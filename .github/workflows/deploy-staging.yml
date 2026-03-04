@@ -5,36 +5,9 @@ on:
     branches: [develop]
 
 jobs:
-  deploy-api:
-    name: Deploy API to Staging
-    runs-on: ubuntu-latest
-    environment: staging
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'pnpm'
-
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm turbo run build --filter=@bithauss/api
-
-      - uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - uses: azure/webapps-deploy@v3
-        with:
-          app-name: bithauss-api-staging
-          package: apps/api/dist
-
   deploy-web:
     name: Deploy Web to Staging
     runs-on: ubuntu-latest
-    environment: staging
     steps:
       - uses: actions/checkout@v4
 
@@ -48,11 +21,37 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm turbo run build --filter=@bithauss/web
 
+      - name: Prepare standalone package
+        run: |
+          cp -r apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static
+          mkdir -p apps/web/.next/standalone/apps/web/public
+          cp -r apps/web/public/* apps/web/.next/standalone/apps/web/public/ 2>/dev/null || true
+
       - uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      - name: Set app settings
+        run: |
+          az webapp config appsettings set \
+            --name bithauss-web \
+            --resource-group bithauss-rg \
+            --settings \
+              SCM_DO_BUILD_DURING_DEPLOYMENT=false \
+              WEBSITES_PORT=3000 \
+              NEXT_PUBLIC_SUPABASE_URL="${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}" \
+              NEXT_PUBLIC_SUPABASE_ANON_KEY="${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" \
+            --output none
+
+      - name: Configure startup
+        run: |
+          az webapp config set \
+            --name bithauss-web \
+            --resource-group bithauss-rg \
+            --startup-file "node apps/web/server.js" \
+            --output none
+
       - uses: azure/webapps-deploy@v3
         with:
-          app-name: bithauss-web-staging
-          package: apps/web/.next
+          app-name: bithauss-web
+          package: apps/web/.next/standalone
