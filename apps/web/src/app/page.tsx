@@ -1,17 +1,19 @@
+import { HeroSection } from "@/components/landing/hero-section";
+import { FeaturedProperties } from "@/components/landing/featured-properties";
+import { BrcSection } from "@/components/landing/brc-section";
+import { PricingSection } from "@/components/landing/pricing-section";
+import { TrustSection } from "@/components/landing/trust-section";
+import { CtaSection } from "@/components/landing/cta-section";
+
 export default function HomePage() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold tracking-tight sm:text-6xl">
-          BitHauss
-        </h1>
-        <p className="mt-4 text-lg text-muted-foreground">
-          Bienes Raíces Certificados
-        </p>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Plataforma en construcción
-        </p>
-      </div>
+    <main className="min-h-screen">
+      <HeroSection />
+      <FeaturedProperties />
+      <BrcSection />
+      <PricingSection />
+      <TrustSection />
+      <CtaSection />
     </main>
   );
 }

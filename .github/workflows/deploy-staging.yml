@@ -20,7 +20,7 @@ jobs:
           cache: 'pnpm'
 
       - run: pnpm install --frozen-lockfile
-      - run: turbo run build --filter=@bithauss/api
+      - run: pnpm turbo run build --filter=@bithauss/api
 
       - uses: azure/login@v2
         with:
@@ -46,7 +46,7 @@ jobs:
           cache: 'pnpm'
 
       - run: pnpm install --frozen-lockfile
-      - run: turbo run build --filter=@bithauss/web
+      - run: pnpm turbo run build --filter=@bithauss/web
 
       - uses: azure/login@v2
         with:
