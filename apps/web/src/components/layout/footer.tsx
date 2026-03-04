@@ -3,10 +3,11 @@ import { ShieldCheck, Mail, Phone, MapPin } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 
 const plataformaLinks = [
-  { label: "Propiedades", href: "#" },
-  { label: "Certificacion BRC", href: "#" },
-  { label: "Planes y Precios", href: "#" },
-  { label: "Como Funciona", href: "#" },
+  { label: "Propiedades", href: "/propiedades" },
+  { label: "Certificacion BRC", href: "/como-funciona" },
+  { label: "Planes y Precios", href: "/#planes" },
+  { label: "Como Funciona", href: "/como-funciona" },
+  { label: "Nosotros", href: "/nosotros" },
 ];
 
 const legalLinks = [
@@ -30,9 +31,9 @@ export function Footer() {
               </span>
             </Link>
             <p className="text-sm leading-relaxed text-background/70">
-              La plataforma lider en bienes raices certificados de Mexico.
-              Verificamos cada propiedad con tecnologia blockchain para
-              garantizar transacciones seguras y transparentes.
+              La primera plataforma en digitalizar todo el procedimiento de
+              compraventa de inmuebles. Creadores del concepto BRC (Bienes
+              Raices Certificados) para eliminar fraudes inmobiliarios.
             </p>
           </div>
 
@@ -107,7 +108,7 @@ export function Footer() {
         {/* Bottom bar */}
         <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
           <p className="text-xs text-background/50">
-            &copy; 2025 BitHauss. Todos los derechos reservados.
+            &copy; 2026 BitHauss. Todos los derechos reservados.
           </p>
           <div className="flex items-center gap-4">
             <Link

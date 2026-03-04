@@ -15,6 +15,9 @@ import {
   Heart,
   Share2,
   Check,
+  ArrowLeft,
+  Bed,
+  Maximize,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -65,6 +68,19 @@ const amenities = [
 export default function PropertyDetailPage() {
   return (
     <main className="min-h-screen bg-background">
+      {/* Back link */}
+      <div className="bg-muted/30">
+        <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 lg:px-8">
+          <Link
+            href="/propiedades"
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Volver a propiedades
+          </Link>
+        </div>
+      </div>
+
       {/* Breadcrumb */}
       <div className="border-b bg-muted/30">
         <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
@@ -152,6 +168,24 @@ export default function PropertyDetailPage() {
                     <MapPin className="h-4 w-4" />
                     <span className="text-sm">Bosques de las Lomas, CDMX</span>
                   </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 text-muted-foreground"
+                  >
+                    <Share2 className="h-4 w-4" />
+                    Compartir
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 text-muted-foreground"
+                  >
+                    <Heart className="h-4 w-4" />
+                    Guardar
+                  </Button>
                 </div>
               </div>
 
@@ -371,6 +405,99 @@ export default function PropertyDetailPage() {
                 </CardContent>
               </Card>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Propiedades Similares */}
+      <div className="border-t bg-muted/20">
+        <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8 sm:py-16">
+          <h2 className="text-2xl font-bold tracking-tight mb-8">
+            Propiedades Similares
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[
+              {
+                title: "Residencia en Polanco",
+                city: "CDMX",
+                price: "$12,500,000 MXN",
+                bedrooms: 4,
+                bathrooms: 3,
+                area: 320,
+                gradient: "from-blue-500 to-blue-700",
+              },
+              {
+                title: "Penthouse Santa Fe",
+                city: "CDMX",
+                price: "$8,900,000 MXN",
+                bedrooms: 3,
+                bathrooms: 2,
+                area: 180,
+                gradient: "from-emerald-400 to-emerald-600",
+              },
+              {
+                title: "Villa Frente al Mar",
+                city: "Cancun",
+                price: "$18,200,000 MXN",
+                bedrooms: 6,
+                bathrooms: 5,
+                area: 580,
+                gradient: "from-cyan-400 to-blue-500",
+              },
+            ].map((prop, i) => (
+              <Link key={prop.title} href={`/propiedades/${i + 2}`}>
+                <Card className="group overflow-hidden border-border/50 transition-all duration-300 hover:shadow-lg hover:shadow-primary/5 hover:-translate-y-1 cursor-pointer">
+                  <div className="relative">
+                    <div
+                      className={`h-40 bg-gradient-to-br ${prop.gradient} flex items-end p-3`}
+                    >
+                      <div className="absolute inset-0 opacity-10">
+                        <div className="absolute bottom-0 left-4 w-12 h-20 bg-white rounded-t-sm" />
+                        <div className="absolute bottom-0 left-12 w-8 h-28 bg-white rounded-t-sm" />
+                        <div className="absolute bottom-0 right-6 w-14 h-16 bg-white rounded-t-sm" />
+                      </div>
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-300 flex items-center justify-center">
+                        <span className="text-white font-semibold opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
+                          Ver Detalles
+                        </span>
+                      </div>
+                      <Badge className="absolute top-2 right-2 bg-emerald-500 hover:bg-emerald-500 text-white text-xs border-0 gap-1 z-10">
+                        <ShieldCheck className="h-3 w-3" />
+                        BRC
+                      </Badge>
+                      <div className="relative z-10">
+                        <span className="text-white font-bold text-base drop-shadow-md">
+                          {prop.price}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <CardContent className="p-4">
+                    <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">
+                      {prop.title}
+                    </h3>
+                    <div className="flex items-center gap-1.5 mt-1 text-muted-foreground">
+                      <MapPin className="h-3 w-3" />
+                      <span className="text-xs">{prop.city}</span>
+                    </div>
+                    <div className="flex items-center gap-3 mt-3 pt-3 border-t border-border/50">
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Bed className="h-3.5 w-3.5" />
+                        <span>{prop.bedrooms}</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Bath className="h-3.5 w-3.5" />
+                        <span>{prop.bathrooms}</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Maximize className="h-3.5 w-3.5" />
+                        <span>{prop.area} m&sup2;</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
           </div>
         </div>
       </div>
