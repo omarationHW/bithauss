@@ -1,0 +1,83 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+.next/
+.turbo/
+out/
+build/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+
+# IDE
+.vscode/
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+._*
+
+# Debug / Logs
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# Testing
+coverage/
+.nyc_output/
+
+# Supabase
+packages/supabase/.temp/
+
+# Claude Code (local agent settings & skills)
+.claude/
+.agents/
+skills-lock.json
+
+# Large binary files
+*.pdf
+*.zip
+*.tar.gz
+
+# Project docs (local only)
+ARCHITECTURE.md
+requerimiento.md
+
+# Security
+*.pem
+*.key
+*.cert
+*.p12
+
+# Vercel
+.vercel/
+
+# TypeScript
+*.tsbuildinfo
+
+# NestJS
+/apps/api/dist/
+
+# Next.js (auto-generated, but git-tracked per convention)
+# apps/web/next-env.d.ts is committed
+
+# Misc
+.cache/
+tmp/

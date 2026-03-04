@@ -1,0 +1,9 @@
+{
+  "name": "@bithauss/supabase",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "db:migrate": "echo 'Run migrations via Supabase CLI'",
+    "db:seed": "echo 'Run seeds via Supabase CLI'"
+  }
+}
