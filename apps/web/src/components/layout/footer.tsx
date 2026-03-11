@@ -27,7 +27,7 @@ export function Footer() {
           <div className="space-y-4">
             <Link href="/" className="inline-block">
               <Image
-                src="/images/Logo-BitHauss-blanco.png"
+                src="https://bithaussstorage.blob.core.windows.net/images/Logo-BitHauss-blanco.png"
                 alt="BitHauss"
                 width={160}
                 height={40}

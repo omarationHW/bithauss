@@ -5,33 +5,33 @@ const testimonials = [
   {
     name: 'Carlos Mendoza',
     role: 'Broker Independiente',
-    image: '/images/confinza1.png',
+    image: 'https://bithaussstorage.blob.core.windows.net/images/confinza1.png',
     quote:
       'BitHauss transformó mi negocio. Mis clientes confían más cuando ven el sello BRC en mis propiedades. He cerrado un 40% más de ventas desde que empecé a usar la plataforma.',
   },
   {
     name: 'Ana Lucía Vargas',
     role: 'Directora de Inmobiliaria',
-    image: '/images/confianza2.png',
+    image: 'https://bithaussstorage.blob.core.windows.net/images/confianza2.png',
     quote:
       'Como inmobiliaria, la certificación BRC nos diferencia de la competencia. El CRM integrado y los leads calificados han sido un game-changer para nuestro equipo de 15 agentes.',
   },
   {
     name: 'Angela Ramírez',
     role: 'Compradora',
-    image: '/images/confianza3.png',
+    image: 'https://bithaussstorage.blob.core.windows.net/images/confianza3.png',
     quote:
       'Compré mi primera casa con total tranquilidad gracias al certificado BRC. Saber que la propiedad fue verificada legalmente me dio la confianza para hacer la inversión más grande de mi vida.',
   },
 ]
 
 const partners = [
-  { name: 'Notaría 45', src: '/images/Notaria45.jpg' },
-  { name: 'Colegio de Notarios', src: '/images/Colegiodenotarios.png' },
-  { name: 'AMPI', src: '/images/AMPI.png' },
-  { name: 'PROFECO', src: '/images/PROFECO.png' },
-  { name: 'CNBV', src: '/images/CNBV.png' },
-  { name: 'RAN', src: '/images/Logo_RAN.png' },
+  { name: 'Notaría 45', src: 'https://bithaussstorage.blob.core.windows.net/images/Notaria45.jpg' },
+  { name: 'Colegio de Notarios', src: 'https://bithaussstorage.blob.core.windows.net/images/Colegiodenotarios.png' },
+  { name: 'AMPI', src: 'https://bithaussstorage.blob.core.windows.net/images/AMPI.png' },
+  { name: 'PROFECO', src: 'https://bithaussstorage.blob.core.windows.net/images/PROFECO.png' },
+  { name: 'CNBV', src: 'https://bithaussstorage.blob.core.windows.net/images/CNBV.png' },
+  { name: 'RAN', src: 'https://bithaussstorage.blob.core.windows.net/images/Logo_RAN.png' },
 ]
 
 export function TrustSection() {

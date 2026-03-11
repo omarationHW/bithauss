@@ -10,7 +10,7 @@ const agents = [
     certId: "#J523215",
     experience: "5 años",
     sales: "36 ventas",
-    image: "/images/Broker1.png",
+    image: "https://bithaussstorage.blob.core.windows.net/images/Broker1.png",
   },
   {
     name: "Eduardo Ramírez",
@@ -18,7 +18,7 @@ const agents = [
     certId: "#J52G961",
     experience: "3 años",
     sales: "15 ventas",
-    image: "/images/Broker2.png",
+    image: "https://bithaussstorage.blob.core.windows.net/images/Broker2.png",
   },
   {
     name: "María López",
@@ -26,7 +26,7 @@ const agents = [
     certId: "#J52H442",
     experience: "4 años",
     sales: "22 ventas",
-    image: "/images/Broker3.png",
+    image: "https://bithaussstorage.blob.core.windows.net/images/Broker3.png",
     blurred: true,
   },
 ];
@@ -34,11 +34,11 @@ const agents = [
 const brokerCards = [
   {
     title: "Conviértete en Broker principal de BitHauss",
-    image: "/images/Brokerprincipal1.jpg",
+    image: "https://bithaussstorage.blob.core.windows.net/images/Brokerprincipal1.jpg",
   },
   {
     title: "Conviértete en Broker profesional en BitHauss",
-    image: "/images/Brokerprincipal2.jpg",
+    image: "https://bithaussstorage.blob.core.windows.net/images/Brokerprincipal2.jpg",
   },
 ];
 
