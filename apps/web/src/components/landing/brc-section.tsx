@@ -15,7 +15,7 @@ type Step = {
 
 const steps: Step[] = [
   {
-    image: "https://bithaussstorage.blob.core.windows.net/images/Solicitud.webp",
+    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Solicitud.webp",
     title: "Solicitud",
     description:
       "El propietario o broker inicia el proceso de certificación registrando la propiedad en la plataforma.",
@@ -23,7 +23,7 @@ const steps: Step[] = [
     bgColor: "bg-blue-100",
   },
   {
-    image: "https://bithaussstorage.blob.core.windows.net/images/Verificacion.webp",
+    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Verificacion.webp",
     title: "Verificación Documental",
     description:
       "Nuestro equipo jurídico valida escrituras, títulos de propiedad, y libertad de gravámenes.",
@@ -39,7 +39,7 @@ const steps: Step[] = [
     bgColor: "bg-violet-100",
   },
   {
-    image: "https://bithaussstorage.blob.core.windows.net/images/Certificado Digital.webp",
+    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Certificado Digital.webp",
     title: "Certificado Digital",
     description:
       "Se emite el Certificado BRC con un sello digital verificable que garantiza la legitimidad de la propiedad.",

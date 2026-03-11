@@ -66,7 +66,7 @@ export function Navbar() {
         {/* Center logo */}
         <Link href="/" className="group flex items-center gap-2">
           <Image
-            src="https://bithaussstorage.blob.core.windows.net/images/Logo-BitHauss-blanco.png"
+            src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Logo-BitHauss-blanco.png"
             alt="BitHauss"
             width={140}
             height={36}

@@ -70,10 +70,11 @@ export function HeroSection() {
     <section className="relative min-h-[85vh] flex items-center justify-center overflow-hidden">
       {/* Background image */}
       <Image
-        src="https://bithaussstorage.blob.core.windows.net/images/header.webp"
+        src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/header.webp"
         alt="Bienes raíces"
         fill
         className="object-cover"
+        sizes="100vw"
         priority
       />
 

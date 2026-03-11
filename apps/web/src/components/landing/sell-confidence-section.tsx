@@ -45,7 +45,7 @@ export function SellConfidenceSection() {
             {/* Right image */}
             <div className="relative aspect-[4/3] rounded-xl overflow-hidden">
               <Image
-                src="https://bithaussstorage.blob.core.windows.net/images/Vendetucasa.webp"
+                src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Vendetucasa.webp"
                 alt="Vende tu casa con confianza"
                 fill
                 className="object-cover"

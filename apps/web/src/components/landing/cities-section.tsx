@@ -7,32 +7,32 @@ const cities = [
   {
     name: "Ciudad de México",
     short: "CDMX",
-    image: "https://bithaussstorage.blob.core.windows.net/images/CDMX.webp",
+    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/CDMX.webp",
   },
   {
     name: "Guadalajara",
     short: "Guadalajara",
-    image: "https://bithaussstorage.blob.core.windows.net/images/Guadalajara.webp",
+    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Guadalajara.webp",
   },
   {
     name: "Nuevo León",
     short: "Nuevo León",
-    image: "https://bithaussstorage.blob.core.windows.net/images/NuevoLeon.webp",
+    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/NuevoLeon.webp",
   },
   {
     name: "Puebla",
     short: "Puebla",
-    image: "https://bithaussstorage.blob.core.windows.net/images/PUEBLA.webp",
+    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/PUEBLA.webp",
   },
   {
     name: "Veracruz",
     short: "Veracruz",
-    image: "https://bithaussstorage.blob.core.windows.net/images/Veracruz.webp",
+    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Veracruz.webp",
   },
   {
     name: "Querétaro",
     short: "Querétaro",
-    image: "https://bithaussstorage.blob.core.windows.net/images/Queretaro.webp",
+    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Queretaro.webp",
   },
 ];
 
@@ -63,6 +63,7 @@ export function CitiesSection() {
                   src={city.image}
                   alt={city.name}
                   fill
+                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                   className="object-cover transition-transform duration-500 group-hover:scale-105"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />

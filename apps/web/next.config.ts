@@ -10,6 +10,11 @@ const nextConfig: NextConfig = {
         hostname: "bithaussstorage.blob.core.windows.net",
         pathname: "/images/**",
       },
+      {
+        protocol: "https",
+        hostname: "bithauss-images-fpdpe5auefacdweh.z03.azurefd.net",
+        pathname: "/images/**",
+      },
     ],
   },
 };
