@@ -45,7 +45,7 @@ export function CtaSection() {
           {/* Background image with scroll zoom */}
           <Image
             ref={imageRef}
-            src="https://bithaussstorage.blob.core.windows.net/images/Footer.jpg"
+            src="https://bithaussstorage.blob.core.windows.net/images/Footer.webp"
             alt="Ciudad"
             fill
             className="object-cover transition-transform duration-100 will-change-transform"

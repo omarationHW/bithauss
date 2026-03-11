@@ -6,15 +6,15 @@ import { Eye } from "lucide-react";
 const options = [
   {
     title: "Vende tu casa tú mismo\nCon certificación BRC",
-    image: "https://bithaussstorage.blob.core.windows.net/images/Opcionventa1.jpg",
+    image: "https://bithaussstorage.blob.core.windows.net/images/Opcionventa1.webp",
   },
   {
     title: "Busca tu propio agente\nespecializado",
-    image: "https://bithaussstorage.blob.core.windows.net/images/Opcionventa2.jpg",
+    image: "https://bithaussstorage.blob.core.windows.net/images/Opcionventa2.webp",
   },
   {
     title: "Recibe una oferta\nen efectivo",
-    image: "https://bithaussstorage.blob.core.windows.net/images/Opcionventa3.jpg",
+    image: "https://bithaussstorage.blob.core.windows.net/images/Opcionventa3.webp",
   },
 ];
 

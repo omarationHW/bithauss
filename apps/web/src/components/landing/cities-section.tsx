@@ -7,32 +7,32 @@ const cities = [
   {
     name: "Ciudad de México",
     short: "CDMX",
-    image: "https://bithaussstorage.blob.core.windows.net/images/CDMX.jpg",
+    image: "https://bithaussstorage.blob.core.windows.net/images/CDMX.webp",
   },
   {
     name: "Guadalajara",
     short: "Guadalajara",
-    image: "https://bithaussstorage.blob.core.windows.net/images/Guadalajara.jpg",
+    image: "https://bithaussstorage.blob.core.windows.net/images/Guadalajara.webp",
   },
   {
     name: "Nuevo León",
     short: "Nuevo León",
-    image: "https://bithaussstorage.blob.core.windows.net/images/NuevoLeon.jpg",
+    image: "https://bithaussstorage.blob.core.windows.net/images/NuevoLeon.webp",
   },
   {
     name: "Puebla",
     short: "Puebla",
-    image: "https://bithaussstorage.blob.core.windows.net/images/PUEBLA.jpg",
+    image: "https://bithaussstorage.blob.core.windows.net/images/PUEBLA.webp",
   },
   {
     name: "Veracruz",
     short: "Veracruz",
-    image: "https://bithaussstorage.blob.core.windows.net/images/Veracruz.jpg",
+    image: "https://bithaussstorage.blob.core.windows.net/images/Veracruz.webp",
   },
   {
     name: "Querétaro",
     short: "Querétaro",
-    image: "https://bithaussstorage.blob.core.windows.net/images/Queretaro.jpg",
+    image: "https://bithaussstorage.blob.core.windows.net/images/Queretaro.webp",
   },
 ];
 

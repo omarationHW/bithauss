@@ -5,33 +5,33 @@ const testimonials = [
   {
     name: 'Carlos Mendoza',
     role: 'Broker Independiente',
-    image: 'https://bithaussstorage.blob.core.windows.net/images/confinza1.png',
+    image: 'https://bithaussstorage.blob.core.windows.net/images/confinza1.webp',
     quote:
       'BitHauss transformó mi negocio. Mis clientes confían más cuando ven el sello BRC en mis propiedades. He cerrado un 40% más de ventas desde que empecé a usar la plataforma.',
   },
   {
     name: 'Ana Lucía Vargas',
     role: 'Directora de Inmobiliaria',
-    image: 'https://bithaussstorage.blob.core.windows.net/images/confianza2.png',
+    image: 'https://bithaussstorage.blob.core.windows.net/images/confianza2.webp',
     quote:
       'Como inmobiliaria, la certificación BRC nos diferencia de la competencia. El CRM integrado y los leads calificados han sido un game-changer para nuestro equipo de 15 agentes.',
   },
   {
     name: 'Angela Ramírez',
     role: 'Compradora',
-    image: 'https://bithaussstorage.blob.core.windows.net/images/confianza3.png',
+    image: 'https://bithaussstorage.blob.core.windows.net/images/confianza3.webp',
     quote:
       'Compré mi primera casa con total tranquilidad gracias al certificado BRC. Saber que la propiedad fue verificada legalmente me dio la confianza para hacer la inversión más grande de mi vida.',
   },
 ]
 
 const partners = [
-  { name: 'Notaría 45', src: 'https://bithaussstorage.blob.core.windows.net/images/Notaria45.jpg' },
-  { name: 'Colegio de Notarios', src: 'https://bithaussstorage.blob.core.windows.net/images/Colegiodenotarios.png' },
-  { name: 'AMPI', src: 'https://bithaussstorage.blob.core.windows.net/images/AMPI.png' },
-  { name: 'PROFECO', src: 'https://bithaussstorage.blob.core.windows.net/images/PROFECO.png' },
-  { name: 'CNBV', src: 'https://bithaussstorage.blob.core.windows.net/images/CNBV.png' },
-  { name: 'RAN', src: 'https://bithaussstorage.blob.core.windows.net/images/Logo_RAN.png' },
+  { name: 'Notaría 45', src: 'https://bithaussstorage.blob.core.windows.net/images/Notaria45.webp' },
+  { name: 'Colegio de Notarios', src: 'https://bithaussstorage.blob.core.windows.net/images/Colegiodenotarios.webp' },
+  { name: 'AMPI', src: 'https://bithaussstorage.blob.core.windows.net/images/AMPI.webp' },
+  { name: 'PROFECO', src: 'https://bithaussstorage.blob.core.windows.net/images/PROFECO.webp' },
+  { name: 'CNBV', src: 'https://bithaussstorage.blob.core.windows.net/images/CNBV.webp' },
+  { name: 'RAN', src: 'https://bithaussstorage.blob.core.windows.net/images/Logo_RAN.webp' },
 ]
 
 export function TrustSection() {
