@@ -1,18 +1,19 @@
 import Link from "next/link";
-import { ShieldCheck, Mail, Phone, MapPin } from "lucide-react";
+import Image from "next/image";
+import { Mail, Phone, MapPin } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 
 const plataformaLinks = [
   { label: "Propiedades", href: "/propiedades" },
-  { label: "Certificacion BRC", href: "/como-funciona" },
+  { label: "Certificado BRC", href: "/como-funciona" },
   { label: "Planes y Precios", href: "/#planes" },
   { label: "Como Funciona", href: "/como-funciona" },
   { label: "Nosotros", href: "/nosotros" },
 ];
 
 const legalLinks = [
-  { label: "Terminos de Servicio", href: "#" },
-  { label: "Politica de Privacidad", href: "#" },
+  { label: "Términos de Servicio", href: "#" },
+  { label: "Política de Privacidad", href: "#" },
   { label: "Aviso Legal", href: "#" },
   { label: "Cookies", href: "#" },
 ];
@@ -24,16 +25,19 @@ export function Footer() {
         <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
           {/* Company info */}
           <div className="space-y-4">
-            <Link href="/" className="flex items-center gap-2">
-              <ShieldCheck className="h-7 w-7 text-primary" />
-              <span className="text-xl font-bold tracking-tight">
-                BitHauss
-              </span>
+            <Link href="/" className="inline-block">
+              <Image
+                src="/images/Logo-BitHauss-blanco.png"
+                alt="BitHauss"
+                width={160}
+                height={40}
+                className="h-10 w-auto"
+              />
             </Link>
-            <p className="text-sm leading-relaxed text-background/70">
+            <p className="text-sm leading-relaxed text-background/90">
               La primera plataforma en digitalizar todo el procedimiento de
               compraventa de inmuebles. Creadores del concepto BRC (Bienes
-              Raices Certificados) para eliminar fraudes inmobiliarios.
+              Raíces Certificados) para eliminar fraudes inmobiliarios.
             </p>
           </div>
 
@@ -47,7 +51,7 @@ export function Footer() {
                 <li key={link.label}>
                   <Link
                     href={link.href}
-                    className="text-sm text-background/70 transition-colors hover:text-background"
+                    className="text-sm text-background/90 transition-colors hover:text-background"
                   >
                     {link.label}
                   </Link>
@@ -66,7 +70,7 @@ export function Footer() {
                 <li key={link.label}>
                   <Link
                     href={link.href}
-                    className="text-sm text-background/70 transition-colors hover:text-background"
+                    className="text-sm text-background/90 transition-colors hover:text-background"
                   >
                     {link.label}
                   </Link>
@@ -82,21 +86,21 @@ export function Footer() {
             </h3>
             <ul className="space-y-3">
               <li className="flex items-start gap-2.5">
-                <Mail className="mt-0.5 h-4 w-4 shrink-0 text-background/50" />
-                <span className="text-sm text-background/70">
+                <Mail className="mt-0.5 h-4 w-4 shrink-0 text-background/75" />
+                <span className="text-sm text-background/90">
                   contacto@bithauss.com
                 </span>
               </li>
               <li className="flex items-start gap-2.5">
-                <Phone className="mt-0.5 h-4 w-4 shrink-0 text-background/50" />
-                <span className="text-sm text-background/70">
+                <Phone className="mt-0.5 h-4 w-4 shrink-0 text-background/75" />
+                <span className="text-sm text-background/90">
                   +52 (55) 1234-5678
                 </span>
               </li>
               <li className="flex items-start gap-2.5">
-                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-background/50" />
-                <span className="text-sm text-background/70">
-                  Ciudad de Mexico, Mexico
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-background/75" />
+                <span className="text-sm text-background/90">
+                  Ciudad de México, México
                 </span>
               </li>
             </ul>
@@ -107,13 +111,13 @@ export function Footer() {
 
         {/* Bottom bar */}
         <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
-          <p className="text-xs text-background/50">
+          <p className="text-xs text-background/75">
             &copy; 2026 BitHauss. Todos los derechos reservados.
           </p>
           <div className="flex items-center gap-4">
             <Link
               href="#"
-              className="text-background/50 transition-colors hover:text-background"
+              className="text-background/75 transition-colors hover:text-background"
               aria-label="Facebook"
             >
               <svg
@@ -127,7 +131,7 @@ export function Footer() {
             </Link>
             <Link
               href="#"
-              className="text-background/50 transition-colors hover:text-background"
+              className="text-background/75 transition-colors hover:text-background"
               aria-label="Instagram"
             >
               <svg
@@ -141,7 +145,7 @@ export function Footer() {
             </Link>
             <Link
               href="#"
-              className="text-background/50 transition-colors hover:text-background"
+              className="text-background/75 transition-colors hover:text-background"
               aria-label="LinkedIn"
             >
               <svg
@@ -155,7 +159,7 @@ export function Footer() {
             </Link>
             <Link
               href="#"
-              className="text-background/50 transition-colors hover:text-background"
+              className="text-background/75 transition-colors hover:text-background"
               aria-label="X (Twitter)"
             >
               <svg

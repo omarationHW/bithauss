@@ -2,22 +2,22 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   MapPin,
-  BedDouble,
-  Bath,
-  Ruler,
   ShieldCheck,
   SlidersHorizontal,
   ChevronRight,
+  ChevronLeft,
   Home,
+  Heart,
+  Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import {
   Select,
@@ -37,154 +37,211 @@ const properties = [
   {
     id: "1",
     title: "Casa Moderna en Bosques de las Lomas",
-    location: "Bosques de las Lomas, CDMX",
-    price: "$8,500,000",
+    address: "Bosques de las Lomas, CDMX\nCDMX, C.P. 11700",
+    price: "$8,500,000 MXN",
     bedrooms: 4,
-    bathrooms: 3.5,
+    bathrooms: 3,
     area: 320,
     brc: true,
-    gradient: "from-blue-600 to-indigo-800",
+    image: "/images/Casa1.jpg",
     tag: "Compra",
+    isNew: true,
+    notary: "Alejandro Ramírez Torres",
+    timeAgo: "Hace 10 Horas",
+    favorite: false,
   },
   {
     id: "2",
     title: "Departamento de Lujo en Polanco",
-    location: "Polanco, CDMX",
-    price: "$45,000/mes",
+    address: "Polanco, CDMX\nCDMX, C.P. 11560",
+    price: "$45,000/mes MXN",
     bedrooms: 2,
     bathrooms: 2,
     area: 150,
     brc: true,
-    gradient: "from-emerald-500 to-teal-700",
+    image: "/images/casa2.jpg",
     tag: "Renta",
+    isNew: true,
+    notary: "Valeria Montes García",
+    timeAgo: "Hace 1 Día",
+    favorite: true,
   },
   {
     id: "3",
     title: "Penthouse con Vista al Mar",
-    location: "Zona Hotelera, Cancun",
-    price: "$12,300,000",
+    address: "Zona Hotelera, Cancún\nQuintana Roo, C.P. 77500",
+    price: "$12,300,000 MXN",
     bedrooms: 3,
     bathrooms: 3,
     area: 280,
-    brc: false,
-    gradient: "from-cyan-500 to-blue-600",
+    brc: true,
+    image: "/images/casa3.jpg",
     tag: "Compra",
+    isNew: false,
+    notary: "Julián Herrera Domínguez",
+    timeAgo: "Hace 2 semanas",
+    favorite: false,
   },
   {
     id: "4",
-    title: "Residencia en San Pedro Garza Garcia",
-    location: "San Pedro Garza Garcia, N.L.",
-    price: "$15,800,000",
+    title: "Residencia en San Pedro Garza García",
+    address: "San Pedro Garza García\nNuevo León, C.P. 66220",
+    price: "$15,800,000 MXN",
     bedrooms: 5,
     bathrooms: 4,
     area: 450,
     brc: true,
-    gradient: "from-violet-500 to-purple-700",
+    image: "/images/casa4.jpg",
     tag: "Compra",
+    isNew: true,
+    notary: "Camila Torres Aguilar",
+    timeAgo: "Hace 6 Horas",
+    favorite: false,
   },
   {
     id: "5",
     title: "Loft Industrial en Roma Norte",
-    location: "Roma Norte, CDMX",
-    price: "$28,000/mes",
+    address: "Roma Norte, CDMX\nCDMX, C.P. 06700",
+    price: "$28,000/mes MXN",
     bedrooms: 1,
     bathrooms: 1,
     area: 85,
     brc: false,
-    gradient: "from-orange-500 to-red-600",
+    image: "/images/casa5.jpg",
     tag: "Renta",
+    isNew: false,
+    notary: "Diego Ramírez Solís",
+    timeAgo: "Hace 3 Semanas",
+    favorite: false,
   },
   {
     id: "6",
     title: "Terreno en Riviera Maya",
-    location: "Playa del Carmen, Q. Roo",
-    price: "$3,200,000",
+    address: "Playa del Carmen\nQuintana Roo, C.P. 77710",
+    price: "$3,200,000 MXN",
     bedrooms: 0,
     bathrooms: 0,
     area: 500,
     brc: true,
-    gradient: "from-lime-500 to-green-700",
+    image: "/images/casa6.jpg",
     tag: "Compra",
+    isNew: true,
+    notary: "María Fernanda López",
+    timeAgo: "Hace 5 Horas",
+    favorite: false,
   },
   {
     id: "7",
     title: "Oficina Premium en Santa Fe",
-    location: "Santa Fe, CDMX",
-    price: "$52,000/mes",
+    address: "Santa Fe, CDMX\nCDMX, C.P. 05348",
+    price: "$52,000/mes MXN",
     bedrooms: 0,
     bathrooms: 2,
     area: 200,
     brc: false,
-    gradient: "from-slate-500 to-gray-700",
+    image: "/images/casa7.jpg",
     tag: "Renta",
+    isNew: false,
+    notary: "Carlos Hernández Ruiz",
+    timeAgo: "Hace 1 Semana",
+    favorite: true,
   },
   {
     id: "8",
     title: "Casa de Campo en Valle de Bravo",
-    location: "Valle de Bravo, Edo. Mex.",
-    price: "$6,900,000",
+    address: "Valle de Bravo\nEstado de México, C.P. 51200",
+    price: "$6,900,000 MXN",
     bedrooms: 3,
-    bathrooms: 2.5,
+    bathrooms: 2,
     area: 380,
     brc: true,
-    gradient: "from-amber-500 to-orange-700",
+    image: "/images/casa8.jpg",
     tag: "Compra",
+    isNew: true,
+    notary: "Ana Patricia Morales",
+    timeAgo: "Hace 2 Días",
+    favorite: false,
   },
   {
     id: "9",
     title: "Departamento en Providencia",
-    location: "Providencia, Guadalajara",
-    price: "$4,750,000",
+    address: "Providencia, Guadalajara\nJalisco, C.P. 44630",
+    price: "$4,750,000 MXN",
     bedrooms: 2,
     bathrooms: 2,
     area: 120,
-    brc: false,
-    gradient: "from-rose-500 to-pink-700",
+    brc: true,
+    image: "/images/casa9.jpg",
     tag: "Compra",
+    isNew: false,
+    notary: "Laura Sánchez Medina",
+    timeAgo: "Hace 12 Horas",
+    favorite: false,
+  },
+  {
+    id: "10",
+    title: "Villa Frente al Lago",
+    address: "Paseo del Lago 15, Valle de Bravo\nEstado de México, C.P. 51200",
+    price: "$22,100,000 MXN",
+    bedrooms: 8,
+    bathrooms: 6,
+    area: 620,
+    brc: true,
+    image: "/images/casa10.jpg",
+    tag: "Compra",
+    isNew: true,
+    notary: "Gabriela Ortiz Campos",
+    timeAgo: "Hace 1 Día",
+    favorite: false,
+  },
+  {
+    id: "11",
+    title: "Casa en Juriquilla",
+    address: "Blvd. Juriquilla 540\nQuerétaro, C.P. 76226",
+    price: "$8,200,000 MXN",
+    bedrooms: 4,
+    bathrooms: 3,
+    area: 310,
+    brc: true,
+    image: "/images/Casa1.jpg",
+    tag: "Compra",
+    isNew: false,
+    notary: "Patricia Delgado Reyes",
+    timeAgo: "Hace 5 Días",
+    favorite: true,
+  },
+  {
+    id: "12",
+    title: "Penthouse en Cancún",
+    address: "Blvd. Kukulcán km 12, Zona Hotelera\nCancún, Q. Roo, C.P. 77500",
+    price: "$19,800,000 MXN",
+    bedrooms: 5,
+    bathrooms: 4,
+    area: 380,
+    brc: true,
+    image: "/images/casa2.jpg",
+    tag: "Compra",
+    isNew: true,
+    notary: "Andrés Castillo Nava",
+    timeAgo: "Hace 2 Horas",
+    favorite: false,
   },
 ];
 
 const propertyTypes = ["Casa", "Departamento", "Terreno", "Oficina"];
 const bedroomOptions = ["1", "2", "3", "4+"];
 const mexicanStates = [
-  "Aguascalientes",
-  "Baja California",
-  "Baja California Sur",
-  "Campeche",
-  "Chiapas",
-  "Chihuahua",
-  "Ciudad de Mexico",
-  "Coahuila",
-  "Colima",
-  "Durango",
-  "Estado de Mexico",
-  "Guanajuato",
-  "Guerrero",
-  "Hidalgo",
-  "Jalisco",
-  "Michoacan",
-  "Morelos",
-  "Nayarit",
-  "Nuevo Leon",
-  "Oaxaca",
-  "Puebla",
-  "Queretaro",
-  "Quintana Roo",
-  "San Luis Potosi",
-  "Sinaloa",
-  "Sonora",
-  "Tabasco",
-  "Tamaulipas",
-  "Tlaxcala",
-  "Veracruz",
-  "Yucatan",
+  "Aguascalientes", "Baja California", "Baja California Sur", "Campeche",
+  "Chiapas", "Chihuahua", "Ciudad de Mexico", "Coahuila", "Colima",
+  "Durango", "Estado de Mexico", "Guanajuato", "Guerrero", "Hidalgo",
+  "Jalisco", "Michoacan", "Morelos", "Nayarit", "Nuevo Leon", "Oaxaca",
+  "Puebla", "Queretaro", "Quintana Roo", "San Luis Potosi", "Sinaloa",
+  "Sonora", "Tabasco", "Tamaulipas", "Tlaxcala", "Veracruz", "Yucatan",
   "Zacatecas",
 ];
 
 function FiltersPanel() {
-  const [operationType, setOperationType] = useState<"comprar" | "rentar">(
-    "comprar"
-  );
+  const [operationType, setOperationType] = useState<"comprar" | "rentar">("comprar");
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [selectedBedrooms, setSelectedBedrooms] = useState<string | null>(null);
   const [brcOnly, setBrcOnly] = useState(false);
@@ -197,16 +254,14 @@ function FiltersPanel() {
 
   return (
     <div className="space-y-6">
-      {/* Tipo de operacion */}
+      {/* Tipo de operación */}
       <div>
-        <Label className="mb-3 block text-sm font-semibold">
-          Tipo de operacion
-        </Label>
+        <Label className="mb-3 block text-sm font-semibold">Tipo de operación</Label>
         <div className="flex gap-2">
           <Button
             size="sm"
             variant={operationType === "comprar" ? "default" : "outline"}
-            className="flex-1"
+            className={cn("flex-1", operationType === "comprar" && "bg-gradient-to-r from-primary to-accent text-white")}
             onClick={() => setOperationType("comprar")}
           >
             Comprar
@@ -214,7 +269,7 @@ function FiltersPanel() {
           <Button
             size="sm"
             variant={operationType === "rentar" ? "default" : "outline"}
-            className="flex-1"
+            className={cn("flex-1", operationType === "rentar" && "bg-gradient-to-r from-primary to-accent text-white")}
             onClick={() => setOperationType("rentar")}
           >
             Rentar
@@ -226,9 +281,7 @@ function FiltersPanel() {
 
       {/* Rango de precio */}
       <div>
-        <Label className="mb-3 block text-sm font-semibold">
-          Rango de precio
-        </Label>
+        <Label className="mb-3 block text-sm font-semibold">Rango de precio</Label>
         <div className="flex items-center gap-2">
           <Input placeholder="Min" type="number" className="text-sm" />
           <span className="text-muted-foreground text-sm">-</span>
@@ -240,15 +293,16 @@ function FiltersPanel() {
 
       {/* Tipo de propiedad */}
       <div>
-        <Label className="mb-3 block text-sm font-semibold">
-          Tipo de propiedad
-        </Label>
+        <Label className="mb-3 block text-sm font-semibold">Tipo de propiedad</Label>
         <div className="flex flex-wrap gap-2">
           {propertyTypes.map((type) => (
             <Badge
               key={type}
               variant={selectedTypes.includes(type) ? "default" : "outline"}
-              className="cursor-pointer select-none px-3 py-1.5 text-xs"
+              className={cn(
+                "cursor-pointer select-none px-3 py-1.5 text-xs",
+                selectedTypes.includes(type) && "bg-primary hover:bg-primary/90"
+              )}
               onClick={() => toggleType(type)}
             >
               {type}
@@ -259,18 +313,19 @@ function FiltersPanel() {
 
       <Separator />
 
-      {/* Recamaras */}
+      {/* Recámaras */}
       <div>
-        <Label className="mb-3 block text-sm font-semibold">Recamaras</Label>
+        <Label className="mb-3 block text-sm font-semibold">Recámaras</Label>
         <div className="flex gap-2">
           {bedroomOptions.map((opt) => (
             <Badge
               key={opt}
               variant={selectedBedrooms === opt ? "default" : "outline"}
-              className="cursor-pointer select-none px-3 py-1.5 text-xs"
-              onClick={() =>
-                setSelectedBedrooms(selectedBedrooms === opt ? null : opt)
-              }
+              className={cn(
+                "cursor-pointer select-none px-3 py-1.5 text-xs",
+                selectedBedrooms === opt && "bg-primary hover:bg-primary/90"
+              )}
+              onClick={() => setSelectedBedrooms(selectedBedrooms === opt ? null : opt)}
             >
               {opt}
             </Badge>
@@ -289,9 +344,7 @@ function FiltersPanel() {
           </SelectTrigger>
           <SelectContent>
             {mexicanStates.map((state) => (
-              <SelectItem key={state} value={state}>
-                {state}
-              </SelectItem>
+              <SelectItem key={state} value={state}>{state}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -299,17 +352,17 @@ function FiltersPanel() {
 
       <Separator />
 
-      {/* Certificacion BRC */}
+      {/* Certificación BRC */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <ShieldCheck className="h-4 w-4 text-emerald-600" />
-          <Label className="text-sm font-semibold">Certificacion BRC</Label>
+          <ShieldCheck className="h-4 w-4 text-accent" />
+          <Label className="text-sm font-semibold">Certificación BRC</Label>
         </div>
         <button
           onClick={() => setBrcOnly(!brcOnly)}
           className={cn(
             "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
-            brcOnly ? "bg-primary" : "bg-muted"
+            brcOnly ? "bg-accent" : "bg-muted"
           )}
         >
           <span
@@ -324,21 +377,21 @@ function FiltersPanel() {
       <Separator />
 
       {/* Aplicar filtros */}
-      <Button className="w-full">Aplicar filtros</Button>
+      <Button className="w-full bg-gradient-to-r from-primary to-accent hover:opacity-90 text-white">
+        Aplicar filtros
+      </Button>
     </div>
   );
 }
 
 export default function PropiedadesPage() {
   return (
-    <main className="min-h-screen bg-background">
+    <main className="min-h-screen bg-background pt-16">
       {/* Breadcrumb and Title */}
       <div className="border-b bg-muted/30">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <nav className="mb-3 flex items-center gap-1.5 text-sm text-muted-foreground">
-            <Link href="/" className="hover:text-foreground transition-colors">
-              Inicio
-            </Link>
+            <Link href="/" className="hover:text-foreground transition-colors">Inicio</Link>
             <ChevronRight className="h-3.5 w-3.5" />
             <span className="text-foreground font-medium">Propiedades</span>
           </nav>
@@ -346,7 +399,7 @@ export default function PropiedadesPage() {
             Propiedades en Venta y Renta
           </h1>
           <p className="mt-1 text-muted-foreground">
-            Encuentra tu propiedad ideal con certificacion blockchain
+            Encuentra tu propiedad ideal con certificación BRC
           </p>
         </div>
       </div>
@@ -355,15 +408,13 @@ export default function PropiedadesPage() {
         <div className="flex gap-8">
           {/* Desktop Sidebar Filters */}
           <aside className="hidden w-72 shrink-0 md:block">
-            <Card>
-              <CardContent className="p-5">
-                <div className="mb-4 flex items-center gap-2">
-                  <SlidersHorizontal className="h-4 w-4 text-primary" />
-                  <h2 className="text-base font-semibold">Filtros</h2>
-                </div>
-                <FiltersPanel />
-              </CardContent>
-            </Card>
+            <div className="rounded-xl border border-border/40 bg-card p-5 sticky top-24">
+              <div className="mb-4 flex items-center gap-2">
+                <SlidersHorizontal className="h-4 w-4 text-primary" />
+                <h2 className="text-base font-semibold">Filtros</h2>
+              </div>
+              <FiltersPanel />
+            </div>
           </aside>
 
           {/* Main Content */}
@@ -374,11 +425,7 @@ export default function PropiedadesPage() {
                 {/* Mobile filter trigger */}
                 <Sheet>
                   <SheetTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-2 md:hidden"
-                    >
+                    <Button variant="outline" size="sm" className="gap-2 md:hidden">
                       <SlidersHorizontal className="h-4 w-4" />
                       Filtros
                     </Button>
@@ -392,7 +439,7 @@ export default function PropiedadesPage() {
                   </SheetContent>
                 </Sheet>
                 <p className="text-sm text-muted-foreground">
-                  <span className="font-semibold text-foreground">127</span>{" "}
+                  <span className="font-semibold text-foreground">{properties.length}</span>{" "}
                   propiedades encontradas
                 </p>
               </div>
@@ -401,94 +448,118 @@ export default function PropiedadesPage() {
                   <SelectValue placeholder="Ordenar por" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="relevancia">Mas relevantes</SelectItem>
-                  <SelectItem value="precio-asc">
-                    Precio: menor a mayor
-                  </SelectItem>
-                  <SelectItem value="precio-desc">
-                    Precio: mayor a menor
-                  </SelectItem>
-                  <SelectItem value="recientes">Mas recientes</SelectItem>
+                  <SelectItem value="relevancia">Más relevantes</SelectItem>
+                  <SelectItem value="precio-asc">Precio: menor a mayor</SelectItem>
+                  <SelectItem value="precio-desc">Precio: mayor a menor</SelectItem>
+                  <SelectItem value="recientes">Más recientes</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Property Grid */}
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {properties.map((property) => (
+            {/* Property Grid - same style as landing */}
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {properties.map((property, i) => (
                 <Link
                   key={property.id}
                   href={`/propiedades/${property.id}`}
                   className="group"
                 >
-                  <Card className="overflow-hidden transition-shadow hover:shadow-lg">
-                    {/* Image placeholder */}
-                    <div className="relative">
-                      <div
-                        className={cn(
-                          "h-48 bg-gradient-to-br",
-                          property.gradient
+                  <div
+                    className="bg-card rounded-xl border border-border/40 overflow-hidden hover:shadow-lg transition-all duration-500 animate-fade-in-up"
+                    style={{ animationDelay: `${i * 50}ms` }}
+                  >
+                    {/* Time label */}
+                    <div className="flex items-center gap-1.5 px-4 py-2.5 text-xs text-muted-foreground">
+                      <Home className="h-3.5 w-3.5" />
+                      <span>Agregado</span>
+                      <span className="font-semibold text-foreground">{property.timeAgo}</span>
+                    </div>
+
+                    {/* Image */}
+                    <div className="relative aspect-[4/3] overflow-hidden">
+                      <Image
+                        src={property.image}
+                        alt={property.title}
+                        fill
+                        className="object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+
+                      {/* Badges */}
+                      <div className="absolute top-3 left-3 flex items-center gap-2">
+                        {property.isNew && (
+                          <span className="bg-primary text-white text-[10px] font-semibold px-2 py-0.5 rounded">
+                            Nuevo
+                          </span>
                         )}
-                      >
-                        <div className="flex h-full items-center justify-center">
-                          <Home className="h-12 w-12 text-white/30" />
-                        </div>
+                        <span className="bg-accent text-white text-[10px] font-medium px-2 py-0.5 rounded">
+                          {property.tag === "Renta" ? "Renta" : "Compra"}
+                        </span>
                       </div>
-                      {/* Tag badge */}
-                      <Badge
-                        className={cn(
-                          "absolute left-3 top-3 text-xs",
-                          property.tag === "Renta"
-                            ? "bg-amber-500 hover:bg-amber-500"
-                            : "bg-primary hover:bg-primary"
-                        )}
-                      >
-                        {property.tag}
-                      </Badge>
-                      {/* BRC badge */}
+
+                      {/* BRC Shield */}
                       {property.brc && (
-                        <div className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-semibold text-white">
-                          <ShieldCheck className="h-3 w-3" />
-                          BRC
+                        <div className="absolute top-3 right-3 h-8 w-8 rounded-full bg-accent/90 flex items-center justify-center">
+                          <ShieldCheck className="h-4 w-4 text-white" />
                         </div>
                       )}
-                    </div>
-                    <CardContent className="p-4">
-                      <h3 className="mb-1 line-clamp-1 text-sm font-semibold leading-tight group-hover:text-primary transition-colors">
-                        {property.title}
-                      </h3>
-                      <div className="mb-3 flex items-center gap-1 text-xs text-muted-foreground">
-                        <MapPin className="h-3 w-3" />
-                        {property.location}
-                      </div>
-                      <p className="mb-3 text-lg font-bold text-primary">
-                        {property.price}
-                        <span className="text-xs font-normal text-muted-foreground">
-                          {" "}
-                          MXN
-                        </span>
-                      </p>
-                      <Separator className="mb-3" />
-                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                        {property.bedrooms > 0 && (
-                          <div className="flex items-center gap-1">
-                            <BedDouble className="h-3.5 w-3.5" />
-                            <span>{property.bedrooms}</span>
-                          </div>
-                        )}
-                        {property.bathrooms > 0 && (
-                          <div className="flex items-center gap-1">
-                            <Bath className="h-3.5 w-3.5" />
-                            <span>{property.bathrooms}</span>
-                          </div>
-                        )}
-                        <div className="flex items-center gap-1">
-                          <Ruler className="h-3.5 w-3.5" />
-                          <span>{property.area} m&sup2;</span>
+
+                      {/* Navigation arrows */}
+                      <button className="absolute left-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-black/30 flex items-center justify-center text-white/80 hover:bg-black/50 transition-colors">
+                        <ChevronLeft className="h-4 w-4" />
+                      </button>
+                      <button className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-black/30 flex items-center justify-center text-white/80 hover:bg-black/50 transition-colors">
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+
+                      {/* Certificado BRC badge */}
+                      {property.brc && (
+                        <div className="absolute left-1/2 bottom-14 -translate-x-1/2 z-10">
+                          <span className="inline-flex items-center bg-black/80 backdrop-blur-sm px-4 py-1.5 rounded-full border border-white/10">
+                            <span className="text-xs font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                              Certificado BRC
+                            </span>
+                          </span>
                         </div>
+                      )}
+
+                      {/* Price overlay */}
+                      <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent pt-10 pb-3 px-4">
+                        <div className="text-white/60 text-[10px]">Precio</div>
+                        <div className="text-white font-bold text-lg">{property.price}</div>
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+
+                    {/* Card content */}
+                    <div className="p-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="font-semibold text-foreground text-sm leading-tight group-hover:text-primary transition-colors">
+                          {property.title}
+                        </h3>
+                        <button className="flex-shrink-0 text-muted-foreground hover:text-destructive transition-colors">
+                          <Heart
+                            className={cn(
+                              "h-4 w-4",
+                              property.favorite && "fill-primary text-primary"
+                            )}
+                          />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                        {property.bedrooms > 0 && <span>● {property.bedrooms} recámaras</span>}
+                        {property.bathrooms > 0 && <span>● {property.bathrooms} baños</span>}
+                        <span>● {property.area}m²</span>
+                      </div>
+
+                      <p className="mt-2 text-xs text-muted-foreground whitespace-pre-line leading-relaxed">
+                        {property.address}
+                      </p>
+
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Notario: <span className="font-semibold text-foreground">{property.notary}</span>
+                      </p>
+                    </div>
+                  </div>
                 </Link>
               ))}
             </div>

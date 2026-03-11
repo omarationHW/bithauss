@@ -358,6 +358,20 @@
   }
 }
 
+/* --- Infinite marquee scroll --- */
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-33.333%);
+  }
+}
+
+@utility animate-marquee {
+  animation: marquee 12s linear infinite;
+}
+
 .dark {
   --color-background: hsl(222 47% 6%);
   --color-foreground: hsl(210 40% 98%);
