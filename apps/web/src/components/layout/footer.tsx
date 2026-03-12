@@ -27,7 +27,7 @@ export function Footer() {
           <div className="space-y-4">
             <Link href="/" className="inline-flex items-center gap-2">
               <Image
-                src="/images/bithauss-logo-blanco 1.png"
+                src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/bithauss-logo-blanco-1.png"
                 alt="BitHauss icon"
                 width={48}
                 height={48}
