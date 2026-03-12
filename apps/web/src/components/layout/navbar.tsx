@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { Menu } from "lucide-react";
@@ -25,6 +26,8 @@ const navLinks = [
 export function Navbar() {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const pathname = usePathname();
+  const isHome = pathname === "/";
 
   useEffect(() => {
     const handleScroll = () => {
@@ -35,11 +38,14 @@ export function Navbar() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  // On non-home pages, always use solid navbar style
+  const solid = !isHome || scrolled;
+
   return (
     <header
       className={cn(
         "fixed top-0 z-50 w-full transition-all duration-300",
-        scrolled
+        solid
           ? "bg-background/90 backdrop-blur-xl border-b border-border/50 shadow-sm"
           : "bg-transparent"
       )}
@@ -53,7 +59,7 @@ export function Navbar() {
               href={link.href}
               className={cn(
                 "rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
-                scrolled
+                solid
                   ? "text-muted-foreground hover:text-foreground hover:bg-primary/5"
                   : "text-white/80 hover:text-white"
               )}
@@ -72,7 +78,7 @@ export function Navbar() {
             height={36}
             className={cn(
               "h-8 w-auto transition-all duration-300",
-              scrolled && "brightness-0 dark:brightness-100"
+              solid && "brightness-0 dark:brightness-100"
             )}
           />
         </Link>
@@ -83,7 +89,7 @@ export function Navbar() {
             href="/auth/login"
             className={cn(
               "text-sm font-medium transition-colors duration-200",
-              scrolled
+              solid
                 ? "text-muted-foreground hover:text-foreground"
                 : "text-white/80 hover:text-white"
             )}
@@ -107,7 +113,7 @@ export function Navbar() {
               size="icon"
               className={cn(
                 "lg:hidden",
-                scrolled ? "hover:bg-primary/5" : "text-white hover:bg-white/10"
+                solid ? "hover:bg-primary/5" : "text-white hover:bg-white/10"
               )}
             >
               <Menu className="h-5 w-5" />

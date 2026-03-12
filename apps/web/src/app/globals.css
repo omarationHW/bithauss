@@ -358,6 +358,20 @@
   }
 }
 
+/* --- Price ticker scroll --- */
+@keyframes ticker {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+@utility animate-ticker {
+  animation: ticker 30s linear infinite;
+}
+
 /* --- Infinite marquee scroll --- */
 @keyframes marquee {
   0% {

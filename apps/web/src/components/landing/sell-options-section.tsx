@@ -1,43 +1,43 @@
-"use client";
+'use client'
 
-import Image from "next/image";
-import { Eye } from "lucide-react";
+import Image from 'next/image'
+import { Eye } from 'lucide-react'
 
 const options = [
   {
-    title: "Vende tu casa tú mismo\nCon certificación BRC",
-    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Opcionventa1.webp",
+    title: 'Vende tu casa tú mismo\nCon certificación BRC',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Opcionventa1.webp',
   },
   {
-    title: "Busca tu propio agente\nespecializado",
-    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Opcionventa2.webp",
+    title: 'Busca tu propio agente\nespecializado',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Opcionventa2.webp',
   },
   {
-    title: "Recibe una oferta\nen efectivo",
-    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Opcionventa3.webp",
+    title: 'Recibe leads directos\nde compradores interesados',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Opcionventa3.webp',
   },
-];
+]
 
 export function SellOptionsSection() {
   return (
-    <section className="py-16 sm:py-20 px-4 sm:px-6 lg:px-8">
+    <section className="px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
       <div className="mx-auto max-w-5xl">
         {/* Header */}
-        <div className="text-center mb-10">
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+        <div className="mb-10 text-center">
+          <h2 className="text-foreground text-2xl font-bold tracking-tight sm:text-3xl">
             Explora más opciones de venta
           </h2>
-          <p className="mt-3 text-muted-foreground">
+          <p className="text-muted-foreground mt-3">
             Vende tu casa a tu manera. Elige el camino que se adapte a tus necesidades.
           </p>
         </div>
 
         {/* Options triptych */}
-        <div className="flex rounded-2xl overflow-hidden h-[420px]">
+        <div className="flex h-[420px] overflow-hidden rounded-2xl">
           {options.map((option) => (
             <div
               key={option.title}
-              className="relative flex-1 group cursor-pointer overflow-hidden transition-all duration-500 ease-in-out hover:flex-[2]"
+              className="group relative flex-1 cursor-pointer overflow-hidden transition-all duration-500 ease-in-out hover:flex-[2]"
             >
               <Image
                 src={option.image}
@@ -47,19 +47,19 @@ export function SellOptionsSection() {
                 blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzNnLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiIGZpbGw9IiMyMDIwMjAiLz48L3N2Zz4="
                 className="object-cover transition-transform duration-500 group-hover:scale-110"
               />
-              <div className="absolute inset-0 bg-black/50 group-hover:bg-black/40 transition-colors duration-300" />
+              <div className="absolute inset-0 bg-black/50 transition-colors duration-300 group-hover:bg-black/40" />
 
               {/* Ver más - centered, only on hover */}
-              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10">
-                <span className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm border border-white/30 text-white font-semibold px-6 py-3 rounded-full text-base">
+              <div className="absolute inset-0 z-10 flex items-center justify-center opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+                <span className="inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/20 px-6 py-3 text-base font-semibold text-white backdrop-blur-sm">
                   <Eye className="h-5 w-5" />
                   Ver más
                 </span>
               </div>
 
               {/* Text - centered at bottom */}
-              <div className="absolute bottom-0 inset-x-0 p-5 flex justify-center">
-                <p className="text-white font-semibold text-sm sm:text-base leading-snug whitespace-pre-line text-center">
+              <div className="absolute inset-x-0 bottom-0 flex justify-center p-5">
+                <p className="text-center text-sm leading-snug font-semibold whitespace-pre-line text-white sm:text-base">
                   {option.title}
                 </p>
               </div>
@@ -68,5 +68,5 @@ export function SellOptionsSection() {
         </div>
       </div>
     </section>
-  );
+  )
 }

@@ -1,53 +1,51 @@
-import Image from "next/image";
-import { UserCheck } from "lucide-react";
-import { cn } from "@/lib/utils";
+import Image from 'next/image'
+import { UserCheck } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 type Step = {
-  title: string;
-  description: string;
-  color: string;
-  bgColor: string;
-  keepOriginalColor?: boolean;
-} & (
-  | { image: string; icon?: never }
-  | { icon: typeof UserCheck; image?: never }
-);
+  title: string
+  description: string
+  color: string
+  bgColor: string
+  keepOriginalColor?: boolean
+} & ({ image: string; icon?: never } | { icon: typeof UserCheck; image?: never })
 
 const steps: Step[] = [
   {
-    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Solicitud.webp",
-    title: "Solicitud",
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Solicitud.webp',
+    title: 'Solicitud',
     description:
-      "El propietario o broker inicia el proceso de certificación registrando la propiedad en la plataforma.",
-    color: "text-blue-600",
-    bgColor: "bg-blue-100",
+      'El propietario o broker inicia el proceso de certificación registrando la propiedad en la plataforma.',
+    color: 'text-blue-600',
+    bgColor: 'bg-blue-100',
   },
   {
-    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Verificacion.webp",
-    title: "Verificación Documental",
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Verificacion.webp',
+    title: 'Verificación Documental',
     description:
-      "Nuestro equipo jurídico valida escrituras, títulos de propiedad, y libertad de gravámenes.",
-    color: "text-teal-600",
-    bgColor: "bg-teal-100",
+      'Nuestro equipo legal apoyado con Inteligencia Artificial efectúa la primera revisión documental del Inmueble',
+    color: 'text-teal-600',
+    bgColor: 'bg-teal-100',
   },
   {
     icon: UserCheck,
-    title: "Validación Notarial",
+    title: 'Validación Notarial',
     description:
-      "Notarios certificados verifican la autenticidad de los documentos y la identidad del propietario.",
-    color: "text-violet-600",
-    bgColor: "bg-violet-100",
+      'La revisión profunda del expediente es llevada a cabo por Notarios, quienes revisan todos los aspectos legales y documentales para validar el status jurídico del Inmueble.',
+    color: 'text-violet-600',
+    bgColor: 'bg-violet-100',
   },
   {
-    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Certificado Digital.webp",
-    title: "Certificado Digital",
+    image:
+      'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Certificado Digital.webp',
+    title: 'Certificado BRC',
     description:
-      "Se emite el Certificado BRC con un sello digital verificable que garantiza la legitimidad de la propiedad.",
-    color: "text-emerald-600",
-    bgColor: "bg-white",
+      'BitHauss emite un Certificado Digital en la Blockchain que garantiza inmutabilidad del BRC - Bien Raíz Cerificado - Certificado Notarial, que puede ser consultado de manera pública.',
+    color: 'text-emerald-600',
+    bgColor: 'bg-white',
     keepOriginalColor: true,
   },
-];
+]
 
 function StepIcon({ step, size = 32 }: { step: Step; size?: number }) {
   if (step.image) {
@@ -57,23 +55,23 @@ function StepIcon({ step, size = 32 }: { step: Step; size?: number }) {
         alt={step.title}
         width={size}
         height={size}
-        className={cn("object-contain", !step.keepOriginalColor && "brightness-0")}
+        className={cn('object-contain', !step.keepOriginalColor && 'brightness-0')}
       />
-    );
+    )
   }
-  const Icon = step.icon!;
-  return <Icon className={cn("h-7 w-7", step.color)} />;
+  const Icon = step.icon!
+  return <Icon className={cn('h-7 w-7', step.color)} />
 }
 
 export function BrcSection() {
   return (
-    <section className="py-16 sm:py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-secondary/80 to-secondary/40">
+    <section className="from-secondary/80 to-secondary/40 bg-gradient-to-br px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
       <div className="mx-auto max-w-5xl">
         <div className="p-8 sm:p-12">
           {/* Title */}
-          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-foreground max-w-2xl">
-            Introducimos Certificadores BRC : Tu Garantía Contra el{" "}
-            <span className="relative inline-block text-destructive">
+          <h2 className="text-foreground max-w-2xl text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl">
+            Introducimos Certificados Digitales BRC : Tu Garantía Contra el{' '}
+            <span className="text-destructive relative inline-block">
               Fraude
               <svg
                 className="absolute -bottom-1.5 left-0 w-full"
@@ -93,24 +91,23 @@ export function BrcSection() {
           </h2>
 
           {/* Description */}
-          <p className="mt-4 text-base text-muted-foreground max-w-3xl leading-relaxed">
-            En México existe el riesgo de caer en operaciones inmobiliarias
-            fraudulentas. Bienes Raíces Certificados (BRC) es el primer sistema
-            de verificación notarial digital que valida la autenticidad de cada
-            propiedad, protegiendo a compradores y vendedores.
+          <p className="text-muted-foreground mt-4 max-w-3xl text-base leading-relaxed">
+            En México existe el riesgo de caer en operaciones inmobiliarias fraudulentas. Bienes
+            Raíces Certificados (BRC) es el primer sistema de verificación notarial digital que
+            valida la autenticidad de cada propiedad, protegiendo a compradores y vendedores.
           </p>
 
           {/* Steps */}
           <div className="mt-10">
             {/* Icons + Arrows row (desktop) */}
-            <div className="hidden lg:flex items-center">
+            <div className="hidden items-center lg:flex">
               {steps.map((step, index) => (
                 <div key={step.title} className="contents">
-                  <div className="flex-1 flex justify-center">
+                  <div className="flex flex-1 justify-center">
                     <div
                       className={cn(
-                        "w-16 h-16 rounded-full flex items-center justify-center",
-                        step.bgColor
+                        'flex h-16 w-16 items-center justify-center rounded-full',
+                        step.bgColor,
                       )}
                     >
                       <StepIcon step={step} size={34} />
@@ -120,7 +117,7 @@ export function BrcSection() {
                     <svg
                       viewBox="0 0 80 16"
                       fill="none"
-                      className="w-16 h-4 text-muted-foreground/30 flex-shrink-0 -mx-4"
+                      className="text-muted-foreground/30 -mx-4 h-4 w-16 flex-shrink-0"
                     >
                       <line
                         x1="0"
@@ -146,13 +143,11 @@ export function BrcSection() {
             </div>
 
             {/* Text row (desktop) */}
-            <div className="hidden lg:grid grid-cols-4 gap-4 mt-5">
+            <div className="mt-5 hidden grid-cols-4 gap-4 lg:grid">
               {steps.map((step) => (
-                <div key={step.title} className="text-center px-2">
-                  <h3 className={cn("font-semibold text-sm", step.color)}>
-                    {step.title}
-                  </h3>
-                  <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">
+                <div key={step.title} className="px-2 text-center">
+                  <h3 className={cn('text-sm font-semibold', step.color)}>{step.title}</h3>
+                  <p className="text-muted-foreground mt-1.5 text-sm leading-relaxed">
                     {step.description}
                   </p>
                 </div>
@@ -165,17 +160,15 @@ export function BrcSection() {
                 <div key={step.title} className="flex items-start gap-4">
                   <div
                     className={cn(
-                      "flex-shrink-0 w-16 h-16 rounded-full flex items-center justify-center",
-                      step.bgColor
+                      'flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-full',
+                      step.bgColor,
                     )}
                   >
                     <StepIcon step={step} size={34} />
                   </div>
                   <div>
-                    <h3 className={cn("font-semibold text-sm", step.color)}>
-                      {step.title}
-                    </h3>
-                    <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">
+                    <h3 className={cn('text-sm font-semibold', step.color)}>{step.title}</h3>
+                    <p className="text-muted-foreground mt-1.5 text-sm leading-relaxed">
                       {step.description}
                     </p>
                   </div>
@@ -186,5 +179,5 @@ export function BrcSection() {
         </div>
       </div>
     </section>
-  );
+  )
 }

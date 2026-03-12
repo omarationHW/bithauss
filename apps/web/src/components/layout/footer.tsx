@@ -25,16 +25,20 @@ export function Footer() {
         <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
           {/* Company info */}
           <div className="space-y-4">
-            <Link href="/" className="inline-block">
+            <Link href="/" className="inline-flex items-center gap-2">
               <Image
-                src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Logo-BitHauss-blanco.png"
-                alt="BitHauss"
-                width={160}
-                height={40}
-                className="h-10 w-auto"
+                src="/images/bithauss-logo-blanco 1.png"
+                alt="BitHauss icon"
+                width={48}
+                height={48}
+                className="h-12 w-auto"
+                style={{
+                  filter: 'brightness(0) saturate(100%) invert(32%) sepia(93%) saturate(1800%) hue-rotate(212deg) brightness(97%) contrast(93%)',
+                }}
               />
+              <span className="text-3xl font-bold tracking-tight text-white">BitHauss</span>
             </Link>
-            <p className="text-sm leading-relaxed text-background/90">
+            <p className="text-sm leading-relaxed text-background">
               La primera plataforma en digitalizar todo el procedimiento de
               compraventa de inmuebles. Creadores del concepto BRC (Bienes
               Raíces Certificados) para eliminar fraudes inmobiliarios.
@@ -51,7 +55,7 @@ export function Footer() {
                 <li key={link.label}>
                   <Link
                     href={link.href}
-                    className="text-sm text-background/90 transition-colors hover:text-background"
+                    className="text-sm text-background transition-colors hover:text-background"
                   >
                     {link.label}
                   </Link>
@@ -70,7 +74,7 @@ export function Footer() {
                 <li key={link.label}>
                   <Link
                     href={link.href}
-                    className="text-sm text-background/90 transition-colors hover:text-background"
+                    className="text-sm text-background transition-colors hover:text-background"
                   >
                     {link.label}
                   </Link>
@@ -86,20 +90,20 @@ export function Footer() {
             </h3>
             <ul className="space-y-3">
               <li className="flex items-start gap-2.5">
-                <Mail className="mt-0.5 h-4 w-4 shrink-0 text-background/75" />
-                <span className="text-sm text-background/90">
+                <Mail className="mt-0.5 h-4 w-4 shrink-0 text-background" />
+                <span className="text-sm text-background">
                   contacto@bithauss.com
                 </span>
               </li>
               <li className="flex items-start gap-2.5">
-                <Phone className="mt-0.5 h-4 w-4 shrink-0 text-background/75" />
-                <span className="text-sm text-background/90">
+                <Phone className="mt-0.5 h-4 w-4 shrink-0 text-background" />
+                <span className="text-sm text-background">
                   +52 (55) 1234-5678
                 </span>
               </li>
               <li className="flex items-start gap-2.5">
-                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-background/75" />
-                <span className="text-sm text-background/90">
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-background" />
+                <span className="text-sm text-background">
                   Ciudad de México, México
                 </span>
               </li>
@@ -111,13 +115,13 @@ export function Footer() {
 
         {/* Bottom bar */}
         <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
-          <p className="text-xs text-background/75">
+          <p className="text-xs text-background">
             &copy; 2026 BitHauss. Todos los derechos reservados.
           </p>
           <div className="flex items-center gap-4">
             <Link
               href="#"
-              className="text-background/75 transition-colors hover:text-background"
+              className="text-background transition-colors hover:text-background"
               aria-label="Facebook"
             >
               <svg
@@ -131,7 +135,7 @@ export function Footer() {
             </Link>
             <Link
               href="#"
-              className="text-background/75 transition-colors hover:text-background"
+              className="text-background transition-colors hover:text-background"
               aria-label="Instagram"
             >
               <svg
@@ -145,7 +149,7 @@ export function Footer() {
             </Link>
             <Link
               href="#"
-              className="text-background/75 transition-colors hover:text-background"
+              className="text-background transition-colors hover:text-background"
               aria-label="LinkedIn"
             >
               <svg
@@ -159,7 +163,7 @@ export function Footer() {
             </Link>
             <Link
               href="#"
-              className="text-background/75 transition-colors hover:text-background"
+              className="text-background transition-colors hover:text-background"
               aria-label="X (Twitter)"
             >
               <svg

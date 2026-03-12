@@ -1,16 +1,16 @@
-import Image from "next/image";
-import { ArrowDown } from "lucide-react";
+import Image from 'next/image'
+import { ArrowDown } from 'lucide-react'
 
 export function SellConfidenceSection() {
   return (
-    <section className="py-16 sm:py-20 px-4 sm:px-6 lg:px-8">
+    <section className="px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
       <div className="mx-auto max-w-5xl">
-        <div className="rounded-2xl border border-primary/10 p-8 sm:p-12 overflow-hidden bg-gradient-to-br from-primary/10 to-accent/10">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+        <div className="border-primary/10 from-primary/10 to-accent/10 overflow-hidden rounded-2xl border bg-gradient-to-br p-8 sm:p-12">
+          <div className="grid grid-cols-1 items-center gap-8 md:grid-cols-2">
             {/* Left content */}
             <div>
-              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-                Vende tu casa con{" "}
+              <h2 className="text-foreground text-2xl font-bold tracking-tight sm:text-3xl">
+                Vende tu casa con{' '}
                 <span className="relative inline-block">
                   <span className="text-primary">confianza</span>
                   <svg
@@ -30,20 +30,20 @@ export function SellConfidenceSection() {
                 </span>
               </h2>
 
-              <p className="mt-4 text-muted-foreground leading-relaxed">
-                Te ofrecemos Certificado BRC la primera plataforma con
-                verificación judicial que protege a compradores y vendedores.
-                Únete a la plataforma de bienes raíces más segura de México.
+              <p className="text-muted-foreground mt-4 leading-relaxed">
+                Te ofrecemos Certificado BRC la primera plataforma con verificación Notarial que
+                protege a compradores y vendedores. Únete a la plataforma de bienes raíces más
+                segura de México.
               </p>
 
-              <button className="mt-6 inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-primary to-accent px-6 py-3 text-sm font-semibold text-white shadow-md hover:opacity-90 transition-opacity duration-200">
+              <button className="from-primary to-accent mt-6 inline-flex items-center gap-2 rounded-lg bg-gradient-to-r px-6 py-3 text-sm font-semibold text-white shadow-md transition-opacity duration-200 hover:opacity-90">
                 Comienza tu verificación
                 <ArrowDown className="h-4 w-4" />
               </button>
             </div>
 
             {/* Right image */}
-            <div className="relative aspect-[4/3] rounded-xl overflow-hidden">
+            <div className="relative aspect-[4/3] overflow-hidden rounded-xl">
               <Image
                 src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Vendetucasa.webp"
                 alt="Vende tu casa con confianza"
@@ -57,5 +57,5 @@ export function SellConfidenceSection() {
         </div>
       </div>
     </section>
-  );
+  )
 }

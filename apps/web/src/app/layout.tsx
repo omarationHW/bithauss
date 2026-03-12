@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { Providers } from "./providers";
 import { Navbar } from "@/components/layout/navbar";
+import { PriceTicker } from "@/components/layout/price-ticker";
 import { Footer } from "@/components/layout/footer";
 import "./globals.css";
 
@@ -26,6 +27,7 @@ export default function RootLayout({
       <body className={`${inter.variable} font-sans antialiased`}>
         <Providers>
           <Navbar />
+          <PriceTicker />
           {children}
           <Footer />
         </Providers>
