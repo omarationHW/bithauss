@@ -48,6 +48,8 @@ export function SellConfidenceSection() {
                 src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Vendetucasa.webp"
                 alt="Vende tu casa con confianza"
                 fill
+                placeholder="blur"
+                blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzNnLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiIGZpbGw9IiMyMDIwMjAiLz48L3N2Zz4="
                 className="object-cover"
               />
             </div>
