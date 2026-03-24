@@ -153,7 +153,7 @@ export default function ComoFuncionaPage() {
         {/* Right image - full height */}
         <div className="absolute right-0 top-0 bottom-0 w-1/2 hidden md:block">
           <Image
-            src="/images/Hero.png"
+            src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Hero.png"
             alt="BitHauss"
             fill
             className="object-contain object-right-bottom"
@@ -199,7 +199,7 @@ export default function ComoFuncionaPage() {
                 <div className="flex items-center mb-2">
                   {/* Circle 1 */}
                   <div className="relative h-12 w-12 rounded-full overflow-hidden">
-                    <Image src="/images/Casa1.jpg" alt="" fill className="object-cover" />
+                    <Image src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Casa1.jpg" alt="" fill className="object-cover" />
                     <div
                       className="absolute top-0.5 right-0.5 h-4 w-4 rounded-full flex items-center justify-center"
                       style={{ background: 'linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))' }}
@@ -209,7 +209,7 @@ export default function ComoFuncionaPage() {
                   </div>
                   {/* Circle 2 */}
                   <div className="relative h-12 w-12 rounded-full overflow-hidden -ml-3">
-                    <Image src="/images/casa2.jpg" alt="" fill className="object-cover" />
+                    <Image src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa2.jpg" alt="" fill className="object-cover" />
                     <div
                       className="absolute top-0.5 right-0.5 h-4 w-4 rounded-full flex items-center justify-center"
                       style={{ background: 'linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))' }}
@@ -483,7 +483,7 @@ export default function ComoFuncionaPage() {
 
               <div className="relative min-h-[300px] hidden md:block">
                 <Image
-                  src="/images/Listo-para-empezar.jpg"
+                  src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Listo-para-empezar.jpg"
                   alt="Listo para empezar"
                   fill
                   className="object-cover"
