@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   User,
   Mail,
@@ -18,6 +19,7 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useUser } from "../_context/user-context";
 import { createClient } from "@/lib/supabase/client";
 
 /* ------------------------------------------------------------------ */
@@ -45,36 +47,64 @@ const mockProfile = {
 /* ------------------------------------------------------------------ */
 
 export default function PerfilPage() {
-  const [loading, setLoading] = useState(true);
+  const { user: authUser, loading, updateUser } = useUser();
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [profile, setProfile] = useState(mockProfile);
-  const [userEmail, setUserEmail] = useState<string>("");
 
   useEffect(() => {
-    async function fetchUser() {
-      try {
-        const supabase = createClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (user) {
-          setUserEmail(user.email ?? "");
-          if (user.user_metadata?.first_name) {
-            setProfile((prev) => ({
-              ...prev,
-              firstName: user.user_metadata.first_name ?? prev.firstName,
-              lastName: user.user_metadata.last_name ?? prev.lastName,
-              email: user.email ?? prev.email,
-            }));
-          }
-        }
-      } catch {
-        // Use mock data on error
-      }
-      setLoading(false);
+    if (authUser) {
+      setProfile((prev) => ({
+        ...prev,
+        firstName: authUser.firstName || prev.firstName,
+        lastName: authUser.lastName || prev.lastName,
+        email: authUser.email || prev.email,
+      }));
     }
-    fetchUser();
-  }, []);
+  }, [authUser]);
+
+  const userEmail = authUser?.email ?? "";
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (authUser?.avatarUrl) setAvatarUrl(authUser.avatarUrl);
+  }, [authUser]);
+
+  async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !authUser) return;
+
+    setUploadingAvatar(true);
+    try {
+      const supabase = createClient();
+      const ext = file.name.split(".").pop();
+      const filePath = `${authUser.id}/avatar.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from("avatars")
+        .getPublicUrl(filePath);
+
+      // Update profile with avatar URL
+      await supabase
+        .from("profiles")
+        .update({ avatar_url: publicUrl })
+        .eq("id", authUser.id);
+
+      const newUrl = `${publicUrl}?t=${Date.now()}`;
+      setAvatarUrl(newUrl);
+      updateUser({ avatarUrl: newUrl });
+    } catch (err) {
+      console.error("Error uploading avatar:", err);
+    }
+    setUploadingAvatar(false);
+  }
 
   const initials = `${profile.firstName.charAt(0)}${profile.lastName.charAt(0)}`.toUpperCase();
 
@@ -124,28 +154,53 @@ export default function PerfilPage() {
       <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
         {/* Gradient banner */}
         <div
-          className="h-32 sm:h-40"
+          className="h-36 sm:h-44"
           style={{
             background:
               "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
           }}
         />
 
-        <div className="px-6 pb-6">
-          <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-end -mt-12 sm:-mt-14">
+        <div className="px-6 pb-8 pt-4">
+          <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-end -mt-10 sm:-mt-10">
             {/* Avatar */}
             <div className="relative">
-              <div
-                className="flex h-24 w-24 sm:h-28 sm:w-28 items-center justify-center rounded-2xl border-4 border-white shadow-lg text-3xl sm:text-4xl font-bold text-white"
-                style={{
-                  background:
-                    "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
-                }}
+              {avatarUrl ? (
+                <Image
+                  src={avatarUrl}
+                  alt="Avatar"
+                  width={96}
+                  height={96}
+                  className="h-20 w-20 sm:h-24 sm:w-24 rounded-2xl border-4 border-white shadow-lg object-cover"
+                />
+              ) : (
+                <div
+                  className="flex h-20 w-20 sm:h-24 sm:w-24 items-center justify-center rounded-2xl border-4 border-white shadow-lg text-2xl sm:text-3xl font-bold text-white"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
+                  }}
+                >
+                  {initials}
+                </div>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleAvatarUpload}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingAvatar}
+                className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-md border border-gray-200 text-gray-500 transition-all duration-300 hover:text-gray-700 hover:shadow-lg disabled:opacity-50"
               >
-                {initials}
-              </div>
-              <button className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-md border border-gray-200 text-gray-500 transition-all duration-300 hover:text-gray-700 hover:shadow-lg">
-                <Camera className="h-4 w-4" />
+                {uploadingAvatar ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Camera className="h-4 w-4" />
+                )}
               </button>
             </div>
 

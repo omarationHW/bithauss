@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -12,6 +12,7 @@ import {
   Home,
   Heart,
   Search,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -32,201 +33,121 @@ import {
   SheetTrigger,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { createClient } from "@/lib/supabase/client";
 
-const properties = [
-  {
-    id: "1",
-    title: "Casa Moderna en Bosques de las Lomas",
-    address: "Bosques de las Lomas, CDMX\nCDMX, C.P. 11700",
-    price: "$8,500,000 MXN",
-    bedrooms: 4,
-    bathrooms: 3,
-    area: 320,
-    brc: true,
-    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Casa1.webp",
-    tag: "Compra",
-    isNew: true,
-    notary: "Alejandro Ramírez Torres",
-    timeAgo: "Hace 10 Horas",
+interface PropertyFromDB {
+  id: string;
+  title: string;
+  address_line: string | null;
+  neighborhood: string | null;
+  city: string | null;
+  state: string | null;
+  price: number | null;
+  currency: string | null;
+  operation: string | null;
+  bedrooms: number | null;
+  bathrooms: number | null;
+  area_total: number | null;
+  featured_image_url: string | null;
+  brc_status: string | null;
+  slug: string | null;
+  created_at: string | null;
+  status: string | null;
+}
+
+interface MappedProperty {
+  id: string;
+  title: string;
+  address: string;
+  price: string;
+  bedrooms: number;
+  bathrooms: number;
+  area: number;
+  brc: boolean;
+  image: string;
+  tag: string;
+  isNew: boolean;
+  notary: string;
+  timeAgo: string;
+  favorite: boolean;
+}
+
+function formatPrice(price: number | null, currency: string | null, operation: string | null): string {
+  if (!price) return "Precio no disponible";
+  const cur = currency || "MXN";
+  const formatted = price.toLocaleString("es-MX", { style: "currency", currency: cur, minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  if (operation === "RENTA") {
+    return `${formatted}/mes ${cur}`;
+  }
+  return `${formatted} ${cur}`;
+}
+
+function formatShortPrice(price: number | null): string {
+  if (!price) return "$0";
+  if (price >= 1_000_000) {
+    const millions = price / 1_000_000;
+    return `$${millions % 1 === 0 ? millions.toFixed(0) : millions.toFixed(2)} M`;
+  }
+  if (price >= 1_000) {
+    const thousands = price / 1_000;
+    return `$${thousands % 1 === 0 ? thousands.toFixed(0) : thousands.toFixed(1)} K`;
+  }
+  return `$${price}`;
+}
+
+function timeAgo(dateStr: string | null): string {
+  if (!dateStr) return "";
+  const now = new Date();
+  const date = new Date(dateStr);
+  const diffMs = now.getTime() - date.getTime();
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const diffWeeks = Math.floor(diffDays / 7);
+  const diffMonths = Math.floor(diffDays / 30);
+
+  if (diffMinutes < 60) return `Hace ${diffMinutes} minutos`;
+  if (diffHours < 24) return `Hace ${diffHours} ${diffHours === 1 ? "Hora" : "Horas"}`;
+  if (diffDays < 7) return `Hace ${diffDays} ${diffDays === 1 ? "Día" : "Días"}`;
+  if (diffWeeks < 5) return `Hace ${diffWeeks} ${diffWeeks === 1 ? "Semana" : "Semanas"}`;
+  return `Hace ${diffMonths} ${diffMonths === 1 ? "Mes" : "Meses"}`;
+}
+
+function isNewProperty(dateStr: string | null): boolean {
+  if (!dateStr) return false;
+  const now = new Date();
+  const date = new Date(dateStr);
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  return diffDays <= 7;
+}
+
+function buildAddress(p: PropertyFromDB): string {
+  const line1Parts = [p.address_line, p.neighborhood].filter(Boolean);
+  const line2Parts = [p.city, p.state].filter(Boolean);
+  const line1 = line1Parts.join(", ");
+  const line2 = line2Parts.join(", ");
+  return [line1, line2].filter(Boolean).join("\n");
+}
+
+function mapProperty(p: PropertyFromDB): MappedProperty {
+  return {
+    id: p.id,
+    title: p.title || "Sin título",
+    address: buildAddress(p),
+    price: formatPrice(p.price, p.currency, p.operation),
+    bedrooms: p.bedrooms || 0,
+    bathrooms: p.bathrooms || 0,
+    area: p.area_total || 0,
+    brc: p.brc_status === "CERTIFICADO",
+    image: p.featured_image_url || "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Casa1.webp",
+    tag: p.operation === "RENTA" ? "Renta" : "Compra",
+    isNew: isNewProperty(p.created_at),
+    notary: "",
+    timeAgo: timeAgo(p.created_at),
     favorite: false,
-  },
-  {
-    id: "2",
-    title: "Departamento de Lujo en Polanco",
-    address: "Polanco, CDMX\nCDMX, C.P. 11560",
-    price: "$45,000/mes MXN",
-    bedrooms: 2,
-    bathrooms: 2,
-    area: 150,
-    brc: true,
-    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa2.webp",
-    tag: "Renta",
-    isNew: true,
-    notary: "Valeria Montes García",
-    timeAgo: "Hace 1 Día",
-    favorite: true,
-  },
-  {
-    id: "3",
-    title: "Penthouse con Vista al Mar",
-    address: "Zona Hotelera, Cancún\nQuintana Roo, C.P. 77500",
-    price: "$12,300,000 MXN",
-    bedrooms: 3,
-    bathrooms: 3,
-    area: 280,
-    brc: true,
-    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa3.webp",
-    tag: "Compra",
-    isNew: false,
-    notary: "Julián Herrera Domínguez",
-    timeAgo: "Hace 2 semanas",
-    favorite: false,
-  },
-  {
-    id: "4",
-    title: "Residencia en San Pedro Garza García",
-    address: "San Pedro Garza García\nNuevo León, C.P. 66220",
-    price: "$15,800,000 MXN",
-    bedrooms: 5,
-    bathrooms: 4,
-    area: 450,
-    brc: true,
-    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa4.webp",
-    tag: "Compra",
-    isNew: true,
-    notary: "Camila Torres Aguilar",
-    timeAgo: "Hace 6 Horas",
-    favorite: false,
-  },
-  {
-    id: "5",
-    title: "Loft Industrial en Roma Norte",
-    address: "Roma Norte, CDMX\nCDMX, C.P. 06700",
-    price: "$28,000/mes MXN",
-    bedrooms: 1,
-    bathrooms: 1,
-    area: 85,
-    brc: false,
-    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa5.webp",
-    tag: "Renta",
-    isNew: false,
-    notary: "Diego Ramírez Solís",
-    timeAgo: "Hace 3 Semanas",
-    favorite: false,
-  },
-  {
-    id: "6",
-    title: "Terreno en Riviera Maya",
-    address: "Playa del Carmen\nQuintana Roo, C.P. 77710",
-    price: "$3,200,000 MXN",
-    bedrooms: 0,
-    bathrooms: 0,
-    area: 500,
-    brc: true,
-    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa6.webp",
-    tag: "Compra",
-    isNew: true,
-    notary: "María Fernanda López",
-    timeAgo: "Hace 5 Horas",
-    favorite: false,
-  },
-  {
-    id: "7",
-    title: "Oficina Premium en Santa Fe",
-    address: "Santa Fe, CDMX\nCDMX, C.P. 05348",
-    price: "$52,000/mes MXN",
-    bedrooms: 0,
-    bathrooms: 2,
-    area: 200,
-    brc: false,
-    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa7.webp",
-    tag: "Renta",
-    isNew: false,
-    notary: "Carlos Hernández Ruiz",
-    timeAgo: "Hace 1 Semana",
-    favorite: true,
-  },
-  {
-    id: "8",
-    title: "Casa de Campo en Valle de Bravo",
-    address: "Valle de Bravo\nEstado de México, C.P. 51200",
-    price: "$6,900,000 MXN",
-    bedrooms: 3,
-    bathrooms: 2,
-    area: 380,
-    brc: true,
-    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa8.webp",
-    tag: "Compra",
-    isNew: true,
-    notary: "Ana Patricia Morales",
-    timeAgo: "Hace 2 Días",
-    favorite: false,
-  },
-  {
-    id: "9",
-    title: "Departamento en Providencia",
-    address: "Providencia, Guadalajara\nJalisco, C.P. 44630",
-    price: "$4,750,000 MXN",
-    bedrooms: 2,
-    bathrooms: 2,
-    area: 120,
-    brc: true,
-    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa9.webp",
-    tag: "Compra",
-    isNew: false,
-    notary: "Laura Sánchez Medina",
-    timeAgo: "Hace 12 Horas",
-    favorite: false,
-  },
-  {
-    id: "10",
-    title: "Villa Frente al Lago",
-    address: "Paseo del Lago 15, Valle de Bravo\nEstado de México, C.P. 51200",
-    price: "$22,100,000 MXN",
-    bedrooms: 8,
-    bathrooms: 6,
-    area: 620,
-    brc: true,
-    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa10.webp",
-    tag: "Compra",
-    isNew: true,
-    notary: "Gabriela Ortiz Campos",
-    timeAgo: "Hace 1 Día",
-    favorite: false,
-  },
-  {
-    id: "11",
-    title: "Casa en Juriquilla",
-    address: "Blvd. Juriquilla 540\nQuerétaro, C.P. 76226",
-    price: "$8,200,000 MXN",
-    bedrooms: 4,
-    bathrooms: 3,
-    area: 310,
-    brc: true,
-    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Casa1.webp",
-    tag: "Compra",
-    isNew: false,
-    notary: "Patricia Delgado Reyes",
-    timeAgo: "Hace 5 Días",
-    favorite: true,
-  },
-  {
-    id: "12",
-    title: "Penthouse en Cancún",
-    address: "Blvd. Kukulcán km 12, Zona Hotelera\nCancún, Q. Roo, C.P. 77500",
-    price: "$19,800,000 MXN",
-    bedrooms: 5,
-    bathrooms: 4,
-    area: 380,
-    brc: true,
-    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa2.webp",
-    tag: "Compra",
-    isNew: true,
-    notary: "Andrés Castillo Nava",
-    timeAgo: "Hace 2 Horas",
-    favorite: false,
-  },
-];
+  };
+}
 
 const propertyTypes = ["Casa", "Departamento", "Terreno", "Oficina", "Local"];
 const bedroomOptions = ["1", "2", "3", "4+"];
@@ -451,24 +372,75 @@ function FiltersPanel() {
   );
 }
 
-const mapMarkers = [
-  { id: "1", price: "$8.50 M", top: "18%", left: "22%" },
-  { id: "2", price: "$4.50 M", top: "28%", left: "38%" },
-  { id: "3", price: "$12.30 M", top: "22%", right: "22%" },
-  { id: "4", price: "$15.80 M", top: "42%", left: "18%" },
-  { id: "5", price: "$9.45 M", top: "48%", left: "42%" },
-  { id: "6", price: "$5.02 M", top: "38%", right: "18%" },
-  { id: "7", price: "$6.80 M", top: "58%", left: "28%" },
-  { id: "8", price: "$9.45 M", top: "62%", right: "28%" },
-  { id: "9", price: "$5.02 M", top: "52%", right: "12%" },
-  { id: "10", price: "$7.20 M", top: "72%", left: "32%" },
-  { id: "11", price: "$9.45 M", top: "68%", right: "22%" },
-  { id: "12", price: "$12.30 M", top: "78%", right: "38%" },
+const demoProperties: MappedProperty[] = [
+  { id: "demo-1", title: "Casa Moderna en Bosques de las Lomas", address: "Bosques de las Lomas\nCDMX, C.P. 11700", price: "$8,500,000 MXN", bedrooms: 4, bathrooms: 3, area: 320, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Casa1.webp", tag: "Compra", isNew: true, notary: "Alejandro Ramírez Torres", timeAgo: "Hace 10 Horas", favorite: false },
+  { id: "demo-2", title: "Departamento de Lujo en Polanco", address: "Polanco\nCDMX, C.P. 11560", price: "$45,000/mes MXN", bedrooms: 2, bathrooms: 2, area: 150, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa2.webp", tag: "Renta", isNew: true, notary: "Valeria Montes García", timeAgo: "Hace 1 Día", favorite: true },
+  { id: "demo-3", title: "Penthouse con Vista al Mar", address: "Zona Hotelera, Cancún\nQuintana Roo, C.P. 77500", price: "$12,300,000 MXN", bedrooms: 3, bathrooms: 3, area: 280, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa3.webp", tag: "Compra", isNew: false, notary: "Julián Herrera", timeAgo: "Hace 2 semanas", favorite: false },
+  { id: "demo-4", title: "Residencia en San Pedro Garza García", address: "San Pedro Garza García\nNuevo León, C.P. 66220", price: "$15,800,000 MXN", bedrooms: 5, bathrooms: 4, area: 450, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa4.webp", tag: "Compra", isNew: true, notary: "Camila Torres", timeAgo: "Hace 6 Horas", favorite: false },
+  { id: "demo-5", title: "Terreno en Riviera Maya", address: "Playa del Carmen\nQuintana Roo, C.P. 77710", price: "$3,200,000 MXN", bedrooms: 0, bathrooms: 0, area: 500, brc: false, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa5.webp", tag: "Compra", isNew: false, notary: "", timeAgo: "Hace 3 Días", favorite: false },
+  { id: "demo-6", title: "Oficina en Santa Fe", address: "Santa Fe\nCDMX, C.P. 05300", price: "$28,000/mes MXN", bedrooms: 0, bathrooms: 2, area: 120, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa6.webp", tag: "Renta", isNew: true, notary: "Roberto Juárez", timeAgo: "Hace 4 Horas", favorite: false },
+  { id: "demo-7", title: "Casa Colonial en Centro Histórico", address: "Centro Histórico\nCDMX, C.P. 06000", price: "$16,700,000 MXN", bedrooms: 5, bathrooms: 4, area: 320, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa7.webp", tag: "Compra", isNew: false, notary: "María Fernández", timeAgo: "Hace 1 Semana", favorite: false },
+  { id: "demo-8", title: "Departamento Nuevo en Condesa", address: "Condesa\nCDMX, C.P. 06140", price: "$5,900,000 MXN", bedrooms: 2, bathrooms: 2, area: 95, brc: false, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa8.webp", tag: "Compra", isNew: true, notary: "", timeAgo: "Hace 2 Horas", favorite: false },
+  { id: "demo-9", title: "Casa con Jardín en Coyoacán", address: "Coyoacán\nCDMX, C.P. 04000", price: "$9,450,000 MXN", bedrooms: 3, bathrooms: 3, area: 280, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa9.webp", tag: "Compra", isNew: false, notary: "Carlos Mendoza", timeAgo: "Hace 5 Días", favorite: false },
+  { id: "demo-10", title: "Loft Industrial en Roma Norte", address: "Roma Norte\nCDMX, C.P. 06700", price: "$35,000/mes MXN", bedrooms: 1, bathrooms: 1, area: 85, brc: false, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa10.webp", tag: "Renta", isNew: true, notary: "", timeAgo: "Hace 3 Horas", favorite: false },
+  { id: "demo-11", title: "Villa Frente al Lago en Valle de Bravo", address: "Valle de Bravo\nEstado de México, C.P. 51200", price: "$22,500,000 MXN", bedrooms: 6, bathrooms: 5, area: 580, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Casa1.webp", tag: "Compra", isNew: false, notary: "Ana Martínez", timeAgo: "Hace 1 Semana", favorite: false },
+  { id: "demo-12", title: "Penthouse en Interlomas", address: "Interlomas, Huixquilucan\nEstado de México, C.P. 52787", price: "$7,200,000 MXN", bedrooms: 3, bathrooms: 2, area: 180, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa2.webp", tag: "Compra", isNew: true, notary: "Andrés Castillo", timeAgo: "Hace 2 Horas", favorite: false },
 ];
 
 export default function PropiedadesPage() {
   const [viewMode, setViewMode] = useState<"lista" | "mapa">("lista");
   const [activeMarker, setActiveMarker] = useState<string | null>(null);
+  const [properties, setProperties] = useState<MappedProperty[]>([]);
+  const [rawProperties, setRawProperties] = useState<PropertyFromDB[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchProperties() {
+      setLoading(true);
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("properties")
+        .select("id, title, address_line, neighborhood, city, state, price, currency, operation, bedrooms, bathrooms, area_total, featured_image_url, brc_status, slug, created_at, status")
+        .eq("status", "PUBLICADO")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Error fetching properties:", error);
+        setProperties(demoProperties);
+      } else {
+        const dbProperties = (data || []) as PropertyFromDB[];
+        const realMapped = dbProperties.map(mapProperty);
+        setProperties([...realMapped, ...demoProperties]);
+      }
+      setLoading(false);
+    }
+    fetchProperties();
+  }, []);
+
+  // Generate map markers from real data with distributed positions
+  const mapMarkers = properties.map((property, index) => {
+    const positions = [
+      { top: "18%", left: "22%" },
+      { top: "28%", left: "38%" },
+      { top: "22%", right: "22%" },
+      { top: "42%", left: "18%" },
+      { top: "48%", left: "42%" },
+      { top: "38%", right: "18%" },
+      { top: "58%", left: "28%" },
+      { top: "62%", right: "28%" },
+      { top: "52%", right: "12%" },
+      { top: "72%", left: "32%" },
+      { top: "68%", right: "22%" },
+      { top: "78%", right: "38%" },
+    ];
+    const pos = positions[index % positions.length];
+    const raw = rawProperties[index];
+    return {
+      id: property.id,
+      price: formatShortPrice(raw?.price ?? null),
+      ...pos,
+    };
+  });
 
   return (
     <main className="min-h-screen bg-background pt-[100px]">
@@ -553,7 +525,7 @@ export default function PropiedadesPage() {
                   </SheetContent>
                 </Sheet>
                 <p className="text-sm text-muted-foreground">
-                  <span className="font-semibold text-foreground">{properties.length}</span>{" "}
+                  <span className="font-semibold text-foreground">{loading ? "..." : properties.length}</span>{" "}
                   propiedades encontradas
                 </p>
               </div>
@@ -572,9 +544,28 @@ export default function PropiedadesPage() {
 
             {/* Property Grid / Map view */}
             <div>
+            {/* Loading state */}
+            {loading && (
+              <div className="flex flex-col items-center justify-center py-20">
+                <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+                <p className="text-muted-foreground text-sm">Cargando propiedades...</p>
+              </div>
+            )}
+
+            {/* Empty state */}
+            {!loading && properties.length === 0 && viewMode === "lista" && (
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <Search className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                <h3 className="text-lg font-semibold mb-1">No se encontraron propiedades</h3>
+                <p className="text-muted-foreground text-sm max-w-md">
+                  No hay propiedades publicadas en este momento. Intenta ajustar los filtros o vuelve más tarde.
+                </p>
+              </div>
+            )}
+
             <div className={cn(
               "grid gap-5",
-              viewMode === "mapa"
+              viewMode === "mapa" || loading
                 ? "hidden"
                 : "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
             )}>
@@ -602,7 +593,7 @@ export default function PropiedadesPage() {
                         alt={property.title}
                         fill
                         placeholder="blur"
-                        blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzNnLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiIGZpbGw9IiMyMDIwMjAiLz48L3N2Zz4="
+                        blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMnLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiIGZpbGw9IiMyMDIwMjAiLz48L3N2Zz4="
                         sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                         className="object-cover transition-transform duration-500 group-hover:scale-105"
                       />
@@ -678,9 +669,11 @@ export default function PropiedadesPage() {
                         {property.address}
                       </p>
 
-                      <p className="mt-1.5 text-[10px] text-muted-foreground">
-                        Notario: <span className="font-semibold text-foreground">{property.notary}</span>
-                      </p>
+                      {property.notary && (
+                        <p className="mt-1.5 text-[10px] text-muted-foreground">
+                          Notario: <span className="font-semibold text-foreground">{property.notary}</span>
+                        </p>
+                      )}
                     </div>
                   </div>
                 </Link>
@@ -688,7 +681,7 @@ export default function PropiedadesPage() {
             </div>
 
             {/* Map */}
-            {viewMode === "mapa" && (
+            {viewMode === "mapa" && !loading && (
               <div className="w-full h-[calc(100vh-200px)] rounded-xl overflow-hidden border border-border/40 relative">
                 <iframe
                   src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d60216.953710835554!2d-99.19155229814455!3d19.390519038498072!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x85ce0026db097507%3A0x54061076265ee841!2sCiudad%20de%20M%C3%A9xico%2C%20CDMX!5e0!3m2!1ses-419!2smx!4v1700000000000!5m2!1ses-419!2smx"
@@ -707,7 +700,7 @@ export default function PropiedadesPage() {
                     <div
                       key={marker.id}
                       className={cn("absolute", isActive ? "z-50" : "z-10")}
-                      style={{ top: marker.top, left: marker.left, right: marker.right }}
+                      style={{ top: (marker as Record<string, string>).top, left: (marker as Record<string, string>).left, right: (marker as Record<string, string>).right }}
                     >
                       <button
                         onClick={(e) => { e.stopPropagation(); setActiveMarker(isActive ? null : marker.id); }}

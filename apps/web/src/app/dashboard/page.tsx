@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useUser } from "./_context/user-context";
 import {
   Building2,
   Users,
@@ -17,7 +17,6 @@ import {
   MessageSquare,
   FileText,
 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 
 /* ------------------------------------------------------------------ */
 /*  Mock data                                                         */
@@ -153,40 +152,9 @@ function isBrokerRole(role: string) {
 
 export default function DashboardPage() {
   const maxChartValue = Math.max(...chartData.map((d) => d.value));
-  const [userName, setUserName] = useState<string | null>(null);
-  const [userRole, setUserRole] = useState<string>("COMPRADOR");
-  const [loadingUser, setLoadingUser] = useState(true);
-
-  useEffect(() => {
-    async function fetchUser() {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("first_name, last_name, role")
-          .eq("id", user.id)
-          .maybeSingle();
-
-        if (profile?.first_name) {
-          setUserName(
-            `${profile.first_name} ${profile.last_name ?? ""}`.trim()
-          );
-        } else if (user.user_metadata?.first_name) {
-          setUserName(
-            `${user.user_metadata.first_name} ${user.user_metadata.last_name ?? ""}`.trim()
-          );
-        } else {
-          setUserName(user.email ?? "Usuario");
-        }
-        setUserRole(profile?.role ?? user.user_metadata?.role ?? "COMPRADOR");
-      }
-      setLoadingUser(false);
-    }
-    fetchUser();
-  }, []);
+  const { user, loading: loadingUser } = useUser();
+  const userName = user?.fullName ?? null;
+  const userRole = user?.role ?? "COMPRADOR";
 
   const today = new Date().toLocaleDateString("es-MX", {
     weekday: "long",

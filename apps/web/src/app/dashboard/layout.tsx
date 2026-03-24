@@ -1,14 +1,14 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { createClient } from "@/lib/supabase/client";
+import { UserProvider, useUser } from "./_context/user-context";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -76,6 +76,7 @@ function SidebarContent({
   activeItem,
   userName,
   userInitials,
+  userAvatarUrl,
   userRole,
   navItems,
   onLogout,
@@ -83,6 +84,7 @@ function SidebarContent({
   activeItem: string;
   userName: string;
   userInitials: string;
+  userAvatarUrl: string | null;
   userRole: UserRole;
   navItems: typeof allNavItems;
   onLogout: () => void;
@@ -108,15 +110,25 @@ function SidebarContent({
 
       {/* User Info */}
       <div className="flex items-center gap-3 px-6 py-5">
-        <div
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white shadow-lg"
-          style={{
-            background:
-              "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
-          }}
-        >
-          {userInitials}
-        </div>
+        {userAvatarUrl ? (
+          <Image
+            src={userAvatarUrl}
+            alt={userName}
+            width={44}
+            height={44}
+            className="h-11 w-11 shrink-0 rounded-full object-cover shadow-lg"
+          />
+        ) : (
+          <div
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white shadow-lg"
+            style={{
+              background:
+                "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
+            }}
+          >
+            {userInitials}
+          </div>
+        )}
         <div className="flex flex-col overflow-hidden">
           <span className="truncate text-sm font-semibold text-white">
             {userName}
@@ -195,53 +207,23 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  return (
+    <UserProvider>
+      <DashboardShell>{children}</DashboardShell>
+    </UserProvider>
+  );
+}
+
+function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
+  const { user, loading, logout } = useUser();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [userName, setUserName] = useState("Cargando...");
-  const [userInitials, setUserInitials] = useState("...");
-  const [userRole, setUserRole] = useState<UserRole>("COMPRADOR");
 
-  useEffect(() => {
-    async function fetchUser() {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("first_name, last_name, role")
-          .eq("id", user.id)
-          .maybeSingle();
-
-        const first =
-          profile?.first_name ?? user.user_metadata?.first_name ?? "";
-        const last =
-          profile?.last_name ?? user.user_metadata?.last_name ?? "";
-        const fullName =
-          `${first} ${last}`.trim() || user.email || "Usuario";
-        setUserName(fullName);
-
-        const role = (profile?.role ?? user.user_metadata?.role ?? "COMPRADOR") as UserRole;
-        setUserRole(role);
-
-        const initials =
-          first && last
-            ? `${first[0]}${last[0]}`.toUpperCase()
-            : fullName.slice(0, 2).toUpperCase();
-        setUserInitials(initials);
-      }
-    }
-    fetchUser();
-  }, []);
-
-  const handleLogout = useCallback(async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/auth/login");
-    router.refresh();
-  }, [router]);
+  const userName = user?.fullName ?? "Cargando...";
+  const userInitials = user?.initials ?? "..";
+  const userAvatarUrl = user?.avatarUrl ?? null;
+  const userRole = user?.role ?? "COMPRADOR";
+  const handleLogout = logout;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -251,6 +233,7 @@ export default function DashboardLayout({
           activeItem={pathname}
           userName={userName}
           userInitials={userInitials}
+          userAvatarUrl={userAvatarUrl}
           userRole={userRole}
           navItems={getNavItemsForRole(userRole)}
           onLogout={handleLogout}
@@ -277,6 +260,7 @@ export default function DashboardLayout({
                 activeItem={pathname}
                 userName={userName}
                 userInitials={userInitials}
+                userAvatarUrl={userAvatarUrl}
                 userRole={userRole}
                 navItems={getNavItemsForRole(userRole)}
                 onLogout={handleLogout}
@@ -313,15 +297,25 @@ export default function DashboardLayout({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-2.5 rounded-xl border border-gray-200 bg-white px-3 py-1.5 transition-all duration-300 hover:bg-gray-50">
-                  <div
-                    className="flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold text-white"
-                    style={{
-                      background:
-                        "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
-                    }}
-                  >
-                    {userInitials}
-                  </div>
+                  {userAvatarUrl ? (
+                    <Image
+                      src={userAvatarUrl}
+                      alt={userName}
+                      width={28}
+                      height={28}
+                      className="h-7 w-7 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div
+                      className="flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold text-white"
+                      style={{
+                        background:
+                          "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
+                      }}
+                    >
+                      {userInitials}
+                    </div>
+                  )}
                   <span className="hidden text-sm font-medium text-gray-700 md:inline-block">
                     {userName.split(" ")[0]}
                   </span>

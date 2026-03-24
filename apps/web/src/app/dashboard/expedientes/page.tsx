@@ -14,157 +14,95 @@ import {
   User,
   ChevronDown,
   ChevronUp,
+  Loader2,
+  Inbox,
 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import { useUser } from "@/app/dashboard/_context/user-context";
 
 /* ------------------------------------------------------------------ */
-/*  Types & Mock data                                                  */
+/*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
-interface Documento {
-  nombre: string;
-  completado: boolean;
+interface BrcDocument {
+  id: string;
+  document_type_id: string;
+  file_name: string;
+  status: string;
+  brc_document_types: {
+    name: string;
+  } | null;
 }
 
 interface Expediente {
-  id: number;
-  propiedad: string;
-  fechaSolicitud: string;
-  estado: string;
-  notario: string;
-  progreso: number;
-  documentos: Documento[];
+  id: string;
+  property_id: string;
+  status: string;
+  notes: string | null;
+  created_at: string;
+  assigned_notary_id: string | null;
+  properties: {
+    title: string;
+  } | null;
+  notary_profile: {
+    first_name: string;
+    last_name: string;
+  } | null;
+  brc_documents: BrcDocument[];
 }
 
-const stats = [
-  {
-    label: "Total Solicitudes",
-    value: "12",
-    icon: FileText,
-    color: "hsl(221 83% 53%)",
-    bgColor: "hsl(221 83% 53% / 0.1)",
-  },
-  {
-    label: "En Revision",
-    value: "4",
-    icon: Clock,
-    color: "hsl(45 93% 47%)",
-    bgColor: "hsl(45 93% 47% / 0.1)",
-  },
-  {
-    label: "Certificados",
-    value: "6",
-    icon: CheckCircle2,
-    color: "hsl(160 84% 39%)",
-    bgColor: "hsl(160 84% 39% / 0.1)",
-  },
-  {
-    label: "Rechazados",
-    value: "2",
-    icon: XCircle,
-    color: "hsl(0 72% 51%)",
-    bgColor: "hsl(0 72% 51% / 0.1)",
-  },
-];
+/* ------------------------------------------------------------------ */
+/*  Status mapping                                                     */
+/* ------------------------------------------------------------------ */
 
-const expedientes: Expediente[] = [
-  {
-    id: 1,
-    propiedad: "Depto. Polanco 3 Rec.",
-    fechaSolicitud: "15 Feb 2026",
-    estado: "En Revision",
-    notario: "Lic. Carlos Mendoza",
-    progreso: 65,
-    documentos: [
-      { nombre: "Escritura", completado: true },
-      { nombre: "INE", completado: true },
-      { nombre: "Boleta Predial", completado: true },
-      { nombre: "Recibo de Agua", completado: false },
-      { nombre: "CFE", completado: true },
-    ],
-  },
-  {
-    id: 2,
-    propiedad: "Casa Coyoacan 250m2",
-    fechaSolicitud: "20 Feb 2026",
-    estado: "Documentacion Pendiente",
-    notario: "Lic. Ana Martinez",
-    progreso: 40,
-    documentos: [
-      { nombre: "Escritura", completado: true },
-      { nombre: "INE", completado: true },
-      { nombre: "Boleta Predial", completado: false },
-      { nombre: "Recibo de Agua", completado: false },
-      { nombre: "CFE", completado: false },
-    ],
-  },
-  {
-    id: 3,
-    propiedad: "Penthouse Santa Fe",
-    fechaSolicitud: "1 Mar 2026",
-    estado: "Validacion Notarial",
-    notario: "Lic. Roberto Juarez",
-    progreso: 85,
-    documentos: [
-      { nombre: "Escritura", completado: true },
-      { nombre: "INE", completado: true },
-      { nombre: "Boleta Predial", completado: true },
-      { nombre: "Recibo de Agua", completado: true },
-      { nombre: "CFE", completado: true },
-    ],
-  },
-  {
-    id: 4,
-    propiedad: "Local Comercial Roma",
-    fechaSolicitud: "5 Ene 2026",
-    estado: "Certificado",
-    notario: "Lic. Patricia Gomez",
-    progreso: 100,
-    documentos: [
-      { nombre: "Escritura", completado: true },
-      { nombre: "INE", completado: true },
-      { nombre: "Boleta Predial", completado: true },
-      { nombre: "Recibo de Agua", completado: true },
-      { nombre: "CFE", completado: true },
-    ],
-  },
-  {
-    id: 5,
-    propiedad: "Depto. Condesa 2 Rec.",
-    fechaSolicitud: "10 Dic 2025",
-    estado: "Rechazado",
-    notario: "Lic. Fernando Rios",
-    progreso: 30,
-    documentos: [
-      { nombre: "Escritura", completado: true },
-      { nombre: "INE", completado: false },
-      { nombre: "Boleta Predial", completado: false },
-      { nombre: "Recibo de Agua", completado: false },
-      { nombre: "CFE", completado: false },
-    ],
-  },
-];
+const STATUS_LABELS: Record<string, string> = {
+  EN_REVISION: "En Revision",
+  DOCUMENTACION_PENDIENTE: "Documentacion Pendiente",
+  VALIDACION_NOTARIAL: "Validacion Notarial",
+  CERTIFICADO: "Certificado",
+  RECHAZADO: "Rechazado",
+};
+
+const STATUS_BADGE_STYLES: Record<string, string> = {
+  EN_REVISION: "bg-blue-50 text-blue-600 border border-blue-200",
+  DOCUMENTACION_PENDIENTE: "bg-amber-50 text-amber-600 border border-amber-200",
+  VALIDACION_NOTARIAL: "bg-purple-50 text-purple-600 border border-purple-200",
+  CERTIFICADO: "bg-emerald-50 text-emerald-600 border border-emerald-200",
+  RECHAZADO: "bg-red-50 text-red-600 border border-red-200",
+};
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
-function getEstadoBadge(estado: string) {
-  const styles: Record<string, string> = {
-    "En Revision": "bg-blue-50 text-blue-600 border border-blue-200",
-    "Documentacion Pendiente":
-      "bg-amber-50 text-amber-600 border border-amber-200",
-    "Validacion Notarial":
-      "bg-purple-50 text-purple-600 border border-purple-200",
-    Certificado: "bg-emerald-50 text-emerald-600 border border-emerald-200",
-    Rechazado: "bg-red-50 text-red-600 border border-red-200",
-  };
+function getEstadoBadge(status: string) {
+  const label = STATUS_LABELS[status] ?? status;
+  const style =
+    STATUS_BADGE_STYLES[status] ??
+    "bg-gray-100 text-gray-600 border border-gray-200";
   return (
     <span
-      className={`inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-semibold ${styles[estado] ?? "bg-gray-100 text-gray-600 border border-gray-200"}`}
+      className={`inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-semibold ${style}`}
     >
-      {estado}
+      {label}
     </span>
   );
+}
+
+function getProgressFromDocs(docs: BrcDocument[]) {
+  if (docs.length === 0) return 0;
+  const completed = docs.filter(
+    (d) => d.status === "APROBADO" || d.status === "VALIDADO"
+  ).length;
+  return Math.round((completed / docs.length) * 100);
+}
+
+function getStatusProgress(status: string, docProgress: number) {
+  if (status === "CERTIFICADO") return 100;
+  if (status === "RECHAZADO") return docProgress;
+  if (status === "VALIDACION_NOTARIAL") return Math.max(docProgress, 80);
+  if (status === "EN_REVISION") return Math.max(docProgress, 30);
+  return docProgress;
 }
 
 function getProgressColor(progreso: number) {
@@ -174,18 +112,120 @@ function getProgressColor(progreso: number) {
   return "hsl(0 72% 51%)";
 }
 
+function formatDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString("es-MX", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 /* ------------------------------------------------------------------ */
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
 
 export default function ExpedientesPage() {
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const { user } = useUser();
+  const [expedientes, setExpedientes] = useState<Expediente[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedExp, setSelectedExp] = useState<Expediente | null>(null);
 
   useEffect(() => {
     document.body.style.overflow = selectedExp ? "hidden" : "";
-    return () => { document.body.style.overflow = ""; };
+    return () => {
+      document.body.style.overflow = "";
+    };
   }, [selectedExp]);
+
+  /* ---- Fetch expedientes ---- */
+  useEffect(() => {
+    if (!user) return;
+
+    async function fetchExpedientes() {
+      const supabase = createClient();
+
+      const { data, error } = await supabase
+        .from("brc_expedientes")
+        .select(
+          `
+          id,
+          property_id,
+          status,
+          notes,
+          created_at,
+          assigned_notary_id,
+          properties ( title ),
+          notary_profile:profiles!brc_expedientes_assigned_notary_id_fkey ( first_name, last_name ),
+          brc_documents (
+            id,
+            document_type_id,
+            file_name,
+            status,
+            brc_document_types ( name )
+          )
+        `
+        )
+        .eq("requested_by", user!.id)
+        .order("created_at", { ascending: false });
+
+      if (!error && data) {
+        setExpedientes(data as unknown as Expediente[]);
+      }
+      setLoading(false);
+    }
+
+    fetchExpedientes();
+  }, [user]);
+
+  /* ---- Stats ---- */
+  const stats = [
+    {
+      label: "Total Solicitudes",
+      value: String(expedientes.length),
+      icon: FileText,
+      color: "hsl(221 83% 53%)",
+      bgColor: "hsl(221 83% 53% / 0.1)",
+    },
+    {
+      label: "En Revision",
+      value: String(
+        expedientes.filter(
+          (e) =>
+            e.status === "EN_REVISION" || e.status === "DOCUMENTACION_PENDIENTE"
+        ).length
+      ),
+      icon: Clock,
+      color: "hsl(45 93% 47%)",
+      bgColor: "hsl(45 93% 47% / 0.1)",
+    },
+    {
+      label: "Certificados",
+      value: String(
+        expedientes.filter((e) => e.status === "CERTIFICADO").length
+      ),
+      icon: CheckCircle2,
+      color: "hsl(160 84% 39%)",
+      bgColor: "hsl(160 84% 39% / 0.1)",
+    },
+    {
+      label: "Rechazados",
+      value: String(
+        expedientes.filter((e) => e.status === "RECHAZADO").length
+      ),
+      icon: XCircle,
+      color: "hsl(0 72% 51%)",
+      bgColor: "hsl(0 72% 51% / 0.1)",
+    },
+  ];
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -204,7 +244,8 @@ export default function ExpedientesPage() {
             Gestiona tus solicitudes de certificados de bienes raices.
           </p>
         </div>
-        <button
+        <Link
+          href="/dashboard/propiedades"
           className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg"
           style={{
             background:
@@ -213,7 +254,7 @@ export default function ExpedientesPage() {
         >
           <Plus className="h-4 w-4" />
           Nueva Solicitud
-        </button>
+        </Link>
       </div>
 
       {/* ============================================================ */}
@@ -251,312 +292,375 @@ export default function ExpedientesPage() {
       </div>
 
       {/* ============================================================ */}
+      {/*  Empty State                                                 */}
+      {/* ============================================================ */}
+      {expedientes.length === 0 && (
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-gray-100 bg-white py-16 shadow-sm">
+          <Inbox className="h-16 w-16 text-gray-200 mb-4" />
+          <h3
+            className="text-lg font-bold text-gray-900 mb-1"
+            style={{ fontFamily: "Barlow, Inter, sans-serif" }}
+          >
+            Sin expedientes
+          </h3>
+          <p className="text-sm text-gray-500 mb-6 text-center max-w-sm">
+            Aun no tienes solicitudes de certificacion BRC. Comienza seleccionando una propiedad para certificar.
+          </p>
+          <Link
+            href="/dashboard/propiedades"
+            className="inline-flex items-center gap-2 rounded-xl px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg"
+            style={{
+              background:
+                "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
+            }}
+          >
+            <Plus className="h-4 w-4" />
+            Crear mi primera solicitud
+          </Link>
+        </div>
+      )}
+
+      {/* ============================================================ */}
       {/*  Expedientes List                                            */}
       {/* ============================================================ */}
       <div className="space-y-4">
-        {expedientes.map((exp) => (
-          <div
-            key={exp.id}
-            className="rounded-2xl border border-gray-100 bg-white shadow-sm transition-all duration-300 hover:shadow-md"
-          >
-            {/* Main row */}
-            <div className="p-6">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                {/* Left: Property + Date */}
-                <div className="flex items-center gap-4 min-w-0">
-                  <div
-                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl"
-                    style={{
-                      background:
-                        "linear-gradient(135deg, hsl(221 83% 53% / 0.1), hsl(160 84% 39% / 0.1))",
-                    }}
-                  >
-                    <ShieldCheck
-                      className="h-5 w-5"
-                      style={{ color: "hsl(221 83% 53%)" }}
-                    />
-                  </div>
-                  <div className="min-w-0">
-                    <h4
-                      className="font-bold text-gray-900 truncate"
-                      style={{ fontFamily: "Barlow, Inter, sans-serif" }}
+        {expedientes.map((exp) => {
+          const docProgress = getProgressFromDocs(exp.brc_documents);
+          const progreso = getStatusProgress(exp.status, docProgress);
+          const notaryName = exp.notary_profile
+            ? `Lic. ${exp.notary_profile.first_name} ${exp.notary_profile.last_name}`
+            : "Sin asignar";
+          const propertyTitle = exp.properties?.title ?? "Propiedad";
+
+          return (
+            <div
+              key={exp.id}
+              className="rounded-2xl border border-gray-100 bg-white shadow-sm transition-all duration-300 hover:shadow-md"
+            >
+              {/* Main row */}
+              <div className="p-6">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  {/* Left: Property + Date */}
+                  <div className="flex items-center gap-4 min-w-0">
+                    <div
+                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl"
+                      style={{
+                        background:
+                          "linear-gradient(135deg, hsl(221 83% 53% / 0.1), hsl(160 84% 39% / 0.1))",
+                      }}
                     >
-                      {exp.propiedad}
-                    </h4>
-                    <p className="mt-0.5 text-sm text-gray-500">
-                      Solicitud: {exp.fechaSolicitud}
+                      <ShieldCheck
+                        className="h-5 w-5"
+                        style={{ color: "hsl(221 83% 53%)" }}
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <h4
+                        className="font-bold text-gray-900 truncate"
+                        style={{ fontFamily: "Barlow, Inter, sans-serif" }}
+                      >
+                        {propertyTitle}
+                      </h4>
+                      <p className="mt-0.5 text-sm text-gray-500">
+                        Solicitud: {formatDate(exp.created_at)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Center: Status + Notary */}
+                  <div className="flex flex-wrap items-center gap-3">
+                    {getEstadoBadge(exp.status)}
+                    <div className="flex items-center gap-1.5 text-sm text-gray-500">
+                      <User className="h-3.5 w-3.5" />
+                      {notaryName}
+                    </div>
+                  </div>
+
+                  {/* Right: Progress + Actions */}
+                  <div className="flex items-center gap-4">
+                    {/* Progress bar */}
+                    <div className="flex items-center gap-3 min-w-[160px]">
+                      <div className="h-2 flex-1 rounded-full bg-gray-100">
+                        <div
+                          className="h-2 rounded-full transition-all duration-500"
+                          style={{
+                            width: `${progreso}%`,
+                            background: getProgressColor(progreso),
+                          }}
+                        />
+                      </div>
+                      <span className="text-sm font-semibold text-gray-600 w-10 text-right">
+                        {progreso}%
+                      </span>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setSelectedExp(exp)}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-semibold text-gray-700 transition-all duration-300 hover:bg-gray-50 hover:shadow-sm"
+                      >
+                        Ver Expediente
+                        <ArrowUpRight className="h-3 w-3" />
+                      </button>
+                      <button
+                        onClick={() =>
+                          setExpandedId(expandedId === exp.id ? null : exp.id)
+                        }
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-400 transition-all duration-300 hover:bg-gray-50 hover:text-gray-600"
+                      >
+                        {expandedId === exp.id ? (
+                          <ChevronUp className="h-4 w-4" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Expanded: Document Checklist */}
+              {expandedId === exp.id && (
+                <div className="border-t border-gray-100 bg-gray-50/50 px-6 py-4">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
+                    Checklist de Documentos
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    {exp.brc_documents.length > 0 ? (
+                      exp.brc_documents.map((doc) => {
+                        const completado =
+                          doc.status === "APROBADO" || doc.status === "VALIDADO";
+                        const docName =
+                          doc.brc_document_types?.name ?? doc.file_name;
+                        return (
+                          <div
+                            key={doc.id}
+                            className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 text-sm font-medium transition-all duration-200 ${
+                              completado
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                : "border-amber-200 bg-amber-50 text-amber-700"
+                            }`}
+                          >
+                            {completado ? (
+                              <CheckCircle2 className="h-4 w-4" />
+                            ) : (
+                              <AlertCircle className="h-4 w-4" />
+                            )}
+                            {docName}
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <p className="text-sm text-gray-400">
+                        No se han subido documentos aun.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ============================================================ */}
+      {/*  Expediente Detail Modal                                     */}
+      {/* ============================================================ */}
+      {selectedExp && (() => {
+        const docProgress = getProgressFromDocs(selectedExp.brc_documents);
+        const progreso = getStatusProgress(selectedExp.status, docProgress);
+        const notaryName = selectedExp.notary_profile
+          ? `Lic. ${selectedExp.notary_profile.first_name} ${selectedExp.notary_profile.last_name}`
+          : "Sin asignar";
+        const propertyTitle = selectedExp.properties?.title ?? "Propiedad";
+
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+            onClick={() => setSelectedExp(null)}
+          >
+            <div
+              className="w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl animate-fade-in-up"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div
+                className="p-6 text-white sticky top-0 z-10"
+                style={{
+                  background:
+                    "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
+                }}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center">
+                      <ShieldCheck className="h-5 w-5 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold">{propertyTitle}</h3>
+                      <p className="text-sm text-white/70">
+                        Expediente BRC #{selectedExp.id.slice(0, 8)}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSelectedExp(null)}
+                    className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors"
+                  >
+                    <XCircle className="h-4 w-4 text-white" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-6">
+                {/* Status & Progress */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="rounded-xl bg-gray-50 p-4">
+                    <p className="text-xs text-gray-400 mb-1">Estado</p>
+                    {getEstadoBadge(selectedExp.status)}
+                  </div>
+                  <div className="rounded-xl bg-gray-50 p-4">
+                    <p className="text-xs text-gray-400 mb-1">Progreso</p>
+                    <div className="flex items-center gap-3">
+                      <div className="h-2 flex-1 rounded-full bg-gray-200">
+                        <div
+                          className="h-2 rounded-full transition-all"
+                          style={{
+                            width: `${progreso}%`,
+                            background: getProgressColor(progreso),
+                          }}
+                        />
+                      </div>
+                      <span className="text-sm font-bold text-gray-700">
+                        {progreso}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Info */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="rounded-xl border border-gray-100 p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Clock className="h-3.5 w-3.5 text-gray-400" />
+                      <p className="text-xs text-gray-400">
+                        Fecha de solicitud
+                      </p>
+                    </div>
+                    <p className="text-sm font-semibold text-gray-900">
+                      {formatDate(selectedExp.created_at)}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-gray-100 p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <User className="h-3.5 w-3.5 text-gray-400" />
+                      <p className="text-xs text-gray-400">Notario asignado</p>
+                    </div>
+                    <p className="text-sm font-semibold text-gray-900">
+                      {notaryName}
                     </p>
                   </div>
                 </div>
 
-                {/* Center: Status + Notary */}
-                <div className="flex flex-wrap items-center gap-3">
-                  {getEstadoBadge(exp.estado)}
-                  <div className="flex items-center gap-1.5 text-sm text-gray-500">
-                    <User className="h-3.5 w-3.5" />
-                    {exp.notario}
+                {/* Notes */}
+                {selectedExp.notes && (
+                  <div className="rounded-xl border border-gray-100 p-4">
+                    <p className="text-xs text-gray-400 mb-1">Notas</p>
+                    <p className="text-sm text-gray-700">{selectedExp.notes}</p>
                   </div>
-                </div>
+                )}
 
-                {/* Right: Progress + Actions */}
-                <div className="flex items-center gap-4">
-                  {/* Progress bar */}
-                  <div className="flex items-center gap-3 min-w-[160px]">
-                    <div className="h-2 flex-1 rounded-full bg-gray-100">
-                      <div
-                        className="h-2 rounded-full transition-all duration-500"
-                        style={{
-                          width: `${exp.progreso}%`,
-                          background: getProgressColor(exp.progreso),
-                        }}
-                      />
-                    </div>
-                    <span className="text-sm font-semibold text-gray-600 w-10 text-right">
-                      {exp.progreso}%
-                    </span>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setSelectedExp(exp)}
-                      className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-semibold text-gray-700 transition-all duration-300 hover:bg-gray-50 hover:shadow-sm"
-                    >
-                      Ver Expediente
-                      <ArrowUpRight className="h-3 w-3" />
-                    </button>
-                    <button
-                      onClick={() =>
-                        setExpandedId(expandedId === exp.id ? null : exp.id)
-                      }
-                      className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-400 transition-all duration-300 hover:bg-gray-50 hover:text-gray-600"
-                    >
-                      {expandedId === exp.id ? (
-                        <ChevronUp className="h-4 w-4" />
-                      ) : (
-                        <ChevronDown className="h-4 w-4" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Expanded: Document Checklist */}
-            {expandedId === exp.id && (
-              <div className="border-t border-gray-100 bg-gray-50/50 px-6 py-4">
-                <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
-                  Checklist de Documentos
-                </p>
-                <div className="flex flex-wrap gap-3">
-                  {exp.documentos.map((doc) => (
-                    <div
-                      key={doc.nombre}
-                      className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 text-sm font-medium transition-all duration-200 ${
-                        doc.completado
-                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                          : "border-amber-200 bg-amber-50 text-amber-700"
-                      }`}
-                    >
-                      {doc.completado ? (
-                        <CheckCircle2 className="h-4 w-4" />
-                      ) : (
-                        <AlertCircle className="h-4 w-4" />
-                      )}
-                      {doc.nombre}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* Expediente Detail Modal */}
-      {selectedExp && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-          onClick={() => setSelectedExp(null)}
-        >
-          <div
-            className="w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl animate-fade-in-up"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div
-              className="p-6 text-white sticky top-0 z-10"
-              style={{ background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))" }}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center">
-                    <ShieldCheck className="h-5 w-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold">{selectedExp.propiedad}</h3>
-                    <p className="text-sm text-white/70">Expediente BRC #{selectedExp.id}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setSelectedExp(null)}
-                  className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors"
-                >
-                  <XCircle className="h-4 w-4 text-white" />
-                </button>
-              </div>
-            </div>
-
-            <div className="p-6 space-y-6">
-              {/* Status & Progress */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="rounded-xl bg-gray-50 p-4">
-                  <p className="text-xs text-gray-400 mb-1">Estado</p>
-                  {getEstadoBadge(selectedExp.estado)}
-                </div>
-                <div className="rounded-xl bg-gray-50 p-4">
-                  <p className="text-xs text-gray-400 mb-1">Progreso</p>
-                  <div className="flex items-center gap-3">
-                    <div className="h-2 flex-1 rounded-full bg-gray-200">
-                      <div
-                        className="h-2 rounded-full transition-all"
-                        style={{
-                          width: `${selectedExp.progreso}%`,
-                          background: getProgressColor(selectedExp.progreso),
-                        }}
-                      />
-                    </div>
-                    <span className="text-sm font-bold text-gray-700">{selectedExp.progreso}%</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Info */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="rounded-xl border border-gray-100 p-4">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Clock className="h-3.5 w-3.5 text-gray-400" />
-                    <p className="text-xs text-gray-400">Fecha de solicitud</p>
-                  </div>
-                  <p className="text-sm font-semibold text-gray-900">{selectedExp.fechaSolicitud}</p>
-                </div>
-                <div className="rounded-xl border border-gray-100 p-4">
-                  <div className="flex items-center gap-2 mb-1">
-                    <User className="h-3.5 w-3.5 text-gray-400" />
-                    <p className="text-xs text-gray-400">Notario asignado</p>
-                  </div>
-                  <p className="text-sm font-semibold text-gray-900">{selectedExp.notario}</p>
-                </div>
-              </div>
-
-              {/* Documents Checklist */}
-              <div>
-                <h4
-                  className="text-sm font-bold text-gray-900 mb-3 uppercase tracking-wider"
-                  style={{ fontFamily: "Barlow, Inter, sans-serif" }}
-                >
-                  Documentos del expediente
-                </h4>
-                <div className="space-y-2">
-                  {selectedExp.documentos.map((doc) => (
-                    <div
-                      key={doc.nombre}
-                      className={`flex items-center justify-between rounded-xl p-3 transition-colors ${
-                        doc.completado ? "bg-emerald-50" : "bg-amber-50"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`h-8 w-8 rounded-lg flex items-center justify-center ${
-                            doc.completado ? "bg-emerald-100" : "bg-amber-100"
-                          }`}
-                        >
-                          {doc.completado ? (
-                            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                          ) : (
-                            <AlertCircle className="h-4 w-4 text-amber-600" />
-                          )}
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{doc.nombre}</p>
-                          <p className="text-xs text-gray-500">
-                            {doc.completado ? "Documento recibido y validado" : "Pendiente de carga"}
-                          </p>
-                        </div>
+                {/* Documents Checklist */}
+                <div>
+                  <h4
+                    className="text-sm font-bold text-gray-900 mb-3 uppercase tracking-wider"
+                    style={{ fontFamily: "Barlow, Inter, sans-serif" }}
+                  >
+                    Documentos del expediente
+                  </h4>
+                  <div className="space-y-2">
+                    {selectedExp.brc_documents.length > 0 ? (
+                      selectedExp.brc_documents.map((doc) => {
+                        const completado =
+                          doc.status === "APROBADO" || doc.status === "VALIDADO";
+                        const docName =
+                          doc.brc_document_types?.name ?? doc.file_name;
+                        return (
+                          <div
+                            key={doc.id}
+                            className={`flex items-center justify-between rounded-xl p-3 transition-colors ${
+                              completado ? "bg-emerald-50" : "bg-amber-50"
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div
+                                className={`h-8 w-8 rounded-lg flex items-center justify-center ${
+                                  completado ? "bg-emerald-100" : "bg-amber-100"
+                                }`}
+                              >
+                                {completado ? (
+                                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                                ) : (
+                                  <AlertCircle className="h-4 w-4 text-amber-600" />
+                                )}
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-gray-900">
+                                  {docName}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {completado
+                                    ? "Documento recibido y validado"
+                                    : "Pendiente de validacion"}
+                                </p>
+                              </div>
+                            </div>
+                            <span
+                              className={`text-xs font-semibold px-2.5 py-1 rounded-lg ${
+                                completado
+                                  ? "bg-emerald-100 text-emerald-700"
+                                  : "bg-amber-100 text-amber-700"
+                              }`}
+                            >
+                              {completado ? "Completado" : "Pendiente"}
+                            </span>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="rounded-xl bg-gray-50 p-4 text-center">
+                        <p className="text-sm text-gray-400">
+                          No se han subido documentos aun.
+                        </p>
                       </div>
-                      <span
-                        className={`text-xs font-semibold px-2.5 py-1 rounded-lg ${
-                          doc.completado
-                            ? "bg-emerald-100 text-emerald-700"
-                            : "bg-amber-100 text-amber-700"
-                        }`}
-                      >
-                        {doc.completado ? "Completado" : "Pendiente"}
-                      </span>
-                    </div>
-                  ))}
+                    )}
+                  </div>
                 </div>
-              </div>
 
-              {/* Timeline */}
-              <div>
-                <h4
-                  className="text-sm font-bold text-gray-900 mb-3 uppercase tracking-wider"
-                  style={{ fontFamily: "Barlow, Inter, sans-serif" }}
-                >
-                  Historial
-                </h4>
-                <div className="space-y-3">
-                  {[
-                    { fecha: selectedExp.fechaSolicitud, accion: "Solicitud BRC creada", actor: "Sistema" },
-                    { fecha: selectedExp.fechaSolicitud, accion: "Documentos iniciales cargados", actor: "Usuario" },
-                    { fecha: "20 Feb 2026", accion: "Asignado a " + selectedExp.notario, actor: "Sistema" },
-                    ...(selectedExp.progreso > 50
-                      ? [{ fecha: "25 Feb 2026", accion: "Revisión documental iniciada", actor: selectedExp.notario }]
-                      : []),
-                    ...(selectedExp.progreso >= 85
-                      ? [{ fecha: "5 Mar 2026", accion: "Validación notarial en proceso", actor: selectedExp.notario }]
-                      : []),
-                    ...(selectedExp.progreso === 100
-                      ? [{ fecha: "10 Mar 2026", accion: "Certificado BRC emitido", actor: "Sistema" }]
-                      : []),
-                  ].map((item, i) => (
-                    <div key={i} className="flex gap-3">
-                      <div className="flex flex-col items-center">
-                        <div
-                          className="h-2.5 w-2.5 rounded-full mt-1.5"
-                          style={{ background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))" }}
-                        />
-                        {i < 3 && <div className="w-px flex-1 bg-gray-200 mt-1" />}
-                      </div>
-                      <div className="pb-3">
-                        <p className="text-sm font-medium text-gray-900">{item.accion}</p>
-                        <p className="text-xs text-gray-400">{item.fecha} · {item.actor}</p>
-                      </div>
-                    </div>
-                  ))}
+                {/* Actions */}
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={() => setSelectedExp(null)}
+                    className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-700 transition-all hover:bg-gray-50"
+                  >
+                    Cerrar
+                  </button>
+                  <button
+                    className="flex-1 rounded-xl py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
+                    }}
+                  >
+                    Subir documentos
+                  </button>
                 </div>
-              </div>
-
-              {/* Actions */}
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => setSelectedExp(null)}
-                  className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-700 transition-all hover:bg-gray-50"
-                >
-                  Cerrar
-                </button>
-                <button
-                  className="flex-1 rounded-xl py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90"
-                  style={{ background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))" }}
-                >
-                  Subir documentos
-                </button>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

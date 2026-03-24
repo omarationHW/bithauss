@@ -26,7 +26,7 @@ const navLinks = [
 export function Navbar() {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const [user, setUser] = useState<{ name: string; initials: string } | null>(null);
+  const [user, setUser] = useState<{ name: string; initials: string; avatarUrl: string | null } | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
@@ -43,15 +43,21 @@ export function Navbar() {
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data: { user: authUser } }) => {
+    supabase.auth.getUser().then(async ({ data: { user: authUser } }) => {
       if (authUser) {
-        const first = authUser.user_metadata?.first_name ?? "";
-        const last = authUser.user_metadata?.last_name ?? "";
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("first_name, last_name, avatar_url")
+          .eq("id", authUser.id)
+          .maybeSingle();
+
+        const first = profile?.first_name ?? authUser.user_metadata?.first_name ?? "";
+        const last = profile?.last_name ?? authUser.user_metadata?.last_name ?? "";
         const name = `${first} ${last}`.trim() || authUser.email || "Usuario";
         const initials = first && last
           ? `${first[0]}${last[0]}`.toUpperCase()
           : name.slice(0, 2).toUpperCase();
-        setUser({ name, initials });
+        setUser({ name, initials, avatarUrl: profile?.avatar_url ?? null });
       } else {
         setUser(null);
       }
@@ -65,7 +71,7 @@ export function Navbar() {
         const initials = first && last
           ? `${first[0]}${last[0]}`.toUpperCase()
           : name.slice(0, 2).toUpperCase();
-        setUser({ name, initials });
+        setUser({ name, initials, avatarUrl: null });
       } else {
         setUser(null);
       }
@@ -148,12 +154,16 @@ export function Navbar() {
                     : "hover:bg-white/10"
                 )}
               >
-                <div
-                  className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold text-white"
-                  style={{ background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))" }}
-                >
-                  {user.initials}
-                </div>
+                {user.avatarUrl ? (
+                  <Image src={user.avatarUrl} alt={user.name} width={32} height={32} className="h-8 w-8 rounded-full object-cover" />
+                ) : (
+                  <div
+                    className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold text-white"
+                    style={{ background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))" }}
+                  >
+                    {user.initials}
+                  </div>
+                )}
                 <span
                   className={cn(
                     "text-sm font-medium",
@@ -273,12 +283,16 @@ export function Navbar() {
                 {user ? (
                   <>
                     <div className="flex items-center gap-3 px-4 py-2">
-                      <div
-                        className="h-10 w-10 rounded-full flex items-center justify-center text-sm font-bold text-white"
-                        style={{ background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))" }}
-                      >
-                        {user.initials}
-                      </div>
+                      {user.avatarUrl ? (
+                        <Image src={user.avatarUrl} alt={user.name} width={40} height={40} className="h-10 w-10 rounded-full object-cover" />
+                      ) : (
+                        <div
+                          className="h-10 w-10 rounded-full flex items-center justify-center text-sm font-bold text-white"
+                          style={{ background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))" }}
+                        >
+                          {user.initials}
+                        </div>
+                      )}
                       <div>
                         <p className="text-sm font-medium">{user.name}</p>
                       </div>
