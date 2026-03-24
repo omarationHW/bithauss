@@ -147,7 +147,7 @@ export default function PropertyDetailPage() {
 
             <div className="relative w-full max-w-4xl h-[70vh]">
               <Image
-                src={images[currentImage]}
+                src={images[currentImage]!}
                 alt={`Foto ${currentImage + 1}`}
                 fill
                 className="object-contain"
@@ -215,7 +215,7 @@ export default function PropertyDetailPage() {
           {/* Main image */}
           <div className="col-span-2 row-span-2 relative group cursor-pointer" onClick={() => openGallery(0)}>
             <Image
-              src={images[0]}
+              src={images[0]!}
               alt="Propiedad principal"
               fill
               className="object-cover transition-transform duration-500 group-hover:scale-105"
