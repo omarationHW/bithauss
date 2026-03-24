@@ -20,7 +20,6 @@ const navLinks = [
   { label: "Inversión", href: "/propiedades" },
   { label: "Certificado BRC", href: "/como-funciona" },
   { label: "Nosotros", href: "/nosotros" },
-  { label: "Planes", href: "/#planes" },
 ];
 
 export function Navbar() {

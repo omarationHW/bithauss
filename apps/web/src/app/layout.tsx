@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Barlow } from "next/font/google";
 import { Providers } from "./providers";
 import { Navbar } from "@/components/layout/navbar";
 import { PriceTicker } from "@/components/layout/price-ticker";
@@ -9,6 +9,12 @@ import "./globals.css";
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
+});
+
+const barlow = Barlow({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800", "900"],
+  variable: "--font-barlow",
 });
 
 export const metadata: Metadata = {
@@ -24,7 +30,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es">
-      <body className={`${inter.variable} font-sans antialiased`}>
+      <body className={`${inter.variable} ${barlow.variable} font-sans antialiased`}>
         <Providers>
           <Navbar />
           <PriceTicker />

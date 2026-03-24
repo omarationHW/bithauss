@@ -1,24 +1,10 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import Image from 'next/image'
 import {
-  Search,
   ShieldCheck,
-  CheckCircle,
-  Upload,
-  Award,
-  Handshake,
-  FileText,
-  ClipboardCheck,
-  Scale,
-  Shield,
-  Cpu,
-  DollarSign,
-  Headphones,
-  Ban,
-  Users,
   ArrowRight,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 
 export const metadata: Metadata = {
@@ -33,125 +19,115 @@ export const metadata: Metadata = {
 
 const buyerSteps = [
   {
-    icon: Search,
     title: 'Busca',
     description: 'Explora propiedades verificadas con filtros avanzados',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Busca.png',
+    bg: 'bg-gray-100',
   },
   {
-    icon: ShieldCheck,
     title: 'Verifica',
-    description: 'Revisa el certificado BRC y la validacion notarial de cada propiedad',
+    description: 'Revisa el certificado BRC y la validación notarial de cada propiedad',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Verifica.png',
+    bg: 'bg-gray-100',
   },
   {
-    icon: CheckCircle,
-    title: 'Compra Seguro',
-    description: 'Realiza tu compra con total confianza y respaldo juridico',
+    title: 'Compra con seguridad',
+    description: 'Realiza tu compra con total confianza y respaldo jurídico',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/COMPRA-CON-SEGURIDAD.png',
+    bg: 'bg-blue-600',
+    textWhite: true,
+    fullImage: true,
   },
 ]
 
 const sellerSteps = [
   {
-    icon: Upload,
     title: 'Publica',
-    description: 'Sube tu propiedad con fotos, descripcion y documentacion',
+    description: 'Sube tu propiedad con fotos, descripción y documentación',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Publica.png',
+    bg: 'bg-gray-100',
   },
   {
-    icon: Award,
     title: 'Certifica',
     description: 'Solicita el certificado BRC para aumentar la confianza y visibilidad',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/CERTIFICA.png',
+    bg: 'bg-gray-100',
   },
   {
-    icon: Handshake,
     title: 'Cierra Tratos',
     description: 'Recibe leads calificados y gestiona todo desde tu dashboard',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/CIERRA-TRATOS.png',
+    bg: 'bg-emerald-500',
+    textWhite: true,
+    fullImage: true,
   },
 ]
 
 const brcSteps = [
   {
-    icon: FileText,
+    step: 1,
     title: 'Solicitud',
-    description: 'El broker o vendedor solicita la certificacion BRC para su propiedad',
-    color: 'text-blue-400',
-    bgColor: 'bg-blue-500/10',
-    borderColor: 'border-blue-500/30',
-    gradientFrom: 'from-blue-500',
-    gradientTo: 'to-indigo-500',
+    description: 'El broker o vendedor solicita la certificación BRC para su propiedad',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Solicitud.jpg',
+    cta: 'Comienza tu solicitud',
+    badgeColor: 'bg-blue-500',
   },
   {
-    icon: Upload,
+    step: 2,
     title: 'Carga de Documentos',
-    description: 'Se suben escritura, identificacion oficial, comprobante predial y mas',
-    color: 'text-blue-400',
-    bgColor: 'bg-blue-500/10',
-    borderColor: 'border-blue-500/30',
-    gradientFrom: 'from-blue-500',
-    gradientTo: 'to-indigo-500',
+    description: 'Se suben escritura, identificación oficial, comprobante predial y más',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Carga-De-Documentos.jpg',
+    badgeGradient: 'linear-gradient(135deg, #1FC32D, #0DB582)',
   },
   {
-    icon: ClipboardCheck,
+    step: 3,
     title: 'Primera Revisión',
-    description:
-      'Nuestro equipo Legal efectúa la revisión documental del expediente.\nUsamos Inteligencia Artificial',
-    color: 'text-amber-400',
-    bgColor: 'bg-amber-500/10',
-    borderColor: 'border-amber-500/30',
-    gradientFrom: 'from-amber-500',
-    gradientTo: 'to-orange-500',
+    description: 'Nuestro equipo Legal efectúa la revisión documental del expediente.\nUsamos Inteligencia Artificial',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Primera-Revision.jpg',
+    badgeColor: 'bg-orange-500',
   },
   {
-    icon: Scale,
-    title: 'Validacion Notarial',
-    description:
-      'Un Notario Público revisa a fondo la documentación legal y el status del Inmueble',
-    color: 'text-violet-400',
-    bgColor: 'bg-violet-500/10',
-    borderColor: 'border-violet-500/30',
-    gradientFrom: 'from-violet-500',
-    gradientTo: 'to-purple-500',
+    step: 4,
+    title: 'Validación Notarial',
+    description: 'Un Notario Público revisa a fondo la documentación legal y el status del Inmueble',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Validacion-Notarial.jpg',
+    badgeColor: 'bg-violet-500',
   },
   {
-    icon: Award,
+    step: 5,
     title: 'Certificado Digital',
     description: 'Se emite el Certificado BRC con sello digital verificable',
-    color: 'text-emerald-400',
-    bgColor: 'bg-emerald-500/10',
-    borderColor: 'border-emerald-500/30',
-    gradientFrom: 'from-emerald-500',
-    gradientTo: 'to-teal-500',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Certificado Digital.png',
+    cta: 'Certifica tu propiedad',
+    badgeColor: 'bg-emerald-500',
+    smallImage: true,
   },
 ]
 
 const benefits = [
   {
-    icon: Shield,
-    title: 'Seguridad Juridica',
-    description: 'Validacion notarial de cada propiedad',
+    title: 'Seguridad Jurídica',
+    description: 'Validación notarial de cada propiedad',
   },
   {
-    icon: Cpu,
-    title: 'Tecnologia de Punta',
-    description: 'Plataforma moderna y rapida',
+    title: 'Tecnología de Punta',
+    description: 'Plataforma moderna y rápida',
   },
   {
-    icon: DollarSign,
     title: 'Precios Accesibles',
     description: 'Planes desde $499 MXN/mes',
   },
   {
-    icon: Headphones,
     title: 'Soporte Dedicado',
-    description: 'Equipo de soporte en espanol 24/7',
+    description: 'Equipo de soporte en español 24/7',
   },
   {
-    icon: Ban,
     title: 'Sin Fraudes',
-    description: 'Proteccion contra fraudes inmobiliarios',
+    description: 'Protección contra fraudes inmobiliarios',
   },
   {
-    icon: Users,
     title: 'Notarios Públicos en México',
-    description: 'Notarios certificados en todo Mexico',
+    description: 'Notarios certificados en todo México',
   },
 ]
 
@@ -161,250 +137,113 @@ const benefits = [
 
 export default function ComoFuncionaPage() {
   return (
-    <main className="min-h-screen pt-[100px]">
+    <main className="min-h-screen">
       {/* ================================================================== */}
       {/*  1. Hero                                                           */}
       {/* ================================================================== */}
-      <section className="relative overflow-hidden py-20 sm:py-28">
-        {/* Background with brand gradient */}
+      <section className="relative overflow-hidden min-h-[65vh] flex items-end">
+        {/* Background gradient */}
         <div
           className="absolute inset-0"
           style={{
-            background:
-              'linear-gradient(135deg, #0F172A 0%, #142C5F 50%, #0F172A 100%)',
+            background: 'linear-gradient(135deg, hsl(221 83% 53%) 0%, hsl(160 84% 39%) 100%)',
           }}
         />
-        {/* Subtle pattern */}
-        <div
-          className="absolute inset-0 opacity-[0.03]"
-          style={{
-            backgroundImage: `radial-gradient(circle at 1px 1px, white 1px, transparent 0)`,
-            backgroundSize: '40px 40px',
-          }}
-        />
-        {/* Gradient glow accents */}
-        <div className="absolute top-0 left-1/4 h-96 w-96 rounded-full bg-primary/15 blur-3xl" />
-        <div className="absolute bottom-0 right-1/4 h-96 w-96 rounded-full bg-accent/10 blur-3xl" />
 
-        <div className="relative z-10 mx-auto max-w-4xl px-4 text-center sm:px-6 lg:px-8">
-          <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-sm font-medium text-white/80 backdrop-blur-sm">
-            <ShieldCheck className="h-4 w-4 text-accent" />
-            Transparencia y Confianza
-          </span>
+        {/* Right image - full height */}
+        <div className="absolute right-0 top-0 bottom-0 w-1/2 hidden md:block">
+          <Image
+            src="/images/Hero.png"
+            alt="BitHauss"
+            fill
+            className="object-contain object-right-bottom"
+          />
+        </div>
 
-          <h1 className="mt-6 text-4xl font-bold tracking-tight text-white sm:text-5xl md:text-6xl">
-            &iquest;Como Funciona{' '}
-            <span className="relative inline-block">
-              <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">BitHauss</span>
-              <svg
-                className="absolute -bottom-2 left-0 w-full"
-                viewBox="0 0 300 12"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
+        <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 w-full pb-12 pt-36">
+          {/* Left text */}
+          <div className="text-white max-w-lg">
+            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl leading-tight">
+              ¿Cómo funciona BitHauss?
+            </h1>
+            <p className="mt-4 text-lg sm:text-xl leading-relaxed text-white/90">
+              La plataforma más segura para comprar, vender e invertir en bienes raíces en México
+            </p>
+            <Button
+              asChild
+              className="mt-6 bg-white hover:bg-white/90"
+            >
+              <Link
+                href="/auth/registro"
+                style={{
+                  background: 'white',
+                  WebkitBackgroundClip: 'unset',
+                }}
               >
-                <path
-                  d="M1 8.5C50 2.5 100 1 150 3.5C200 6 250 2.5 299 8.5"
-                  stroke="hsl(160 84% 39%)"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                />
-              </svg>
-            </span>
-            ?
-          </h1>
-
-          <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-white/70 sm:text-xl">
-            La plataforma mas segura para comprar, vender e invertir en bienes raices en Mexico
-          </p>
-        </div>
-      </section>
-
-      {/* ================================================================== */}
-      {/*  2. Para Compradores                                               */}
-      {/* ================================================================== */}
-      <section className="px-4 py-20 sm:px-6 sm:py-24 lg:px-8 bg-secondary/30">
-        <div className="mx-auto max-w-6xl">
-          <div className="mb-14 text-center">
-            <span className="mb-4 inline-block rounded-full bg-primary/10 px-4 py-1.5 text-sm font-medium text-primary">
-              Compradores
-            </span>
-            <h2 className="text-foreground text-3xl font-bold tracking-tight sm:text-4xl">
-              Para Compradores
-            </h2>
-            <p className="text-muted-foreground mx-auto mt-4 max-w-2xl text-lg">
-              Encuentra tu propiedad ideal con la seguridad que mereces
-            </p>
-          </div>
-
-          <div className="relative grid grid-cols-1 gap-8 md:grid-cols-3 md:gap-12">
-            {buyerSteps.map((step, index) => {
-              const Icon = step.icon
-              return (
-                <div
-                  key={step.title}
-                  className="group relative flex flex-col items-center text-center"
+                <span
+                  className="font-semibold"
+                  style={{
+                    background: 'linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                  }}
                 >
-                  {/* Connector line */}
-                  {index < buyerSteps.length - 1 && (
-                    <div className="absolute top-12 left-[calc(50%+48px)] hidden h-0.5 w-[calc(100%-96px+3rem)] bg-gradient-to-r from-primary/40 to-primary/10 md:block" />
-                  )}
+                  Comienza tu verificación
+                </span>
+              </Link>
+            </Button>
 
-                  <div className="relative z-10 mb-6">
-                    <div className="flex h-24 w-24 items-center justify-center rounded-2xl border border-primary/20 bg-primary/5 transition-all duration-300 group-hover:scale-110 group-hover:bg-primary/10 group-hover:shadow-xl group-hover:shadow-primary/10">
-                      <Icon className="text-primary h-10 w-10" />
-                    </div>
-                    <div className="absolute -top-2.5 -right-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent text-sm font-bold text-white shadow-lg shadow-primary/30">
-                      {index + 1}
+            {/* Mini features */}
+            <div className="mt-8 grid grid-cols-3 gap-4">
+              <div>
+                <div className="flex items-center mb-2">
+                  {/* Circle 1 */}
+                  <div className="relative h-12 w-12 rounded-full overflow-hidden">
+                    <Image src="/images/Casa1.jpg" alt="" fill className="object-cover" />
+                    <div
+                      className="absolute top-0.5 right-0.5 h-4 w-4 rounded-full flex items-center justify-center"
+                      style={{ background: 'linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))' }}
+                    >
+                      <ShieldCheck className="h-2.5 w-2.5 text-white" />
                     </div>
                   </div>
-
-                  <h3 className="text-foreground mb-2 text-xl font-semibold">{step.title}</h3>
-                  <p className="text-muted-foreground max-w-xs leading-relaxed">
-                    {step.description}
-                  </p>
+                  {/* Circle 2 */}
+                  <div className="relative h-12 w-12 rounded-full overflow-hidden -ml-3">
+                    <Image src="/images/casa2.jpg" alt="" fill className="object-cover" />
+                    <div
+                      className="absolute top-0.5 right-0.5 h-4 w-4 rounded-full flex items-center justify-center"
+                      style={{ background: 'linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))' }}
+                    >
+                      <ShieldCheck className="h-2.5 w-2.5 text-white" />
+                    </div>
+                  </div>
+                  {/* Plus square */}
+                  <div className="h-10 w-10 rounded-lg bg-white/20 backdrop-blur-sm flex items-center justify-center -ml-2">
+                    <span className="text-white text-lg font-light">+</span>
+                  </div>
                 </div>
-              )
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* ================================================================== */}
-      {/*  3. Para Brokers y Vendedores                                      */}
-      {/* ================================================================== */}
-      <section className="px-4 py-20 sm:px-6 sm:py-24 lg:px-8">
-        <div className="mx-auto max-w-6xl">
-          <div className="mb-14 text-center">
-            <span className="mb-4 inline-block rounded-full bg-accent/10 px-4 py-1.5 text-sm font-medium text-accent">
-              Brokers y Vendedores
-            </span>
-            <h2 className="text-foreground text-3xl font-bold tracking-tight sm:text-4xl">
-              Para Brokers y Vendedores
-            </h2>
-            <p className="text-muted-foreground mx-auto mt-4 max-w-2xl text-lg">
-              Publica, certifica y cierra tratos con herramientas profesionales
-            </p>
-          </div>
-
-          <div className="relative grid grid-cols-1 gap-8 md:grid-cols-3 md:gap-12">
-            {sellerSteps.map((step, index) => {
-              const Icon = step.icon
-              return (
+                <p className="text-[10px] text-white/70 leading-snug text-justify">
+                  Verificamos a fondo la documentación legal y el status del Inmueble
+                </p>
+              </div>
+              <div>
+                <div className="mb-2 h-11 w-11 rounded-full bg-white/10 flex items-center justify-center">
+                  <ShieldCheck className="h-6 w-6 text-white" />
+                </div>
+                <p className="text-[10px] text-white/70 leading-snug text-justify">
+                  Emitimos el Certificado BRC con sello digital verificable ante notario
+                </p>
+              </div>
+              <div>
                 <div
-                  key={step.title}
-                  className="group relative flex flex-col items-center text-center"
+                  className="mb-2 h-11 w-11 rounded-full flex items-center justify-center"
+                  style={{ background: 'linear-gradient(180deg, #FFFFFF 0%, #DBDBDB 100%)' }}
                 >
-                  {index < sellerSteps.length - 1 && (
-                    <div className="absolute top-12 left-[calc(50%+48px)] hidden h-0.5 w-[calc(100%-96px+3rem)] bg-gradient-to-r from-accent/40 to-accent/10 md:block" />
-                  )}
-
-                  <div className="relative z-10 mb-6">
-                    <div className="flex h-24 w-24 items-center justify-center rounded-2xl border border-accent/20 bg-accent/5 transition-all duration-300 group-hover:scale-110 group-hover:bg-accent/10 group-hover:shadow-xl group-hover:shadow-accent/10">
-                      <Icon className="text-accent h-10 w-10" />
-                    </div>
-                    <div className="absolute -top-2.5 -right-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-accent to-teal-600 text-sm font-bold text-white shadow-lg shadow-accent/30">
-                      {index + 1}
-                    </div>
-                  </div>
-
-                  <h3 className="text-foreground mb-2 text-xl font-semibold">{step.title}</h3>
-                  <p className="text-muted-foreground max-w-xs leading-relaxed">
-                    {step.description}
-                  </p>
+                  <ArrowRight className="h-5 w-5 text-blue-600 rotate-[-90deg]" />
                 </div>
-              )
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* ================================================================== */}
-      {/*  4. El Proceso BRC  — Dark section like landing CTA                */}
-      {/* ================================================================== */}
-      <section className="relative overflow-hidden px-4 py-24 sm:px-6 sm:py-32 lg:px-8">
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              'linear-gradient(135deg, #0F172A 0%, #142C5F 50%, #0F172A 100%)',
-          }}
-        />
-        <div
-          className="absolute inset-0 opacity-[0.03]"
-          style={{
-            backgroundImage: `radial-gradient(circle at 1px 1px, white 1px, transparent 0)`,
-            backgroundSize: '32px 32px',
-          }}
-        />
-        <div className="absolute top-0 left-1/4 h-96 w-96 rounded-full bg-primary/10 blur-3xl" />
-        <div className="absolute bottom-0 right-1/3 h-96 w-96 rounded-full bg-accent/8 blur-3xl" />
-
-        <div className="relative z-10 mx-auto max-w-4xl">
-          <div className="mb-16 text-center sm:mb-20">
-            <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-sm font-medium text-white/80 backdrop-blur-sm">
-              <ShieldCheck className="h-4 w-4 text-accent" />
-              Certificacion BRC
-            </span>
-            <h2 className="mt-6 text-3xl font-bold tracking-tight text-white sm:text-4xl md:text-5xl">
-              El Proceso BRC
-            </h2>
-            <p className="mx-auto mt-4 max-w-2xl text-lg leading-relaxed text-white/60">
-              Conoce paso a paso como certificamos cada propiedad para garantizar tu tranquilidad
-            </p>
-          </div>
-
-          {/* Vertical timeline */}
-          <div className="relative">
-            {/* Vertical connecting line */}
-            <div className="absolute top-0 bottom-0 left-8 w-px bg-gradient-to-b from-blue-500/50 via-amber-500/50 via-violet-500/50 to-emerald-500/50 sm:left-10" />
-
-            <div className="space-y-10 sm:space-y-12">
-              {brcSteps.map((step, index) => {
-                const Icon = step.icon
-                return (
-                  <div key={step.title} className="group relative flex gap-6 sm:gap-8">
-                    {/* Left: icon node */}
-                    <div className="relative z-10 flex-shrink-0">
-                      <div
-                        className={cn(
-                          'flex h-16 w-16 items-center justify-center rounded-2xl border transition-all duration-300 group-hover:scale-110 group-hover:shadow-2xl sm:h-20 sm:w-20',
-                          step.bgColor,
-                          step.borderColor,
-                        )}
-                      >
-                        <Icon className={cn('h-7 w-7 sm:h-8 sm:w-8', step.color)} />
-                      </div>
-                    </div>
-
-                    {/* Right: card content */}
-                    <div className="flex-1 rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur-sm transition-all duration-300 group-hover:-translate-y-1 group-hover:bg-white/[0.08] group-hover:shadow-xl sm:p-6">
-                      <div className="mb-3 flex items-center gap-3">
-                        <span
-                          className={cn(
-                            'inline-flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br text-xs font-bold text-white shadow-sm',
-                            step.gradientFrom,
-                            step.gradientTo,
-                          )}
-                        >
-                          {index + 1}
-                        </span>
-                        <h3 className="text-lg font-semibold text-white sm:text-xl">{step.title}</h3>
-                      </div>
-                      <p className="text-sm leading-relaxed text-white/60 sm:text-base whitespace-pre-line">
-                        {step.description}
-                      </p>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-
-            {/* Final flourish */}
-            <div className="relative z-10 mt-14 flex justify-center">
-              <div className="inline-flex items-center gap-3 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-7 py-3.5 font-semibold text-emerald-400 backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:bg-emerald-500/15 hover:shadow-lg hover:shadow-emerald-500/10">
-                <Award className="h-5 w-5" />
-                Propiedad Certificada BRC
-                <CheckCircle className="h-4 w-4" />
+                <p className="text-[10px] text-white/70 leading-snug text-justify">
+                  Tu propiedad recibirá el mayor número de compradores
+                </p>
               </div>
             </div>
           </div>
@@ -412,34 +251,156 @@ export default function ComoFuncionaPage() {
       </section>
 
       {/* ================================================================== */}
-      {/*  5. Por que BitHauss — Benefits grid                               */}
+      {/*  2. Para Compradores                                               */}
       {/* ================================================================== */}
-      <section className="px-4 py-20 sm:px-6 sm:py-24 lg:px-8 bg-secondary/30">
-        <div className="mx-auto max-w-6xl">
-          <div className="mb-14 text-center">
-            <h2 className="text-foreground text-3xl font-bold tracking-tight sm:text-4xl">
-              &iquest;Por que{' '}
-              <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">BitHauss</span>
-              ?
+      <section className="px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
+        <div className="mx-auto max-w-5xl">
+          <div className="mb-12 text-center">
+            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
+              Para Compradores
             </h2>
-            <p className="text-muted-foreground mx-auto mt-4 max-w-2xl text-lg">
-              Las razones por las que miles de profesionales confian en nosotros
+            <p className="text-muted-foreground mt-3">
+              Encuentra tu propiedad ideal con la seguridad que mereces
             </p>
           </div>
 
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {benefits.map((benefit) => {
-              const Icon = benefit.icon
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {buyerSteps.map((step) => (
+              <div
+                key={step.title}
+                className={`rounded-2xl overflow-hidden ${step.bg} ${step.textWhite ? 'text-white' : ''} transition-all duration-300 hover:shadow-lg hover:-translate-y-1`}
+              >
+                <div className={`relative overflow-hidden ${step.fullImage ? 'h-60' : 'h-52'}`}>
+                  <Image
+                    src={step.image}
+                    alt={step.title}
+                    fill
+                    className={step.fullImage ? "object-cover scale-110" : "object-contain p-2"}
+                  />
+                </div>
+                <div className="p-5">
+                  <h3 className="text-lg font-bold">{step.title}</h3>
+                  <p className={`text-sm mt-1 leading-relaxed ${step.textWhite ? 'text-white/80' : 'text-muted-foreground'}`}>
+                    {step.description}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ================================================================== */}
+      {/*  3. Para Brokers y Vendedores                                      */}
+      {/* ================================================================== */}
+      <section className="px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
+        <div className="mx-auto max-w-5xl">
+          <div className="mb-12 text-center">
+            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
+              Para Brokers y Vendedores
+            </h2>
+            <p className="text-muted-foreground mt-3">
+              Publica, certifica y cierra tratos con herramientas profesionales
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {sellerSteps.map((step) => (
+              <div
+                key={step.title}
+                className={`rounded-2xl overflow-hidden ${step.bg} ${step.textWhite ? 'text-white' : ''} transition-all duration-300 hover:shadow-lg hover:-translate-y-1`}
+              >
+                <div className={`relative overflow-hidden ${step.fullImage ? 'h-60' : 'h-52'}`}>
+                  <Image
+                    src={step.image}
+                    alt={step.title}
+                    fill
+                    className={step.fullImage ? "object-cover scale-110" : "object-contain p-2"}
+                  />
+                </div>
+                <div className="p-5">
+                  <h3 className="text-lg font-bold">{step.title}</h3>
+                  <p className={`text-sm mt-1 leading-relaxed ${step.textWhite ? 'text-white/80' : 'text-muted-foreground'}`}>
+                    {step.description}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ================================================================== */}
+      {/*  4. El Proceso BRC                                                 */}
+      {/* ================================================================== */}
+      <section
+        className="px-4 py-16 sm:px-6 sm:py-20 lg:px-8"
+        style={{
+          background: 'linear-gradient(135deg, hsl(221 83% 53% / 0.04) 0%, hsl(160 84% 39% / 0.04) 100%)',
+        }}
+      >
+        <div className="mx-auto max-w-4xl">
+          <div className="mb-14 text-center">
+            <span
+              className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium text-white"
+              style={{ background: 'linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))' }}
+            >
+              <ShieldCheck className="h-4 w-4" />
+              Certificación BRC
+            </span>
+            <h2 className="mt-4 text-2xl font-bold tracking-tight sm:text-3xl">
+              El Proceso BRC
+            </h2>
+            <p className="text-muted-foreground mt-3 max-w-2xl mx-auto">
+              Conoce paso a paso como certificamos cada propiedad para garantizar tu tranquilidad
+            </p>
+          </div>
+
+          <div className="space-y-6">
+            {brcSteps.map((step, index) => {
+              const isOdd = index % 2 !== 0
               return (
                 <div
-                  key={benefit.title}
-                  className="group rounded-2xl border border-border/50 bg-background p-6 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-xl hover:shadow-primary/5 sm:p-8"
+                  key={step.title}
+                  className="rounded-2xl bg-gradient-to-r from-blue-50/50 to-green-50/30 border border-border/30 overflow-hidden transition-all duration-300 hover:shadow-lg"
                 >
-                  <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-primary/10 to-accent/10 transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg group-hover:shadow-primary/10">
-                    <Icon className="h-6 w-6 text-primary" />
+                  <div className={`grid md:grid-cols-2 gap-6 p-6 ${isOdd ? '' : ''}`}>
+                    {/* Text side */}
+                    <div className={`flex flex-col justify-center ${isOdd ? 'md:order-2' : ''}`}>
+                      <span
+                        className={`inline-flex items-center gap-1.5 w-fit rounded-full px-3 py-1 text-xs font-bold text-white ${step.badgeColor || ''}`}
+                        style={step.badgeGradient ? { background: step.badgeGradient } : undefined}
+                      >
+                        <span className="text-[10px]">✦</span> Paso {step.step}
+                      </span>
+                      <h3 className="mt-3 text-xl font-bold sm:text-2xl">{step.title}</h3>
+                      <p className="mt-2 text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
+                        {step.description}
+                      </p>
+                      {step.cta && (
+                        <Button
+                          asChild
+                          size="sm"
+                          className="mt-4 w-fit border-0 text-white"
+                          style={{
+                            background: 'linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))',
+                          }}
+                        >
+                          <Link href="/auth/registro">{step.cta}</Link>
+                        </Button>
+                      )}
+                    </div>
+
+                    {/* Image side */}
+                    <div className={`relative h-48 sm:h-56 rounded-xl overflow-hidden ${isOdd ? 'md:order-1' : ''} ${step.smallImage ? 'flex items-center justify-center' : ''}`}>
+                      <Image
+                        src={step.image}
+                        alt={step.title}
+                        {...(step.smallImage ? { width: 210, height: 210 } : { fill: true })}
+                        className={step.smallImage ? "object-contain" : "object-cover"}
+                      />
+                    </div>
                   </div>
-                  <h3 className="text-foreground mb-2 text-lg font-semibold">{benefit.title}</h3>
-                  <p className="text-muted-foreground leading-relaxed">{benefit.description}</p>
                 </div>
               )
             })}
@@ -448,54 +409,88 @@ export default function ComoFuncionaPage() {
       </section>
 
       {/* ================================================================== */}
-      {/*  6. CTA                                                            */}
+      {/*  5. Por qué BitHauss                                               */}
       {/* ================================================================== */}
-      <section className="relative overflow-hidden">
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              'linear-gradient(135deg, #0F172A 0%, #142C5F 50%, #0F172A 100%)',
-          }}
-        />
-        <div className="absolute top-0 left-1/4 h-96 w-96 rounded-full bg-primary/15 blur-3xl" />
-        <div className="absolute bottom-0 right-1/4 h-96 w-96 rounded-full bg-accent/10 blur-3xl" />
-
-        <div className="relative z-10 mx-auto max-w-4xl px-4 py-20 text-center sm:px-6 sm:py-28 lg:px-8">
-          <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl md:text-5xl">
-            &iquest;Listo para empezar?
-          </h2>
-
-          <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-white/70">
-            Unete a la plataforma de bienes raices mas segura de Mexico. Tu proxima propiedad te
-            esta esperando.
-          </p>
-
-          <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
-            <Button
-              asChild
-              size="lg"
-              className="h-12 px-8 text-base border-0 bg-gradient-to-r from-primary to-accent text-white shadow-lg shadow-primary/25 hover:opacity-90 transition-all duration-300"
-            >
-              <Link href="/auth/register">
-                Registrarse Gratis
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
-
-            <Button
-              asChild
-              size="lg"
-              variant="outline"
-              className="h-12 bg-transparent px-8 text-base border-white/20 text-white hover:bg-white/10 hover:text-white transition-all duration-300"
-            >
-              <Link href="/propiedades">Ver Propiedades</Link>
-            </Button>
+      <section className="px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
+        <div className="mx-auto max-w-5xl">
+          <div className="mb-12 text-center">
+            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
+              ¿Por qué{' '}
+              <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">BitHauss</span>
+              ?
+            </h2>
+            <p className="text-muted-foreground mt-3">
+              Las razones por las que miles de profesionales confían en nosotros
+            </p>
           </div>
 
-          <p className="mt-6 text-sm text-white/40">
-            Sin tarjeta de credito requerida &middot; Configuracion en 5 minutos
-          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {benefits.map((benefit) => (
+              <div
+                key={benefit.title}
+                className="rounded-2xl border border-border/50 bg-card p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
+              >
+                <div className="mb-3 h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                  <ShieldCheck className="h-5 w-5 text-primary" />
+                </div>
+                <h3 className="font-semibold text-foreground">{benefit.title}</h3>
+                <p className="text-sm text-muted-foreground mt-1">{benefit.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ================================================================== */}
+      {/*  6. CTA                                                            */}
+      {/* ================================================================== */}
+      <section className="px-4 pt-16 sm:px-6 sm:pt-20 lg:px-8 pb-0 mb-[-120px] relative z-10">
+        <div className="mx-auto max-w-5xl">
+          <div className="rounded-3xl bg-gray-50 overflow-hidden shadow-lg">
+            <div className="grid md:grid-cols-2 gap-8">
+              <div className="p-8 sm:p-12 flex flex-col justify-center">
+                <h2 className="text-2xl sm:text-3xl font-bold">
+                  ¿Listo para empezar?
+                </h2>
+                <p className="mt-4 text-muted-foreground leading-relaxed">
+                  Únete a la plataforma de bienes raíces más segura de México. Tu
+                  próxima propiedad te está esperando.
+                </p>
+
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <Button
+                    asChild
+                    className="border-0 text-white"
+                    style={{
+                      background: 'linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))',
+                    }}
+                  >
+                    <Link href="/auth/registro">
+                      Registrarse Gratis
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Link>
+                  </Button>
+
+                  <Button asChild variant="outline">
+                    <Link href="#">Agendar Demo</Link>
+                  </Button>
+                </div>
+
+                <p className="mt-4 text-xs text-muted-foreground">
+                  Sin tarjeta de crédito requerida · Configuración en 5 minutos
+                </p>
+              </div>
+
+              <div className="relative min-h-[300px] hidden md:block">
+                <Image
+                  src="/images/Listo-para-empezar.jpg"
+                  alt="Listo para empezar"
+                  fill
+                  className="object-cover"
+                />
+              </div>
+            </div>
+          </div>
         </div>
       </section>
     </main>

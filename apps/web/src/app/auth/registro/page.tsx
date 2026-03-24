@@ -2,235 +2,189 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import {
-  ShieldCheck,
-  User,
-  Home,
-  Briefcase,
-  Building2,
-} from "lucide-react";
+import Image from "next/image";
+import { User, Home, Briefcase, Building2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { AuthPanel } from "../_components/auth-panel";
 
 type Role = "comprador" | "vendedor" | "broker" | "inmobiliaria";
 
-const roles: { id: Role; label: string; icon: React.ElementType; description: string }[] = [
-  {
-    id: "comprador",
-    label: "Comprador",
-    icon: User,
-    description: "Busco propiedades",
-  },
-  {
-    id: "vendedor",
-    label: "Vendedor",
-    icon: Home,
-    description: "Vendo mi propiedad",
-  },
-  {
-    id: "broker",
-    label: "Broker",
-    icon: Briefcase,
-    description: "Asesor inmobiliario",
-  },
-  {
-    id: "inmobiliaria",
-    label: "Inmobiliaria",
-    icon: Building2,
-    description: "Empresa inmobiliaria",
-  },
+const roles: { id: Role; label: string; icon: React.ElementType }[] = [
+  { id: "comprador", label: "Comprador", icon: User },
+  { id: "vendedor", label: "Vendedor", icon: Home },
+  { id: "broker", label: "Broker", icon: Briefcase },
+  { id: "inmobiliaria", label: "Inmobiliaria", icon: Building2 },
 ];
 
 export default function RegistroPage() {
   const [selectedRole, setSelectedRole] = useState<Role>("comprador");
   const [acceptedTerms, setAcceptedTerms] = useState(false);
 
-  const showCompanyField =
-    selectedRole === "broker" || selectedRole === "inmobiliaria";
-
   return (
-    <main className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-4 py-12">
-      <Card className="w-full max-w-lg">
-        <CardHeader className="space-y-4 text-center">
-          {/* Logo */}
-          <div className="flex items-center justify-center gap-2">
-            <ShieldCheck className="h-8 w-8 text-primary" />
-            <span className="text-2xl font-bold tracking-tight">BitHauss</span>
-          </div>
-          <div>
-            <CardTitle className="text-xl">Crea tu cuenta</CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Unete a la plataforma de bienes raices certificados
-            </p>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Role selector */}
-          <div>
-            <Label className="mb-3 block text-sm font-semibold">
-              Tipo de cuenta
-            </Label>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {roles.map((role) => {
-                const Icon = role.icon;
-                const isSelected = selectedRole === role.id;
-                return (
-                  <button
-                    key={role.id}
-                    type="button"
-                    onClick={() => setSelectedRole(role.id)}
-                    className={cn(
-                      "flex flex-col items-center gap-2 rounded-lg border-2 p-4 text-center transition-all",
-                      isSelected
-                        ? "border-primary bg-primary/5 text-primary"
-                        : "border-border hover:border-muted-foreground/30 hover:bg-muted/50"
-                    )}
-                  >
-                    <Icon
-                      className={cn(
-                        "h-6 w-6",
-                        isSelected ? "text-primary" : "text-muted-foreground"
-                      )}
-                    />
-                    <span className="text-xs font-medium">{role.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+    <>
+      <AuthPanel image="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Registrarte.jpg" />
+      <div className="flex w-full flex-1 items-center justify-center overflow-y-auto lg:w-[40%]">
+        <main className="flex w-full max-w-md flex-col px-8 py-10">
+      {/* Logo */}
+      <div className="mb-6 flex justify-center">
+        <Image
+          src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Logo-BitHauss.png"
+          alt="BitHauss"
+          width={180}
+          height={50}
+        />
+      </div>
 
-          {/* Form */}
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="nombre">Nombre</Label>
-                <Input id="nombre" placeholder="Tu nombre" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="apellido">Apellido</Label>
-                <Input id="apellido" placeholder="Tu apellido" />
-              </div>
-            </div>
+      {/* Title */}
+      <h2 className="mb-4 text-center text-lg font-semibold">Crea tu cuenta</h2>
 
-            <div className="space-y-2">
-              <Label htmlFor="reg-email">Correo electronico</Label>
-              <Input
-                id="reg-email"
-                type="email"
-                placeholder="tu@email.com"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="telefono">Telefono</Label>
-              <Input
-                id="telefono"
-                type="tel"
-                placeholder="+52 55 0000 0000"
-              />
-            </div>
-
-            {/* Company field - conditional */}
-            {showCompanyField && (
-              <div className="space-y-2">
-                <Label htmlFor="empresa">Nombre de empresa</Label>
-                <Input
-                  id="empresa"
-                  placeholder={
-                    selectedRole === "broker"
-                      ? "Nombre de tu agencia"
-                      : "Nombre de la inmobiliaria"
-                  }
-                />
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="reg-password">Contrasena</Label>
-                <Input
-                  id="reg-password"
-                  type="password"
-                  placeholder="Min. 8 caracteres"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="confirm-password">Confirmar contrasena</Label>
-                <Input
-                  id="confirm-password"
-                  type="password"
-                  placeholder="Repite tu contrasena"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Terms checkbox */}
-          <label className="flex items-start gap-3 cursor-pointer">
-            <div className="mt-0.5">
-              <button
-                type="button"
-                onClick={() => setAcceptedTerms(!acceptedTerms)}
-                className={cn(
-                  "flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 transition-colors",
-                  acceptedTerms
-                    ? "border-primary bg-primary text-white"
-                    : "border-border"
-                )}
-              >
-                {acceptedTerms && (
-                  <svg
-                    className="h-3 w-3"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={3}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                )}
-              </button>
-            </div>
-            <span className="text-sm text-muted-foreground">
-              Acepto los{" "}
-              <Link href="#" className="text-primary hover:underline">
-                terminos de servicio
-              </Link>{" "}
-              y{" "}
-              <Link href="#" className="text-primary hover:underline">
-                politica de privacidad
-              </Link>
-            </span>
-          </label>
-
-          <Button className="w-full" size="lg">
-            Crear Cuenta
-          </Button>
-
-          {/* Login link */}
-          <p className="text-center text-sm text-muted-foreground">
-            Ya tienes cuenta?{" "}
-            <Link
-              href="/auth/login"
-              className="font-medium text-primary hover:underline"
+      {/* Role selector */}
+      <div className="mb-6 grid grid-cols-4 gap-3">
+        {roles.map((role) => {
+          const Icon = role.icon;
+          const isSelected = selectedRole === role.id;
+          return (
+            <button
+              key={role.id}
+              type="button"
+              onClick={() => setSelectedRole(role.id)}
+              className={cn(
+                "relative flex flex-col items-center gap-1.5 rounded-lg p-3 text-center transition-all",
+                isSelected
+                  ? "gradient-border bg-accent/5"
+                  : "border-2 border-border hover:border-muted-foreground/30 hover:bg-muted/50"
+              )}
             >
-              Inicia sesion
-            </Link>
-          </p>
-        </CardContent>
-      </Card>
-    </main>
+              <Icon
+                className={cn(
+                  "h-5 w-5",
+                  isSelected ? "text-primary" : "text-muted-foreground"
+                )}
+              />
+              <span className="text-[10px] font-medium">{role.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Form */}
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="nombre">Nombre</Label>
+            <Input id="nombre" placeholder="Tu nombre" />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="apellido">Apellido</Label>
+            <Input id="apellido" placeholder="Tu apellido" />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="reg-email">Correo electrónico</Label>
+          <Input
+            id="reg-email"
+            type="email"
+            placeholder="Tu correo electrónico"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="telefono">Teléfono</Label>
+          <Input
+            id="telefono"
+            type="tel"
+            placeholder="Tu número telefónico"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="reg-password">Contraseña</Label>
+            <Input
+              id="reg-password"
+              type="password"
+              placeholder="Tu nombre"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="confirm-password">Confirmar contraseña</Label>
+            <Input
+              id="confirm-password"
+              type="password"
+              placeholder="Tu apellido"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Terms */}
+      <label className="mt-5 flex items-center gap-3 cursor-pointer">
+        <button
+          type="button"
+          onClick={() => setAcceptedTerms(!acceptedTerms)}
+          className={cn(
+            "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
+            acceptedTerms
+              ? "border-primary bg-primary text-white"
+              : "border-border"
+          )}
+        >
+          {acceptedTerms && (
+            <svg
+              className="h-3 w-3"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={3}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+          )}
+        </button>
+        <span className="text-xs text-muted-foreground">
+          Acepto los{" "}
+          <Link href="#" className="text-primary hover:underline">
+            términos de servicio y política de privacidad
+          </Link>
+        </span>
+      </label>
+
+      {/* Submit button */}
+      <Button
+        className="mt-5 w-full border-0 text-white"
+        size="lg"
+        style={{
+          background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
+        }}
+      >
+        Iniciar sesión
+      </Button>
+
+      {/* Login link */}
+      <p className="mt-5 text-center text-sm text-muted-foreground">
+        Ya tienes cuenta?{" "}
+        <Link
+          href="/auth/login"
+          className="font-medium text-primary hover:underline"
+        >
+          Inicia sesión
+        </Link>
+      </p>
+
+      {/* Footer */}
+      <p className="mt-4 text-center text-xs text-muted-foreground">
+        © 2026 BitHauss
+      </p>
+        </main>
+      </div>
+    </>
   );
 }
