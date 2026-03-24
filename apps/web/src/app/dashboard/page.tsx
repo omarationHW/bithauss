@@ -23,31 +23,25 @@ import { createClient } from "@/lib/supabase/client";
 /*  Mock data                                                         */
 /* ------------------------------------------------------------------ */
 
-const kpis = [
-  {
-    label: "Propiedades Activas",
-    value: "24",
-    change: "+3 este mes",
-    icon: Building2,
-  },
-  {
-    label: "Leads Nuevos",
-    value: "18",
-    change: "+5 hoy",
-    icon: Users,
-  },
-  {
-    label: "Visitas al Perfil",
-    value: "342",
-    change: "+12%",
-    icon: Eye,
-  },
-  {
-    label: "Tasa de Conversión",
-    value: "8.5%",
-    change: "+0.3%",
-    icon: TrendingUp,
-  },
+const brokerKpis = [
+  { label: "Propiedades Activas", value: "24", change: "+3 este mes", icon: Building2 },
+  { label: "Leads Nuevos", value: "18", change: "+5 hoy", icon: Users },
+  { label: "Visitas al Perfil", value: "342", change: "+12%", icon: Eye },
+  { label: "Tasa de Conversión", value: "8.5%", change: "+0.3%", icon: TrendingUp },
+];
+
+const compradorKpis = [
+  { label: "Propiedades Guardadas", value: "12", change: "+2 esta semana", icon: Building2 },
+  { label: "Solicitudes Enviadas", value: "5", change: "+1 hoy", icon: FileText },
+  { label: "Propiedades Visitadas", value: "28", change: "+8 este mes", icon: Eye },
+  { label: "Mensajes", value: "3", change: "+1 nuevo", icon: MessageSquare },
+];
+
+const vendedorKpis = [
+  { label: "Mis Propiedades", value: "3", change: "+1 este mes", icon: Building2 },
+  { label: "Visitas Recibidas", value: "156", change: "+23%", icon: Eye },
+  { label: "Solicitudes de Compra", value: "7", change: "+2 esta semana", icon: Users },
+  { label: "BRC Activos", value: "2", change: "1 en proceso", icon: ShieldCheck },
 ];
 
 const chartData = [
@@ -97,31 +91,25 @@ const recentLeads = [
   },
 ];
 
-const quickActions = [
-  {
-    label: "Publicar Propiedad",
-    icon: Plus,
-    href: "/dashboard/propiedades",
-    primary: true,
-  },
-  {
-    label: "Ver Leads",
-    icon: Users,
-    href: "/dashboard/leads",
-    primary: false,
-  },
-  {
-    label: "Mensajes",
-    icon: MessageSquare,
-    href: "/dashboard/mensajes",
-    primary: false,
-  },
-  {
-    label: "Solicitar BRC",
-    icon: ShieldCheck,
-    href: "/dashboard/expedientes",
-    primary: false,
-  },
+const brokerActions = [
+  { label: "Publicar Propiedad", icon: Plus, href: "/dashboard/propiedades", primary: true },
+  { label: "Ver Leads", icon: Users, href: "/dashboard/leads", primary: false },
+  { label: "Mensajes", icon: MessageSquare, href: "/dashboard/mensajes", primary: false },
+  { label: "Solicitar BRC", icon: ShieldCheck, href: "/dashboard/expedientes", primary: false },
+];
+
+const compradorActions = [
+  { label: "Buscar Propiedades", icon: Plus, href: "/propiedades", primary: true },
+  { label: "Mis Guardadas", icon: Building2, href: "/dashboard/guardadas", primary: false },
+  { label: "Mensajes", icon: MessageSquare, href: "/dashboard/mensajes", primary: false },
+  { label: "Mis Documentos", icon: FileText, href: "/dashboard/documentos", primary: false },
+];
+
+const vendedorActions = [
+  { label: "Publicar Propiedad", icon: Plus, href: "/dashboard/propiedades", primary: true },
+  { label: "Solicitar BRC", icon: ShieldCheck, href: "/dashboard/expedientes", primary: false },
+  { label: "Mensajes", icon: MessageSquare, href: "/dashboard/mensajes", primary: false },
+  { label: "Mis Documentos", icon: FileText, href: "/dashboard/documentos", primary: false },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -147,9 +135,26 @@ function getEstadoBadge(estado: string) {
 /*  Page                                                              */
 /* ------------------------------------------------------------------ */
 
+function getKpisForRole(role: string) {
+  if (role === "COMPRADOR") return compradorKpis;
+  if (role === "VENDEDOR") return vendedorKpis;
+  return brokerKpis;
+}
+
+function getActionsForRole(role: string) {
+  if (role === "COMPRADOR") return compradorActions;
+  if (role === "VENDEDOR") return vendedorActions;
+  return brokerActions;
+}
+
+function isBrokerRole(role: string) {
+  return ["BROKER", "INMOBILIARIA", "ADMIN"].includes(role);
+}
+
 export default function DashboardPage() {
   const maxChartValue = Math.max(...chartData.map((d) => d.value));
   const [userName, setUserName] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string>("COMPRADOR");
   const [loadingUser, setLoadingUser] = useState(true);
 
   useEffect(() => {
@@ -161,7 +166,7 @@ export default function DashboardPage() {
       if (user) {
         const { data: profile } = await supabase
           .from("profiles")
-          .select("first_name, last_name")
+          .select("first_name, last_name, role")
           .eq("id", user.id)
           .maybeSingle();
 
@@ -176,6 +181,7 @@ export default function DashboardPage() {
         } else {
           setUserName(user.email ?? "Usuario");
         }
+        setUserRole(profile?.role ?? user.user_metadata?.role ?? "COMPRADOR");
       }
       setLoadingUser(false);
     }
@@ -223,7 +229,7 @@ export default function DashboardPage() {
       {/*  KPI Stat Cards                                              */}
       {/* ============================================================ */}
       <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-        {kpis.map((kpi) => (
+        {getKpisForRole(userRole).map((kpi) => (
           <div
             key={kpi.label}
             className="group relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
@@ -267,10 +273,11 @@ export default function DashboardPage() {
       </div>
 
       {/* ============================================================ */}
-      {/*  Chart + Quick Actions                                       */}
+      {/*  Chart + Quick Actions (chart only for broker roles)         */}
       {/* ============================================================ */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Leads por Mes Chart */}
+      <div className={`grid gap-6 ${isBrokerRole(userRole) ? "lg:grid-cols-3" : ""}`}>
+        {/* Leads por Mes Chart - only for broker roles */}
+        {isBrokerRole(userRole) && (
         <div className="lg:col-span-2 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
           <div className="mb-6 flex items-center justify-between">
             <div>
@@ -322,6 +329,7 @@ export default function DashboardPage() {
             })}
           </div>
         </div>
+        )}
 
         {/* Quick Actions */}
         <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
@@ -336,7 +344,7 @@ export default function DashboardPage() {
           </p>
 
           <div className="flex flex-col gap-3">
-            {quickActions.map((action) => (
+            {getActionsForRole(userRole).map((action) => (
               <Link
                 key={action.label}
                 href={action.href}
@@ -364,8 +372,9 @@ export default function DashboardPage() {
       </div>
 
       {/* ============================================================ */}
-      {/*  Recent Leads Table                                          */}
+      {/*  Recent Leads Table (broker only)                            */}
       {/* ============================================================ */}
+      {isBrokerRole(userRole) && (
       <div className="rounded-2xl border border-gray-100 bg-white shadow-sm">
         <div className="flex flex-col gap-2 p-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -441,10 +450,12 @@ export default function DashboardPage() {
           </table>
         </div>
       </div>
+      )}
 
       {/* ============================================================ */}
-      {/*  Membresía Card                                              */}
+      {/*  Membresía Card (broker only)                                */}
       {/* ============================================================ */}
+      {isBrokerRole(userRole) && (
       <div
         className="relative overflow-hidden rounded-2xl p-6 shadow-sm sm:p-8"
         style={{
@@ -496,6 +507,7 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 }

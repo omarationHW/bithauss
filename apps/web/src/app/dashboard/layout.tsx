@@ -37,32 +37,54 @@ import {
   Bell,
   ChevronDown,
   Search,
+  Heart,
+  FileText,
+  FolderOpen,
 } from "lucide-react";
 
-const navItems = [
-  { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
-  { label: "Propiedades", icon: Building2, href: "/dashboard/propiedades" },
-  { label: "Leads", icon: Users, href: "/dashboard/leads" },
-  { label: "Mensajes", icon: MessageSquare, href: "/dashboard/mensajes" },
-  { label: "Membresía", icon: CreditCard, href: "/dashboard/membresia" },
-  {
-    label: "BRC Expedientes",
-    icon: ShieldCheck,
-    href: "/dashboard/expedientes",
-  },
-  { label: "Perfil", icon: User, href: "/dashboard/perfil" },
-  { label: "Configuración", icon: Settings, href: "/dashboard/configuracion" },
+type UserRole = "ADMIN" | "INMOBILIARIA" | "BROKER" | "VENDEDOR" | "COMPRADOR" | "NOTARIO" | "OPERADOR_BRC";
+
+const allNavItems = [
+  { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard", roles: ["ALL"] },
+  { label: "Mis Propiedades", icon: Building2, href: "/dashboard/propiedades", roles: ["BROKER", "INMOBILIARIA", "VENDEDOR", "ADMIN"] },
+  { label: "Leads", icon: Users, href: "/dashboard/leads", roles: ["BROKER", "INMOBILIARIA", "ADMIN"] },
+  { label: "Propiedades Guardadas", icon: Heart, href: "/dashboard/guardadas", roles: ["COMPRADOR"] },
+  { label: "Mis Solicitudes", icon: FileText, href: "/dashboard/solicitudes", roles: ["COMPRADOR"] },
+  { label: "Mensajes", icon: MessageSquare, href: "/dashboard/mensajes", roles: ["ALL"] },
+  { label: "Membresía", icon: CreditCard, href: "/dashboard/membresia", roles: ["BROKER", "INMOBILIARIA", "ADMIN"] },
+  { label: "BRC Expedientes", icon: ShieldCheck, href: "/dashboard/expedientes", roles: ["BROKER", "INMOBILIARIA", "VENDEDOR", "NOTARIO", "OPERADOR_BRC", "ADMIN"] },
+  { label: "Documentos KYC", icon: FolderOpen, href: "/dashboard/documentos", roles: ["COMPRADOR", "VENDEDOR"] },
+  { label: "Perfil", icon: User, href: "/dashboard/perfil", roles: ["ALL"] },
+  { label: "Configuración", icon: Settings, href: "/dashboard/configuracion", roles: ["ALL"] },
 ];
+
+function getNavItemsForRole(role: UserRole) {
+  return allNavItems.filter((item) => item.roles.includes("ALL") || item.roles.includes(role));
+}
+
+const rolLabels: Record<UserRole, string> = {
+  ADMIN: "Administrador",
+  INMOBILIARIA: "Inmobiliaria",
+  BROKER: "Broker",
+  VENDEDOR: "Vendedor",
+  COMPRADOR: "Comprador",
+  NOTARIO: "Notario",
+  OPERADOR_BRC: "Operador BRC",
+};
 
 function SidebarContent({
   activeItem,
   userName,
   userInitials,
+  userRole,
+  navItems,
   onLogout,
 }: {
   activeItem: string;
   userName: string;
   userInitials: string;
+  userRole: UserRole;
+  navItems: typeof allNavItems;
   onLogout: () => void;
 }) {
   return (
@@ -106,7 +128,7 @@ function SidebarContent({
                 "linear-gradient(135deg, hsl(221 83% 53% / 0.4), hsl(160 84% 39% / 0.4))",
             }}
           >
-            Broker Pro
+            {rolLabels[userRole]}
           </Badge>
         </div>
       </div>
@@ -178,6 +200,7 @@ export default function DashboardLayout({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userName, setUserName] = useState("Cargando...");
   const [userInitials, setUserInitials] = useState("...");
+  const [userRole, setUserRole] = useState<UserRole>("COMPRADOR");
 
   useEffect(() => {
     async function fetchUser() {
@@ -188,7 +211,7 @@ export default function DashboardLayout({
       if (user) {
         const { data: profile } = await supabase
           .from("profiles")
-          .select("first_name, last_name")
+          .select("first_name, last_name, role")
           .eq("id", user.id)
           .maybeSingle();
 
@@ -199,6 +222,9 @@ export default function DashboardLayout({
         const fullName =
           `${first} ${last}`.trim() || user.email || "Usuario";
         setUserName(fullName);
+
+        const role = (profile?.role ?? user.user_metadata?.role ?? "COMPRADOR") as UserRole;
+        setUserRole(role);
 
         const initials =
           first && last
@@ -225,6 +251,8 @@ export default function DashboardLayout({
           activeItem={pathname}
           userName={userName}
           userInitials={userInitials}
+          userRole={userRole}
+          navItems={getNavItemsForRole(userRole)}
           onLogout={handleLogout}
         />
       </aside>
@@ -249,6 +277,8 @@ export default function DashboardLayout({
                 activeItem={pathname}
                 userName={userName}
                 userInitials={userInitials}
+                userRole={userRole}
+                navItems={getNavItemsForRole(userRole)}
                 onLogout={handleLogout}
               />
             </SheetContent>
