@@ -1,9 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Barlow } from "next/font/google";
 import { Providers } from "./providers";
-import { Navbar } from "@/components/layout/navbar";
-import { PriceTicker } from "@/components/layout/price-ticker";
-import { Footer } from "@/components/layout/footer";
+import { LayoutWrapper } from "@/components/layout/layout-wrapper";
 import "./globals.css";
 
 const inter = Inter({
@@ -32,10 +30,7 @@ export default function RootLayout({
     <html lang="es">
       <body className={`${inter.variable} ${barlow.variable} font-sans antialiased`}>
         <Providers>
-          <Navbar />
-          <PriceTicker />
-          {children}
-          <Footer />
+          <LayoutWrapper>{children}</LayoutWrapper>
         </Providers>
       </body>
     </html>

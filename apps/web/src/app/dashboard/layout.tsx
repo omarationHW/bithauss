@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import Image from "next/image";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { createClient } from "@/lib/supabase/client";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,6 +36,7 @@ import {
   Menu,
   Bell,
   ChevronDown,
+  Search,
 } from "lucide-react";
 
 const navItems = [
@@ -42,52 +44,75 @@ const navItems = [
   { label: "Propiedades", icon: Building2, href: "/dashboard/propiedades" },
   { label: "Leads", icon: Users, href: "/dashboard/leads" },
   { label: "Mensajes", icon: MessageSquare, href: "/dashboard/mensajes" },
-  { label: "Membresia", icon: CreditCard, href: "/dashboard/membresia" },
+  { label: "Membresía", icon: CreditCard, href: "/dashboard/membresia" },
   {
     label: "BRC Expedientes",
     icon: ShieldCheck,
     href: "/dashboard/expedientes",
   },
   { label: "Perfil", icon: User, href: "/dashboard/perfil" },
-  { label: "Configuracion", icon: Settings, href: "/dashboard/configuracion" },
+  { label: "Configuración", icon: Settings, href: "/dashboard/configuracion" },
 ];
 
-function getPageTitle(pathname: string): string {
-  const item = navItems.find((i) => i.href === pathname);
-  return item?.label ?? "Dashboard";
-}
-
-function SidebarContent({ activeItem }: { activeItem: string }) {
+function SidebarContent({
+  activeItem,
+  userName,
+  userInitials,
+  onLogout,
+}: {
+  activeItem: string;
+  userName: string;
+  userInitials: string;
+  onLogout: () => void;
+}) {
   return (
-    <div className="flex h-full flex-col bg-sidebar-background text-sidebar-foreground">
+    <div className="flex h-full flex-col" style={{ backgroundColor: "#0F172A" }}>
       {/* Logo */}
-      <div className="flex items-center gap-2 px-6 py-5">
-        <Link href="/" className="flex items-center gap-2">
-          <ShieldCheck className="h-7 w-7 text-sidebar-primary" />
-          <span className="text-xl font-bold text-sidebar-foreground">
-            BitHauss
-          </span>
+      <div className="flex items-center gap-3 px-6 py-6">
+        <Link href="/" className="flex items-center gap-3">
+          <Image
+            src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Logo-BitHauss-blanco.png"
+            alt="BitHauss"
+            width={140}
+            height={36}
+            className="h-8 w-auto"
+            unoptimized
+          />
         </Link>
       </div>
 
-      <Separator className="bg-sidebar-border" />
+      {/* Subtle divider */}
+      <div className="mx-5 h-px bg-white/10" />
 
       {/* User Info */}
-      <div className="flex items-center gap-3 px-6 py-4">
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-sidebar-primary text-sm font-semibold text-sidebar-primary-foreground">
-          CM
+      <div className="flex items-center gap-3 px-6 py-5">
+        <div
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white shadow-lg"
+          style={{
+            background:
+              "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
+          }}
+        >
+          {userInitials}
         </div>
-        <div className="flex flex-col">
-          <span className="text-sm font-medium text-sidebar-foreground">
-            Carlos Mendoza
+        <div className="flex flex-col overflow-hidden">
+          <span className="truncate text-sm font-semibold text-white">
+            {userName}
           </span>
-          <Badge className="mt-0.5 w-fit bg-sidebar-primary/20 text-sidebar-primary text-[10px] hover:bg-sidebar-primary/30">
+          <Badge
+            className="mt-1 w-fit border-0 px-2 py-0.5 text-[10px] font-semibold text-white"
+            style={{
+              background:
+                "linear-gradient(135deg, hsl(221 83% 53% / 0.4), hsl(160 84% 39% / 0.4))",
+            }}
+          >
             Broker Pro
           </Badge>
         </div>
       </div>
 
-      <Separator className="bg-sidebar-border" />
+      {/* Subtle divider */}
+      <div className="mx-5 h-px bg-white/10" />
 
       {/* Navigation */}
       <ScrollArea className="flex-1 px-3 py-4">
@@ -99,13 +124,28 @@ function SidebarContent({ activeItem }: { activeItem: string }) {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                  "group flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-300",
                   isActive
-                    ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    ? "text-white shadow-lg"
+                    : "text-slate-400 hover:text-white hover:bg-white/5"
                 )}
+                style={
+                  isActive
+                    ? {
+                        background:
+                          "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
+                      }
+                    : undefined
+                }
               >
-                <item.icon className="h-4 w-4" />
+                <item.icon
+                  className={cn(
+                    "h-[18px] w-[18px] transition-colors duration-300",
+                    isActive
+                      ? "text-white"
+                      : "text-slate-500 group-hover:text-white"
+                  )}
+                />
                 {item.label}
               </Link>
             );
@@ -114,15 +154,15 @@ function SidebarContent({ activeItem }: { activeItem: string }) {
       </ScrollArea>
 
       {/* Logout */}
-      <div className="px-3 pb-4">
-        <Separator className="mb-4 bg-sidebar-border" />
-        <Button
-          variant="ghost"
-          className="w-full justify-start gap-3 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+      <div className="px-3 pb-5">
+        <div className="mx-2 mb-4 h-px bg-white/10" />
+        <button
+          onClick={onLogout}
+          className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-400 transition-all duration-300 hover:bg-red-500/10 hover:text-red-400"
         >
-          <LogOut className="h-4 w-4" />
-          Cerrar Sesion
-        </Button>
+          <LogOut className="h-[18px] w-[18px]" />
+          Cerrar Sesión
+        </button>
       </div>
     </div>
   );
@@ -134,80 +174,163 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const pageTitle = getPageTitle(pathname);
+  const [userName, setUserName] = useState("Cargando...");
+  const [userInitials, setUserInitials] = useState("...");
+
+  useEffect(() => {
+    async function fetchUser() {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("first_name, last_name")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        const first =
+          profile?.first_name ?? user.user_metadata?.first_name ?? "";
+        const last =
+          profile?.last_name ?? user.user_metadata?.last_name ?? "";
+        const fullName =
+          `${first} ${last}`.trim() || user.email || "Usuario";
+        setUserName(fullName);
+
+        const initials =
+          first && last
+            ? `${first[0]}${last[0]}`.toUpperCase()
+            : fullName.slice(0, 2).toUpperCase();
+        setUserInitials(initials);
+      }
+    }
+    fetchUser();
+  }, []);
+
+  const handleLogout = useCallback(async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/auth/login");
+    router.refresh();
+  }, [router]);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-gray-50">
       {/* Desktop Sidebar */}
-      <aside className="fixed left-0 top-0 z-40 hidden h-screen w-64 lg:block">
-        <SidebarContent activeItem={pathname} />
+      <aside className="fixed left-0 top-0 z-40 hidden h-screen w-[272px] shadow-2xl lg:block">
+        <SidebarContent
+          activeItem={pathname}
+          userName={userName}
+          userInitials={userInitials}
+          onLogout={handleLogout}
+        />
       </aside>
 
       {/* Main Content */}
-      <div className="lg:ml-64">
+      <div className="lg:ml-[272px]">
         {/* Top Bar */}
-        <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background px-4 lg:px-6">
+        <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-gray-200 bg-white px-4 shadow-sm lg:px-8">
           {/* Mobile menu */}
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="lg:hidden">
-                <Menu className="h-5 w-5" />
-                <span className="sr-only">Abrir menu</span>
+                <Menu className="h-5 w-5 text-gray-600" />
+                <span className="sr-only">Abrir menú</span>
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-64 p-0">
-              <SheetTitle className="sr-only">Menu de navegacion</SheetTitle>
-              <SidebarContent activeItem={pathname} />
+            <SheetContent side="left" className="w-[272px] p-0">
+              <SheetTitle className="sr-only">
+                Menú de navegación
+              </SheetTitle>
+              <SidebarContent
+                activeItem={pathname}
+                userName={userName}
+                userInitials={userInitials}
+                onLogout={handleLogout}
+              />
             </SheetContent>
           </Sheet>
 
-          {/* Page Title */}
-          <h1 className="text-lg font-semibold">{pageTitle}</h1>
+          {/* Search */}
+          <div className="relative hidden md:block">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Buscar propiedades, leads..."
+              className="h-9 w-72 rounded-xl border border-gray-200 bg-gray-50 pl-10 pr-4 text-sm text-gray-700 placeholder:text-gray-400 outline-none transition-all duration-300 focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+            />
+          </div>
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-3">
             {/* Notifications */}
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="h-5 w-5" />
-              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-destructive" />
+            <button className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 transition-all duration-300 hover:bg-gray-50 hover:text-gray-700">
+              <Bell className="h-[18px] w-[18px]" />
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                style={{
+                  background:
+                    "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
+                }}
+              >
+                3
+              </span>
               <span className="sr-only">Notificaciones</span>
-            </Button>
+            </button>
 
             {/* User Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  className="flex items-center gap-2 px-2"
-                >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-                    CM
+                <button className="flex items-center gap-2.5 rounded-xl border border-gray-200 bg-white px-3 py-1.5 transition-all duration-300 hover:bg-gray-50">
+                  <div
+                    className="flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold text-white"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
+                    }}
+                  >
+                    {userInitials}
                   </div>
-                  <span className="hidden text-sm font-medium md:inline-block">
-                    Carlos M.
+                  <span className="hidden text-sm font-medium text-gray-700 md:inline-block">
+                    {userName.split(" ")[0]}
                   </span>
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                </Button>
+                  <ChevronDown className="h-3.5 w-3.5 text-gray-400" />
+                </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
+              <DropdownMenuContent
+                align="end"
+                className="w-52 rounded-xl border border-gray-200 p-1 shadow-lg"
+              >
+                <DropdownMenuLabel className="text-xs text-gray-500">
+                  Mi Cuenta
+                </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                  <User className="mr-2 h-4 w-4" />
-                  Perfil
+                <DropdownMenuItem className="rounded-lg cursor-pointer" asChild>
+                  <Link href="/dashboard/perfil">
+                    <User className="mr-2 h-4 w-4" />
+                    Perfil
+                  </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Settings className="mr-2 h-4 w-4" />
-                  Configuracion
+                <DropdownMenuItem className="rounded-lg cursor-pointer" asChild>
+                  <Link href="/dashboard/configuracion">
+                    <Settings className="mr-2 h-4 w-4" />
+                    Configuración
+                  </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <CreditCard className="mr-2 h-4 w-4" />
-                  Membresia
+                <DropdownMenuItem className="rounded-lg cursor-pointer" asChild>
+                  <Link href="/dashboard/membresia">
+                    <CreditCard className="mr-2 h-4 w-4" />
+                    Membresía
+                  </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-destructive">
+                <DropdownMenuItem
+                  className="rounded-lg cursor-pointer text-red-600 focus:text-red-600"
+                  onClick={handleLogout}
+                >
                   <LogOut className="mr-2 h-4 w-4" />
-                  Cerrar Sesion
+                  Cerrar Sesión
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -215,7 +338,7 @@ export default function DashboardLayout({
         </header>
 
         {/* Page Content */}
-        <main className="p-4 lg:p-6">{children}</main>
+        <main className="p-4 lg:p-8">{children}</main>
       </div>
     </div>
   );
