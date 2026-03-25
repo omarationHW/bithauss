@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
 import { SupabaseConfigService } from '../../config/supabase.config';
@@ -122,5 +123,23 @@ export class ProfilesService {
     }
 
     return data as Profile;
+  }
+
+  /**
+   * Permanently delete a user account and all associated data.
+   * Uses the admin client to delete from auth.users (cascades to profiles and all related data).
+   */
+  async deleteAccount(userId: string): Promise<{ message: string }> {
+    const supabase = this.supabaseConfig.getAdminClient();
+
+    const { error } = await supabase.auth.admin.deleteUser(userId);
+
+    if (error) {
+      this.logger.error(`Failed to delete account ${userId}: ${error.message}`);
+      throw new InternalServerErrorException('No se pudo eliminar la cuenta. Inténtalo de nuevo.');
+    }
+
+    this.logger.log(`Account ${userId} deleted successfully`);
+    return { message: 'Cuenta eliminada exitosamente.' };
   }
 }

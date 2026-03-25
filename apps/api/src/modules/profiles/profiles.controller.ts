@@ -1,4 +1,4 @@
-import { Controller, Get, Put, Post, Body } from '@nestjs/common';
+import { Controller, Get, Put, Post, Delete, Body } from '@nestjs/common';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import {
@@ -42,5 +42,14 @@ export class ProfilesController {
   @Post()
   async createProfile(@Body() dto: CreateProfileDto) {
     return this.profilesService.createProfile(dto);
+  }
+
+  /**
+   * DELETE /api/v1/profiles/me
+   * Permanently deletes the authenticated user's account and all associated data.
+   */
+  @Delete('me')
+  async deleteMyAccount(@CurrentUser('id') userId: string) {
+    return this.profilesService.deleteAccount(userId);
   }
 }
