@@ -1,7 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
+import { useUser } from "../_context/user-context";
 import {
   Bell,
   Shield,
@@ -86,6 +89,11 @@ const activeSessions = [
 /* ------------------------------------------------------------------ */
 
 export default function ConfiguracionPage() {
+  const { user, logout } = useUser();
+  const router = useRouter();
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
   const [notifications, setNotifications] = useState({
     leads: true,
     brcUpdates: true,
@@ -98,8 +106,82 @@ export default function ConfiguracionPage() {
   const [timezone, setTimezone] = useState("america_mexico");
   const [currency, setCurrency] = useState("mxn");
 
+  // Load saved preferences
+  useEffect(() => {
+    async function loadPrefs() {
+      const supabase = createClient();
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (authUser?.user_metadata?.preferences) {
+        const prefs = authUser.user_metadata.preferences;
+        if (prefs.notifications) setNotifications(prefs.notifications);
+        if (prefs.twoFactor) setTwoFactor(prefs.twoFactor);
+        if (prefs.language) setLanguage(prefs.language);
+        if (prefs.timezone) setTimezone(prefs.timezone);
+        if (prefs.currency) setCurrency(prefs.currency);
+      }
+    }
+    loadPrefs();
+  }, []);
+
+  // Save preferences
+  const savePreferences = useCallback(async (prefs: Record<string, unknown>) => {
+    setSaving(true);
+    const supabase = createClient();
+    await supabase.auth.updateUser({
+      data: {
+        preferences: prefs,
+      },
+    });
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }, []);
+
   function toggleNotification(key: keyof typeof notifications) {
-    setNotifications((prev) => ({ ...prev, [key]: !prev[key] }));
+    const updated = { ...notifications, [key]: !notifications[key] };
+    setNotifications(updated);
+    savePreferences({ notifications: updated, twoFactor, language, timezone, currency });
+  }
+
+  function handleTwoFactor() {
+    const updated = !twoFactor;
+    setTwoFactor(updated);
+    savePreferences({ notifications, twoFactor: updated, language, timezone, currency });
+  }
+
+  function handleLanguage(val: string) {
+    setLanguage(val);
+    savePreferences({ notifications, twoFactor, language: val, timezone, currency });
+  }
+
+  function handleTimezone(val: string) {
+    setTimezone(val);
+    savePreferences({ notifications, twoFactor, language, timezone: val, currency });
+  }
+
+  function handleCurrency(val: string) {
+    setCurrency(val);
+    savePreferences({ notifications, twoFactor, language, timezone, currency: val });
+  }
+
+  async function handleDeleteAccount() {
+    const confirmed = window.confirm(
+      "¿Estás seguro de que deseas eliminar tu cuenta? Esta acción no se puede deshacer."
+    );
+    if (!confirmed) return;
+    // For now just log out - actual deletion would require admin API
+    await logout();
+  }
+
+  async function handleChangePassword() {
+    const supabase = createClient();
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (authUser?.email) {
+      await supabase.auth.resetPasswordForEmail(authUser.email, {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      });
+      alert("Se ha enviado un enlace para cambiar tu contraseña a tu correo electrónico.");
+    }
   }
 
   return (
@@ -122,8 +204,13 @@ export default function ConfiguracionPage() {
           Configuracion
         </h2>
         <p className="mt-1 text-sm text-gray-500">
-          Administra tus preferencias y configuracion de cuenta.
+          Administra tus preferencias y configuración de cuenta.
         </p>
+        {saved && (
+          <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-1 text-xs font-semibold text-emerald-600 animate-fade-in-up">
+            ✓ Guardado
+          </span>
+        )}
       </div>
 
       {/* ============================================================ */}
@@ -248,7 +335,10 @@ export default function ConfiguracionPage() {
                 </p>
               </div>
             </div>
-            <button className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-semibold text-gray-700 transition-all duration-300 hover:bg-gray-50 hover:shadow-sm">
+            <button
+              onClick={handleChangePassword}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-semibold text-gray-700 transition-all duration-300 hover:bg-gray-50 hover:shadow-sm"
+            >
               Cambiar
             </button>
           </div>
@@ -268,7 +358,7 @@ export default function ConfiguracionPage() {
             </div>
             <Toggle
               enabled={twoFactor}
-              onToggle={() => setTwoFactor(!twoFactor)}
+              onToggle={handleTwoFactor}
             />
           </div>
 
@@ -348,7 +438,7 @@ export default function ConfiguracionPage() {
               <Globe className="h-4 w-4 text-gray-400" />
               Idioma
             </label>
-            <Select value={language} onValueChange={setLanguage}>
+            <Select value={language} onValueChange={handleLanguage}>
               <SelectTrigger className="rounded-xl border-gray-200">
                 <SelectValue />
               </SelectTrigger>
@@ -365,7 +455,7 @@ export default function ConfiguracionPage() {
               <Clock className="h-4 w-4 text-gray-400" />
               Zona Horaria
             </label>
-            <Select value={timezone} onValueChange={setTimezone}>
+            <Select value={timezone} onValueChange={handleTimezone}>
               <SelectTrigger className="rounded-xl border-gray-200">
                 <SelectValue />
               </SelectTrigger>
@@ -389,7 +479,7 @@ export default function ConfiguracionPage() {
               <DollarSign className="h-4 w-4 text-gray-400" />
               Moneda
             </label>
-            <Select value={currency} onValueChange={setCurrency}>
+            <Select value={currency} onValueChange={handleCurrency}>
               <SelectTrigger className="rounded-xl border-gray-200">
                 <SelectValue />
               </SelectTrigger>
@@ -433,7 +523,10 @@ export default function ConfiguracionPage() {
               y todos los datos asociados. Esta accion no se puede deshacer.
             </p>
           </div>
-          <button className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition-all duration-300 hover:bg-red-700 hover:shadow-lg">
+          <button
+            onClick={handleDeleteAccount}
+            className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition-all duration-300 hover:bg-red-700 hover:shadow-lg"
+          >
             <Trash2 className="h-4 w-4" />
             Eliminar Cuenta
           </button>

@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useUser } from "./_context/user-context";
+import { createClient } from "@/lib/supabase/client";
 import {
   Building2,
   Users,
@@ -16,79 +18,36 @@ import {
   Sparkles,
   MessageSquare,
   FileText,
+  RefreshCw,
 } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
-/*  Mock data                                                         */
+/*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
-const brokerKpis = [
-  { label: "Propiedades Activas", value: "24", change: "+3 este mes", icon: Building2 },
-  { label: "Leads Nuevos", value: "18", change: "+5 hoy", icon: Users },
-  { label: "Visitas al Perfil", value: "342", change: "+12%", icon: Eye },
-  { label: "Tasa de Conversión", value: "8.5%", change: "+0.3%", icon: TrendingUp },
-];
+interface KpiItem {
+  label: string;
+  value: string;
+  change: string;
+  icon: typeof Building2;
+}
 
-const compradorKpis = [
-  { label: "Propiedades Guardadas", value: "12", change: "+2 esta semana", icon: Building2 },
-  { label: "Solicitudes Enviadas", value: "5", change: "+1 hoy", icon: FileText },
-  { label: "Propiedades Visitadas", value: "28", change: "+8 este mes", icon: Eye },
-  { label: "Mensajes", value: "3", change: "+1 nuevo", icon: MessageSquare },
-];
+interface RecentLead {
+  id: string;
+  nombre: string;
+  propiedad: string;
+  fecha: string;
+  estado: string;
+}
 
-const vendedorKpis = [
-  { label: "Mis Propiedades", value: "3", change: "+1 este mes", icon: Building2 },
-  { label: "Visitas Recibidas", value: "156", change: "+23%", icon: Eye },
-  { label: "Solicitudes de Compra", value: "7", change: "+2 esta semana", icon: Users },
-  { label: "BRC Activos", value: "2", change: "1 en proceso", icon: ShieldCheck },
-];
+interface ChartBar {
+  month: string;
+  value: number;
+}
 
-const chartData = [
-  { month: "Oct", value: 45 },
-  { month: "Nov", value: 62 },
-  { month: "Dic", value: 38 },
-  { month: "Ene", value: 55 },
-  { month: "Feb", value: 72 },
-  { month: "Mar", value: 48 },
-];
-
-const recentLeads = [
-  {
-    id: 1,
-    nombre: "Ana García López",
-    propiedad: "Depto. Polanco 3 Rec.",
-    fecha: "4 Mar 2026",
-    estado: "Nuevo",
-  },
-  {
-    id: 2,
-    nombre: "Roberto Hernández",
-    propiedad: "Casa Coyoacán 250m2",
-    fecha: "3 Mar 2026",
-    estado: "Contactado",
-  },
-  {
-    id: 3,
-    nombre: "María Fernanda Ruiz",
-    propiedad: "Penthouse Santa Fe",
-    fecha: "3 Mar 2026",
-    estado: "En negociación",
-  },
-  {
-    id: 4,
-    nombre: "Jorge Martínez Soto",
-    propiedad: "Local Comercial Roma",
-    fecha: "2 Mar 2026",
-    estado: "Nuevo",
-  },
-  {
-    id: 5,
-    nombre: "Patricia Díaz Morales",
-    propiedad: "Depto. Condesa 2 Rec.",
-    fecha: "1 Mar 2026",
-    estado: "Contactado",
-  },
-];
+/* ------------------------------------------------------------------ */
+/*  Static action lists (no data dependency)                           */
+/* ------------------------------------------------------------------ */
 
 const brokerActions = [
   { label: "Publicar Propiedad", icon: Plus, href: "/dashboard/propiedades", primary: true },
@@ -112,14 +71,24 @@ const vendedorActions = [
 ];
 
 /* ------------------------------------------------------------------ */
-/*  Helpers                                                           */
+/*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
+
+const estadoMap: Record<string, string> = {
+  NUEVO: "Nuevo",
+  CONTACTADO: "Contactado",
+  EN_NEGOCIACION: "En negociación",
+  CONVERTIDO: "Convertido",
+  DESCARTADO: "Descartado",
+};
 
 function getEstadoBadge(estado: string) {
   const styles: Record<string, string> = {
     Nuevo: "bg-blue-50 text-blue-600 border border-blue-200",
     Contactado: "bg-amber-50 text-amber-600 border border-amber-200",
     "En negociación": "bg-purple-50 text-purple-600 border border-purple-200",
+    Convertido: "bg-emerald-50 text-emerald-600 border border-emerald-200",
+    Descartado: "bg-red-50 text-red-600 border border-red-200",
   };
   return (
     <span
@@ -128,16 +97,6 @@ function getEstadoBadge(estado: string) {
       {estado}
     </span>
   );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Page                                                              */
-/* ------------------------------------------------------------------ */
-
-function getKpisForRole(role: string) {
-  if (role === "COMPRADOR") return compradorKpis;
-  if (role === "VENDEDOR") return vendedorKpis;
-  return brokerKpis;
 }
 
 function getActionsForRole(role: string) {
@@ -150,11 +109,269 @@ function isBrokerRole(role: string) {
   return ["BROKER", "INMOBILIARIA", "ADMIN"].includes(role);
 }
 
+const MONTH_LABELS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+
+/* ------------------------------------------------------------------ */
+/*  Data-fetching hook                                                 */
+/* ------------------------------------------------------------------ */
+
+function useDashboardData(userId: string | undefined, role: string) {
+  const [kpis, setKpis] = useState<KpiItem[]>([]);
+  const [recentLeads, setRecentLeads] = useState<RecentLead[]>([]);
+  const [chartData, setChartData] = useState<ChartBar[]>([]);
+  const [loadingStats, setLoadingStats] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const refresh = () => {
+    setLoadingStats(true);
+    setRefreshKey((k) => k + 1);
+  };
+
+  useEffect(() => {
+    if (!userId) return;
+
+    let cancelled = false;
+    const supabase = createClient();
+
+    async function fetchBrokerData() {
+      // 1. Propiedades Activas
+      const { count: activeProps } = await supabase
+        .from("properties")
+        .select("id", { count: "exact", head: true })
+        .eq("owner_id", userId!)
+        .eq("status", "PUBLICADO");
+
+      // 2. Get user property IDs for lead queries
+      const { data: userProperties } = await supabase
+        .from("properties")
+        .select("id, view_count")
+        .eq("owner_id", userId!);
+
+      const propertyIds = (userProperties ?? []).map((p) => p.id);
+
+      // 3. Leads Nuevos (leads on user's properties with status NUEVO)
+      let newLeadsCount = 0;
+      if (propertyIds.length > 0) {
+        const { count } = await supabase
+          .from("leads")
+          .select("id", { count: "exact", head: true })
+          .in("property_id", propertyIds)
+          .eq("status", "NUEVO");
+        newLeadsCount = count ?? 0;
+      }
+
+      // 4. Total Visitas (sum of view_count)
+      const totalViews = (userProperties ?? []).reduce(
+        (sum, p) => sum + (p.view_count ?? 0),
+        0,
+      );
+
+      // 5. BRC Certificados
+      const { count: brcCount } = await supabase
+        .from("properties")
+        .select("id", { count: "exact", head: true })
+        .eq("owner_id", userId!)
+        .eq("brc_status", "CERTIFICADO");
+
+      // 6. Recent leads
+      let fetchedLeads: RecentLead[] = [];
+      if (propertyIds.length > 0) {
+        const { data: leadsData } = await supabase
+          .from("leads")
+          .select("id, name, status, created_at, property_id, properties(title)")
+          .in("property_id", propertyIds)
+          .order("created_at", { ascending: false })
+          .limit(5);
+
+        fetchedLeads = (leadsData ?? []).map((l) => ({
+          id: l.id,
+          nombre: l.name ?? "Sin nombre",
+          propiedad:
+            (l.properties as unknown as { title: string } | null)?.title ??
+            "Propiedad",
+          fecha: new Date(l.created_at).toLocaleDateString("es-MX", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          }),
+          estado: estadoMap[l.status] ?? l.status,
+        }));
+      }
+
+      // 7. Chart: leads grouped by month (last 6 months)
+      let chart: ChartBar[] = [];
+      if (propertyIds.length > 0) {
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+        sixMonthsAgo.setDate(1);
+        sixMonthsAgo.setHours(0, 0, 0, 0);
+
+        const { data: leadsForChart } = await supabase
+          .from("leads")
+          .select("created_at")
+          .in("property_id", propertyIds)
+          .gte("created_at", sixMonthsAgo.toISOString())
+          .order("created_at", { ascending: true });
+
+        // Build a map for last 6 months
+        const monthMap = new Map<string, number>();
+        const now = new Date();
+        for (let i = 5; i >= 0; i--) {
+          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          const key = `${d.getFullYear()}-${d.getMonth()}`;
+          monthMap.set(key, 0);
+        }
+
+        for (const row of leadsForChart ?? []) {
+          const d = new Date(row.created_at);
+          const key = `${d.getFullYear()}-${d.getMonth()}`;
+          if (monthMap.has(key)) {
+            monthMap.set(key, (monthMap.get(key) ?? 0) + 1);
+          }
+        }
+
+        chart = Array.from(monthMap.entries()).map(([key, value]) => {
+          const monthIdx = parseInt(key.split("-")[1] ?? "0", 10);
+          return { month: MONTH_LABELS[monthIdx] ?? "N/A", value };
+        });
+      } else {
+        // No properties yet — show empty 6-month chart
+        const now = new Date();
+        chart = Array.from({ length: 6 }, (_, i) => {
+          const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+          return { month: MONTH_LABELS[d.getMonth()] ?? "N/A", value: 0 };
+        });
+      }
+
+      if (cancelled) return;
+
+      setKpis([
+        {
+          label: "Propiedades Activas",
+          value: String(activeProps ?? 0),
+          change: `${propertyIds.length} total`,
+          icon: Building2,
+        },
+        {
+          label: "Leads Nuevos",
+          value: String(newLeadsCount),
+          change: "pendientes",
+          icon: Users,
+        },
+        {
+          label: "Total Visitas",
+          value: String(totalViews),
+          change: "acumuladas",
+          icon: Eye,
+        },
+        {
+          label: "BRC Certificados",
+          value: String(brcCount ?? 0),
+          change: "propiedades",
+          icon: ShieldCheck,
+        },
+      ]);
+      setRecentLeads(fetchedLeads);
+      setChartData(chart);
+      setLoadingStats(false);
+    }
+
+    async function fetchVendedorData() {
+      const { count: myProps } = await supabase
+        .from("properties")
+        .select("id", { count: "exact", head: true })
+        .eq("owner_id", userId!);
+
+      const { data: userProperties } = await supabase
+        .from("properties")
+        .select("id, view_count")
+        .eq("owner_id", userId!);
+
+      const propertyIds = (userProperties ?? []).map((p) => p.id);
+      const totalViews = (userProperties ?? []).reduce(
+        (sum, p) => sum + (p.view_count ?? 0),
+        0,
+      );
+
+      let requestCount = 0;
+      if (propertyIds.length > 0) {
+        const { count } = await supabase
+          .from("leads")
+          .select("id", { count: "exact", head: true })
+          .in("property_id", propertyIds);
+        requestCount = count ?? 0;
+      }
+
+      const { count: brcCount } = await supabase
+        .from("properties")
+        .select("id", { count: "exact", head: true })
+        .eq("owner_id", userId!)
+        .eq("brc_status", "CERTIFICADO");
+
+      if (cancelled) return;
+
+      setKpis([
+        { label: "Mis Propiedades", value: String(myProps ?? 0), change: "publicadas", icon: Building2 },
+        { label: "Visitas Recibidas", value: String(totalViews), change: "acumuladas", icon: Eye },
+        { label: "Solicitudes de Compra", value: String(requestCount), change: "recibidas", icon: Users },
+        { label: "BRC Activos", value: String(brcCount ?? 0), change: "certificados", icon: ShieldCheck },
+      ]);
+      setChartData([]);
+      setRecentLeads([]);
+      setLoadingStats(false);
+    }
+
+    async function fetchCompradorData() {
+      // Comprador tables are not fully connected yet — show zeros where possible
+      if (cancelled) return;
+
+      setKpis([
+        { label: "Propiedades Guardadas", value: "0", change: "por conectar", icon: Building2 },
+        { label: "Solicitudes Enviadas", value: "0", change: "por conectar", icon: FileText },
+        { label: "Propiedades Visitadas", value: "0", change: "por conectar", icon: Eye },
+        { label: "Mensajes", value: "0", change: "por conectar", icon: MessageSquare },
+      ]);
+      setChartData([]);
+      setRecentLeads([]);
+      setLoadingStats(false);
+    }
+
+    setLoadingStats(true);
+
+    if (isBrokerRole(role)) {
+      fetchBrokerData();
+    } else if (role === "VENDEDOR") {
+      fetchVendedorData();
+    } else {
+      fetchCompradorData();
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, role, refreshKey]);
+
+  return { kpis, recentLeads, chartData, loadingStats, refresh };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Page                                                              */
+/* ------------------------------------------------------------------ */
+
 export default function DashboardPage() {
-  const maxChartValue = Math.max(...chartData.map((d) => d.value));
   const { user, loading: loadingUser } = useUser();
   const userName = user?.fullName ?? null;
   const userRole = user?.role ?? "COMPRADOR";
+
+  const { kpis, recentLeads, chartData, loadingStats, refresh } = useDashboardData(
+    user?.id,
+    userRole,
+  );
+
+  const maxChartValue = useMemo(
+    () => Math.max(1, ...chartData.map((d) => d.value)),
+    [chartData],
+  );
 
   const today = new Date().toLocaleDateString("es-MX", {
     weekday: "long",
@@ -187,9 +404,19 @@ export default function DashboardPage() {
             Aquí tienes un resumen de tu actividad reciente.
           </p>
         </div>
-        <div className="flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-medium text-gray-500 shadow-sm border border-gray-100">
-          <CalendarDays className="h-4 w-4 text-gray-400" />
-          <span className="first-letter:uppercase">{today}</span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={refresh}
+            disabled={loadingStats}
+            className="flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-medium text-gray-500 shadow-sm border border-gray-100 transition-all duration-300 hover:bg-gray-50 hover:shadow-md disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 text-gray-400 ${loadingStats ? "animate-spin" : ""}`} />
+            Actualizar
+          </button>
+          <div className="flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-medium text-gray-500 shadow-sm border border-gray-100">
+            <CalendarDays className="h-4 w-4 text-gray-400" />
+            <span className="first-letter:uppercase">{today}</span>
+          </div>
         </div>
       </div>
 
@@ -197,47 +424,65 @@ export default function DashboardPage() {
       {/*  KPI Stat Cards                                              */}
       {/* ============================================================ */}
       <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-        {getKpisForRole(userRole).map((kpi) => (
-          <div
-            key={kpi.label}
-            className="group relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
-          >
-            {/* Subtle gradient accent at top */}
-            <div
-              className="absolute inset-x-0 top-0 h-1 opacity-80"
-              style={{
-                background:
-                  "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
-              }}
-            />
-
-            <div className="flex items-center justify-between">
+        {loadingStats
+          ? Array.from({ length: 4 }).map((_, i) => (
               <div
-                className="flex h-12 w-12 items-center justify-center rounded-xl shadow-sm"
-                style={{
-                  background:
-                    "linear-gradient(135deg, hsl(221 83% 53% / 0.1), hsl(160 84% 39% / 0.1))",
-                }}
+                key={i}
+                className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-sm"
               >
-                <kpi.icon
-                  className="h-5 w-5"
-                  style={{ color: "hsl(221 83% 53%)" }}
+                <div
+                  className="absolute inset-x-0 top-0 h-1 opacity-80"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
+                  }}
                 />
+                <div className="flex items-center justify-center py-6">
+                  <Loader2 className="h-6 w-6 animate-spin text-gray-300" />
+                </div>
               </div>
-              <div className="flex items-center gap-1 rounded-lg bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-600">
-                <TrendingUp className="h-3 w-3" />
-                {kpi.change}
-              </div>
-            </div>
+            ))
+          : kpis.map((kpi) => (
+              <div
+                key={kpi.label}
+                className="group relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
+              >
+                {/* Subtle gradient accent at top */}
+                <div
+                  className="absolute inset-x-0 top-0 h-1 opacity-80"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
+                  }}
+                />
 
-            <div className="mt-4">
-              <p className="text-3xl font-bold text-gray-900">{kpi.value}</p>
-              <p className="mt-1 text-sm font-medium text-gray-500">
-                {kpi.label}
-              </p>
-            </div>
-          </div>
-        ))}
+                <div className="flex items-center justify-between">
+                  <div
+                    className="flex h-12 w-12 items-center justify-center rounded-xl shadow-sm"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, hsl(221 83% 53% / 0.1), hsl(160 84% 39% / 0.1))",
+                    }}
+                  >
+                    <kpi.icon
+                      className="h-5 w-5"
+                      style={{ color: "hsl(221 83% 53%)" }}
+                    />
+                  </div>
+                  <div className="flex items-center gap-1 rounded-lg bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-600">
+                    <TrendingUp className="h-3 w-3" />
+                    {kpi.change}
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <p className="text-3xl font-bold text-gray-900">{kpi.value}</p>
+                  <p className="mt-1 text-sm font-medium text-gray-500">
+                    {kpi.label}
+                  </p>
+                </div>
+              </div>
+            ))}
       </div>
 
       {/* ============================================================ */}
@@ -269,9 +514,14 @@ export default function DashboardPage() {
             </Link>
           </div>
 
+          {loadingStats ? (
+            <div className="flex items-center justify-center h-52">
+              <Loader2 className="h-6 w-6 animate-spin text-gray-300" />
+            </div>
+          ) : (
           <div className="flex items-end gap-4 h-52">
             {chartData.map((bar) => {
-              const height = (bar.value / maxChartValue) * 160;
+              const height = maxChartValue > 0 ? (bar.value / maxChartValue) * 160 : 4;
               return (
                 <div
                   key={bar.month}
@@ -296,6 +546,7 @@ export default function DashboardPage() {
               );
             })}
           </div>
+          )}
         </div>
         )}
 
@@ -387,7 +638,23 @@ export default function DashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {recentLeads.map((lead, i) => (
+              {loadingStats ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-10 text-center">
+                    <Loader2 className="mx-auto h-5 w-5 animate-spin text-gray-300" />
+                  </td>
+                </tr>
+              ) : recentLeads.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="px-6 py-10 text-center text-sm text-gray-400"
+                  >
+                    Aún no tienes leads. Se mostrarán aquí cuando lleguen.
+                  </td>
+                </tr>
+              ) : (
+                recentLeads.map((lead, i) => (
                 <tr
                   key={lead.id}
                   className={`border-t border-gray-100 transition-colors duration-200 hover:bg-gray-50/80 ${
@@ -413,7 +680,8 @@ export default function DashboardPage() {
                     </button>
                   </td>
                 </tr>
-              ))}
+                ))
+              )}
             </tbody>
           </table>
         </div>

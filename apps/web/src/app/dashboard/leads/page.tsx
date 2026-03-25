@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import Link from "next/link";
+import { useState, useEffect, useCallback } from "react";
 import {
   Users,
   UserPlus,
@@ -14,11 +13,22 @@ import {
   TrendingUp,
   XCircle,
   MessageSquare,
+  Loader2,
+  ChevronDown,
 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import { useUser } from "../_context/user-context";
 
 /* ------------------------------------------------------------------ */
-/*  Types & Mock Data                                                  */
+/*  Types                                                              */
 /* ------------------------------------------------------------------ */
+
+type DbStatus =
+  | "NUEVO"
+  | "CONTACTADO"
+  | "EN_NEGOCIACION"
+  | "CONVERTIDO"
+  | "DESCARTADO";
 
 type LeadEstado =
   | "Nuevo"
@@ -28,120 +38,46 @@ type LeadEstado =
   | "Descartado";
 
 interface Lead {
-  id: number;
+  id: string;
   nombre: string;
   email: string;
   telefono: string;
+  mensaje: string | null;
   propiedad: string;
+  propertyId: string | null;
   fecha: string;
+  dbStatus: DbStatus;
   estado: LeadEstado;
+  source: string | null;
+  createdAt: string;
 }
 
-const leads: Lead[] = [
-  {
-    id: 1,
-    nombre: "Ana García López",
-    email: "ana.garcia@email.com",
-    telefono: "+52 55 1234 5678",
-    propiedad: "Depto. Polanco 3 Rec.",
-    fecha: "4 Mar 2026",
-    estado: "Nuevo",
-  },
-  {
-    id: 2,
-    nombre: "Roberto Hernández Vega",
-    email: "roberto.hv@email.com",
-    telefono: "+52 55 2345 6789",
-    propiedad: "Casa Coyoacán 250m²",
-    fecha: "3 Mar 2026",
-    estado: "Contactado",
-  },
-  {
-    id: 3,
-    nombre: "María Fernanda Ruiz",
-    email: "mf.ruiz@email.com",
-    telefono: "+52 55 3456 7890",
-    propiedad: "Penthouse Santa Fe",
-    fecha: "3 Mar 2026",
-    estado: "En negociación",
-  },
-  {
-    id: 4,
-    nombre: "Jorge Martínez Soto",
-    email: "jorge.ms@email.com",
-    telefono: "+52 55 4567 8901",
-    propiedad: "Local Comercial Roma",
-    fecha: "2 Mar 2026",
-    estado: "Nuevo",
-  },
-  {
-    id: 5,
-    nombre: "Patricia Díaz Morales",
-    email: "patricia.dm@email.com",
-    telefono: "+52 55 5678 9012",
-    propiedad: "Depto. Condesa 2 Rec.",
-    fecha: "1 Mar 2026",
-    estado: "Convertido",
-  },
-  {
-    id: 6,
-    nombre: "Fernando Castillo Reyes",
-    email: "f.castillo@email.com",
-    telefono: "+52 55 6789 0123",
-    propiedad: "Casa Pedregal",
-    fecha: "28 Feb 2026",
-    estado: "En negociación",
-  },
-  {
-    id: 7,
-    nombre: "Laura Sánchez Gutiérrez",
-    email: "laura.sg@email.com",
-    telefono: "+52 55 7890 1234",
-    propiedad: "Depto. Narvarte",
-    fecha: "27 Feb 2026",
-    estado: "Descartado",
-  },
-  {
-    id: 8,
-    nombre: "Miguel Ángel Torres",
-    email: "ma.torres@email.com",
-    telefono: "+52 55 8901 2345",
-    propiedad: "Terreno Valle de Bravo",
-    fecha: "26 Feb 2026",
-    estado: "Contactado",
-  },
-];
-
-const kpis = [
-  {
-    label: "Total Leads",
-    value: "156",
-    change: "+12 este mes",
-    icon: Users,
-  },
-  {
-    label: "Nuevos",
-    value: "18",
-    change: "+5 hoy",
-    icon: UserPlus,
-  },
-  {
-    label: "Contactados",
-    value: "42",
-    change: "+8 esta semana",
-    icon: Handshake,
-  },
-  {
-    label: "Convertidos",
-    value: "23",
-    change: "+3 este mes",
-    icon: CheckCircle2,
-  },
-];
-
 /* ------------------------------------------------------------------ */
-/*  Helpers                                                            */
+/*  Status helpers                                                     */
 /* ------------------------------------------------------------------ */
+
+const STATUS_MAP: Record<DbStatus, LeadEstado> = {
+  NUEVO: "Nuevo",
+  CONTACTADO: "Contactado",
+  EN_NEGOCIACION: "En negociación",
+  CONVERTIDO: "Convertido",
+  DESCARTADO: "Descartado",
+};
+
+const DISPLAY_TO_DB: Record<LeadEstado, DbStatus> = {
+  Nuevo: "NUEVO",
+  Contactado: "CONTACTADO",
+  "En negociación": "EN_NEGOCIACION",
+  Convertido: "CONVERTIDO",
+  Descartado: "DESCARTADO",
+};
+
+const STATUS_FLOW: DbStatus[] = [
+  "NUEVO",
+  "CONTACTADO",
+  "EN_NEGOCIACION",
+  "CONVERTIDO",
+];
 
 function getEstadoBadge(estado: LeadEstado) {
   const styles: Record<LeadEstado, string> = {
@@ -160,22 +96,142 @@ function getEstadoBadge(estado: LeadEstado) {
   );
 }
 
+function formatDateEs(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleDateString("es-MX", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 /* ------------------------------------------------------------------ */
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
 
 export default function LeadsPage() {
+  const { user } = useUser();
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
-
-  useEffect(() => {
-    document.body.style.overflow = selectedLead ? "hidden" : "";
-    return () => { document.body.style.overflow = ""; };
-  }, [selectedLead]);
+  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [filtroEstado, setFiltroEstado] = useState<"todos" | LeadEstado>(
     "todos"
   );
 
+  /* ---- Fetch leads ---- */
+  const fetchLeads = useCallback(async () => {
+    if (!user) return;
+    const supabase = createClient();
+
+    const { data, error } = await supabase
+      .from("leads")
+      .select("*, properties(title)")
+      .eq("owner_id", user.id)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Error fetching leads:", error);
+      setLoading(false);
+      return;
+    }
+
+    const mapped: Lead[] = (data ?? []).map((row: any) => ({
+      id: row.id,
+      nombre: row.name,
+      email: row.email,
+      telefono: row.phone ?? "",
+      mensaje: row.message ?? null,
+      propiedad: row.properties?.title ?? "Sin propiedad",
+      propertyId: row.property_id,
+      fecha: formatDateEs(row.created_at),
+      dbStatus: row.status as DbStatus,
+      estado: STATUS_MAP[row.status as DbStatus] ?? "Nuevo",
+      source: row.source,
+      createdAt: row.created_at,
+    }));
+
+    setLeads(mapped);
+    setLoading(false);
+  }, [user]);
+
+  useEffect(() => {
+    fetchLeads();
+  }, [fetchLeads]);
+
+  /* ---- Body scroll lock ---- */
+  useEffect(() => {
+    document.body.style.overflow = selectedLead ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [selectedLead]);
+
+  /* ---- Update status ---- */
+  const handleStatusChange = async (lead: Lead, newDbStatus: DbStatus) => {
+    setUpdatingStatus(lead.id);
+    const supabase = createClient();
+
+    const { error } = await supabase
+      .from("leads")
+      .update({ status: newDbStatus, updated_at: new Date().toISOString() })
+      .eq("id", lead.id);
+
+    if (error) {
+      console.error("Error updating lead status:", error);
+      setUpdatingStatus(null);
+      return;
+    }
+
+    const updated: Lead = {
+      ...lead,
+      dbStatus: newDbStatus,
+      estado: STATUS_MAP[newDbStatus],
+    };
+
+    setLeads((prev) => prev.map((l) => (l.id === lead.id ? updated : l)));
+
+    if (selectedLead?.id === lead.id) {
+      setSelectedLead(updated);
+    }
+
+    setUpdatingStatus(null);
+  };
+
+  /* ---- KPIs from real data ---- */
+  const kpis = [
+    {
+      label: "Total Leads",
+      value: leads.length.toString(),
+      change: `${leads.length} total`,
+      icon: Users,
+    },
+    {
+      label: "Nuevos",
+      value: leads.filter((l) => l.dbStatus === "NUEVO").length.toString(),
+      change: "pendientes",
+      icon: UserPlus,
+    },
+    {
+      label: "Contactados",
+      value: leads
+        .filter((l) => l.dbStatus === "CONTACTADO")
+        .length.toString(),
+      change: "en seguimiento",
+      icon: Handshake,
+    },
+    {
+      label: "Convertidos",
+      value: leads
+        .filter((l) => l.dbStatus === "CONVERTIDO")
+        .length.toString(),
+      change: "cerrados",
+      icon: CheckCircle2,
+    },
+  ];
+
+  /* ---- Filter & search ---- */
   const filtered = leads.filter((lead) => {
     if (filtroEstado !== "todos" && lead.estado !== filtroEstado) return false;
     if (search) {
@@ -197,6 +253,29 @@ export default function LeadsPage() {
     "Convertido",
     "Descartado",
   ];
+
+  /* ---- Next possible statuses for a lead ---- */
+  function getNextStatuses(current: DbStatus): DbStatus[] {
+    const idx = STATUS_FLOW.indexOf(current);
+    const options: DbStatus[] = [];
+    if (idx >= 0 && idx < STATUS_FLOW.length - 1) {
+      options.push(STATUS_FLOW[idx + 1]!);
+    }
+    if (current !== "DESCARTADO") {
+      options.push("DESCARTADO");
+    }
+    return options;
+  }
+
+  /* ---- Loading state ---- */
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-32">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+        <p className="mt-3 text-sm text-gray-500">Cargando leads...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -295,101 +374,124 @@ export default function LeadsPage() {
       </div>
 
       {/* ============================================================ */}
-      {/*  Leads Table                                                  */}
+      {/*  Empty state (no leads at all)                                */}
       {/* ============================================================ */}
-      <div className="rounded-2xl border border-gray-100 bg-white shadow-sm">
-        <div className="overflow-x-auto">
-          {filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16">
-              <Users className="mb-3 h-10 w-10 text-gray-300" />
-              <p className="text-sm text-gray-500">
-                No se encontraron leads con los filtros seleccionados
-              </p>
-            </div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50/50 text-left">
-                  <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
-                    Nombre
-                  </th>
-                  <th className="hidden px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 md:table-cell">
-                    Email
-                  </th>
-                  <th className="hidden px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 lg:table-cell">
-                    Teléfono
-                  </th>
-                  <th className="hidden px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 sm:table-cell">
-                    Propiedad
-                  </th>
-                  <th className="hidden px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 xl:table-cell">
-                    Fecha
-                  </th>
-                  <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
-                    Estado
-                  </th>
-                  <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
-                    Acciones
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((lead) => (
-                  <tr
-                    key={lead.id}
-                    className="border-t border-gray-100 transition-colors duration-200 hover:bg-gray-50/80"
-                  >
-                    <td className="px-6 py-4">
-                      <p className="font-semibold text-gray-900">
-                        {lead.nombre}
-                      </p>
-                      <p className="text-xs text-gray-400 md:hidden">
-                        {lead.email}
-                      </p>
-                    </td>
-                    <td className="hidden px-6 py-4 text-gray-500 md:table-cell">
-                      {lead.email}
-                    </td>
-                    <td className="hidden px-6 py-4 text-gray-500 lg:table-cell">
-                      {lead.telefono}
-                    </td>
-                    <td className="hidden px-6 py-4 text-gray-500 sm:table-cell">
-                      {lead.propiedad}
-                    </td>
-                    <td className="hidden px-6 py-4 text-gray-500 xl:table-cell">
-                      {lead.fecha}
-                    </td>
-                    <td className="px-6 py-4">
-                      {getEstadoBadge(lead.estado)}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => setSelectedLead(lead)}
-                          className="rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-300 hover:bg-gray-100"
-                          style={{ color: "hsl(221 83% 53%)" }}
-                        >
-                          <Eye className="h-3.5 w-3.5" />
-                        </button>
-                        <button className="rounded-lg px-3 py-1.5 text-xs font-semibold text-emerald-600 transition-all duration-300 hover:bg-emerald-50">
-                          <Phone className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </td>
+      {leads.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-gray-100 bg-white py-20 shadow-sm">
+          <Users className="mb-4 h-12 w-12 text-gray-300" />
+          <h3 className="text-lg font-semibold text-gray-700">
+            Aún no tienes leads
+          </h3>
+          <p className="mt-1 max-w-sm text-center text-sm text-gray-400">
+            Cuando alguien se interese en tus propiedades, sus datos aparecerán
+            aquí.
+          </p>
+        </div>
+      ) : (
+        /* ============================================================ */
+        /*  Leads Table                                                  */
+        /* ============================================================ */
+        <div className="rounded-2xl border border-gray-100 bg-white shadow-sm">
+          <div className="overflow-x-auto">
+            {filtered.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16">
+                <Users className="mb-3 h-10 w-10 text-gray-300" />
+                <p className="text-sm text-gray-500">
+                  No se encontraron leads con los filtros seleccionados
+                </p>
+              </div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50/50 text-left">
+                    <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      Nombre
+                    </th>
+                    <th className="hidden px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 md:table-cell">
+                      Email
+                    </th>
+                    <th className="hidden px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 lg:table-cell">
+                      Teléfono
+                    </th>
+                    <th className="hidden px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 sm:table-cell">
+                      Propiedad
+                    </th>
+                    <th className="hidden px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 xl:table-cell">
+                      Fecha
+                    </th>
+                    <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      Estado
+                    </th>
+                    <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      Acciones
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+                </thead>
+                <tbody>
+                  {filtered.map((lead) => (
+                    <tr
+                      key={lead.id}
+                      className="border-t border-gray-100 transition-colors duration-200 hover:bg-gray-50/80"
+                    >
+                      <td className="px-6 py-4">
+                        <p className="font-semibold text-gray-900">
+                          {lead.nombre}
+                        </p>
+                        <p className="text-xs text-gray-400 md:hidden">
+                          {lead.email}
+                        </p>
+                      </td>
+                      <td className="hidden px-6 py-4 text-gray-500 md:table-cell">
+                        {lead.email}
+                      </td>
+                      <td className="hidden px-6 py-4 text-gray-500 lg:table-cell">
+                        {lead.telefono}
+                      </td>
+                      <td className="hidden px-6 py-4 text-gray-500 sm:table-cell">
+                        {lead.propiedad}
+                      </td>
+                      <td className="hidden px-6 py-4 text-gray-500 xl:table-cell">
+                        {lead.fecha}
+                      </td>
+                      <td className="px-6 py-4">
+                        {getEstadoBadge(lead.estado)}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => setSelectedLead(lead)}
+                            className="rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-300 hover:bg-gray-100"
+                            style={{ color: "hsl(221 83% 53%)" }}
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                          </button>
+                          {lead.telefono && (
+                            <a
+                              href={`tel:${lead.telefono.replace(/\s/g, "")}`}
+                              className="rounded-lg px-3 py-1.5 text-xs font-semibold text-emerald-600 transition-all duration-300 hover:bg-emerald-50"
+                            >
+                              <Phone className="h-3.5 w-3.5" />
+                            </a>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
 
-        {/* Footer count */}
-        <div className="border-t border-gray-100 px-6 py-3 text-sm text-gray-500">
-          Mostrando {filtered.length} de {leads.length} leads
+          {/* Footer count */}
+          <div className="border-t border-gray-100 px-6 py-3 text-sm text-gray-500">
+            Mostrando {filtered.length} de {leads.length} leads
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Lead Detail Modal */}
+      {/* ============================================================ */}
+      {/*  Lead Detail Modal                                            */}
+      {/* ============================================================ */}
       {selectedLead && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
@@ -402,12 +504,19 @@ export default function LeadsPage() {
             {/* Header */}
             <div
               className="p-6 text-white"
-              style={{ background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))" }}
+              style={{
+                background:
+                  "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
+              }}
             >
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-lg font-bold">{selectedLead.nombre}</h3>
-                  <p className="text-sm text-white/80 mt-0.5">Lead #{selectedLead.id}</p>
+                  <p className="text-sm text-white/80 mt-0.5">
+                    {selectedLead.source
+                      ? `Fuente: ${selectedLead.source}`
+                      : "Lead"}
+                  </p>
                 </div>
                 <button
                   onClick={() => setSelectedLead(null)}
@@ -420,15 +529,51 @@ export default function LeadsPage() {
 
             {/* Body */}
             <div className="p-6 space-y-5">
-              {/* Status */}
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-500">Estado</span>
-                {getEstadoBadge(selectedLead.estado)}
+              {/* Status with change options */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-500">
+                    Estado actual
+                  </span>
+                  {getEstadoBadge(selectedLead.estado)}
+                </div>
+
+                {/* Status change buttons */}
+                {getNextStatuses(selectedLead.dbStatus).length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    <span className="text-xs text-gray-400 self-center mr-1">
+                      Cambiar a:
+                    </span>
+                    {getNextStatuses(selectedLead.dbStatus).map((nextStatus) => (
+                      <button
+                        key={nextStatus}
+                        disabled={updatingStatus === selectedLead.id}
+                        onClick={() =>
+                          handleStatusChange(selectedLead, nextStatus)
+                        }
+                        className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all duration-200 hover:shadow-sm disabled:opacity-50 ${
+                          nextStatus === "DESCARTADO"
+                            ? "border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                            : "border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100"
+                        }`}
+                      >
+                        {updatingStatus === selectedLead.id ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <ChevronDown className="h-3 w-3" />
+                        )}
+                        {STATUS_MAP[nextStatus]}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Contact info */}
               <div className="space-y-3">
-                <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Información de contacto</h4>
+                <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
+                  Información de contacto
+                </h4>
                 <div className="grid grid-cols-1 gap-3">
                   <div className="flex items-center gap-3 rounded-xl bg-gray-50 p-3">
                     <div className="h-9 w-9 rounded-lg bg-blue-50 flex items-center justify-center">
@@ -436,34 +581,64 @@ export default function LeadsPage() {
                     </div>
                     <div>
                       <p className="text-xs text-gray-400">Email</p>
-                      <p className="text-sm font-medium text-gray-900">{selectedLead.email}</p>
+                      <p className="text-sm font-medium text-gray-900">
+                        {selectedLead.email}
+                      </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 rounded-xl bg-gray-50 p-3">
-                    <div className="h-9 w-9 rounded-lg bg-emerald-50 flex items-center justify-center">
-                      <Phone className="h-4 w-4 text-emerald-500" />
+                  {selectedLead.telefono && (
+                    <div className="flex items-center gap-3 rounded-xl bg-gray-50 p-3">
+                      <div className="h-9 w-9 rounded-lg bg-emerald-50 flex items-center justify-center">
+                        <Phone className="h-4 w-4 text-emerald-500" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400">Teléfono</p>
+                        <p className="text-sm font-medium text-gray-900">
+                          {selectedLead.telefono}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs text-gray-400">Teléfono</p>
-                      <p className="text-sm font-medium text-gray-900">{selectedLead.telefono}</p>
-                    </div>
-                  </div>
+                  )}
                 </div>
               </div>
 
+              {/* Message */}
+              {selectedLead.mensaje && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
+                    Mensaje
+                  </h4>
+                  <p className="rounded-xl bg-gray-50 p-3 text-sm text-gray-600 leading-relaxed">
+                    {selectedLead.mensaje}
+                  </p>
+                </div>
+              )}
+
               {/* Property */}
               <div className="space-y-2">
-                <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Propiedad de interés</h4>
+                <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
+                  Propiedad de interés
+                </h4>
                 <div className="flex items-center gap-3 rounded-xl border border-gray-100 p-3">
                   <div
                     className="h-9 w-9 rounded-lg flex items-center justify-center"
-                    style={{ background: "linear-gradient(135deg, hsl(221 83% 53% / 0.1), hsl(160 84% 39% / 0.1))" }}
+                    style={{
+                      background:
+                        "linear-gradient(135deg, hsl(221 83% 53% / 0.1), hsl(160 84% 39% / 0.1))",
+                    }}
                   >
-                    <Eye className="h-4 w-4" style={{ color: "hsl(221 83% 53%)" }} />
+                    <Eye
+                      className="h-4 w-4"
+                      style={{ color: "hsl(221 83% 53%)" }}
+                    />
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-900">{selectedLead.propiedad}</p>
-                    <p className="text-xs text-gray-400">Recibido el {selectedLead.fecha}</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {selectedLead.propiedad}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      Recibido el {selectedLead.fecha}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -477,14 +652,19 @@ export default function LeadsPage() {
                   <MessageSquare className="h-4 w-4" />
                   Enviar email
                 </a>
-                <a
-                  href={`tel:${selectedLead.telefono.replace(/\s/g, "")}`}
-                  className="flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90"
-                  style={{ background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))" }}
-                >
-                  <Phone className="h-4 w-4" />
-                  Llamar
-                </a>
+                {selectedLead.telefono && (
+                  <a
+                    href={`tel:${selectedLead.telefono.replace(/\s/g, "")}`}
+                    className="flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
+                    }}
+                  >
+                    <Phone className="h-4 w-4" />
+                    Llamar
+                  </a>
+                )}
               </div>
             </div>
           </div>

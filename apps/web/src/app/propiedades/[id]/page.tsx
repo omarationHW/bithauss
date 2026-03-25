@@ -24,6 +24,7 @@ import {
   Star,
   X,
   ChevronLeft,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -286,6 +287,189 @@ const demoOwner: Profile = {
   role: "BROKER",
 };
 
+function ContactForm({ propertyId, ownerId }: { propertyId: string; ownerId: string }) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+
+    if (!name.trim() || !email.trim()) {
+      setError("Nombre y email son obligatorios.");
+      return;
+    }
+
+    setSending(true);
+    try {
+      const supabase = createClient();
+      const { error: insertError } = await supabase.from("leads").insert({
+        property_id: propertyId,
+        owner_id: ownerId,
+        name: name.trim(),
+        email: email.trim(),
+        phone: phone.trim() || null,
+        message: message.trim() || null,
+        status: "NUEVO",
+        source: "ORGANICO",
+      });
+
+      if (insertError) throw new Error(insertError.message);
+
+      // Increment lead_count on the property
+      supabase.rpc("increment_property_lead_count", { prop_id: propertyId }).then();
+
+      // Create a conversation if user is logged in
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (currentUser && currentUser.id !== ownerId) {
+        // Check if conversation already exists between these users for this property
+        const { data: existingConvs } = await supabase
+          .from("conversation_participants")
+          .select("conversation_id, conversations!inner(property_id)")
+          .eq("user_id", currentUser.id);
+
+        const existingConv = existingConvs?.find(
+          (cp: any) => cp.conversations?.property_id === propertyId
+        );
+
+        let conversationId: string;
+
+        if (existingConv) {
+          conversationId = existingConv.conversation_id;
+        } else {
+          // Create new conversation
+          const { data: newConv } = await supabase
+            .from("conversations")
+            .insert({
+              property_id: propertyId,
+              subject: `Consulta sobre propiedad`,
+            })
+            .select("id")
+            .single();
+
+          if (newConv) {
+            conversationId = newConv.id;
+            // Add both participants
+            await supabase.from("conversation_participants").insert([
+              { conversation_id: conversationId, user_id: currentUser.id },
+              { conversation_id: conversationId, user_id: ownerId },
+            ]);
+          } else {
+            conversationId = "";
+          }
+        }
+
+        // Send the message in the conversation
+        if (conversationId) {
+          await supabase.from("messages").insert({
+            conversation_id: conversationId,
+            sender_id: currentUser.id,
+            content: message.trim() || `Hola, me interesa esta propiedad. Mi contacto: ${email.trim()}${phone.trim() ? `, ${phone.trim()}` : ""}`,
+          });
+        }
+      }
+
+      setSent(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al enviar el mensaje.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  if (sent) {
+    return (
+      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-center">
+        <div className="mx-auto mb-3 h-12 w-12 rounded-full bg-emerald-100 flex items-center justify-center">
+          <Check className="h-6 w-6 text-emerald-600" />
+        </div>
+        <h3 className="font-semibold text-emerald-800">Mensaje enviado</h3>
+        <p className="text-sm text-emerald-600 mt-1">
+          El asesor se pondrá en contacto contigo pronto.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-border/50 p-5">
+      <h3 className="font-semibold text-sm mb-4">Agenda una visita</h3>
+      <form onSubmit={handleSubmit} className="space-y-3">
+        {error && (
+          <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-600">
+            {error}
+          </div>
+        )}
+        <div className="space-y-1.5">
+          <Label htmlFor="contact-name" className="text-xs">Nombre *</Label>
+          <Input
+            id="contact-name"
+            placeholder="Tu nombre completo"
+            className="text-sm"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="contact-email" className="text-xs">Email *</Label>
+          <Input
+            id="contact-email"
+            type="email"
+            placeholder="tu@email.com"
+            className="text-sm"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="contact-phone" className="text-xs">Teléfono</Label>
+          <Input
+            id="contact-phone"
+            type="tel"
+            placeholder="+52 55 0000 0000"
+            className="text-sm"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="contact-message" className="text-xs">Mensaje</Label>
+          <Textarea
+            id="contact-message"
+            placeholder="Me interesa esta propiedad..."
+            rows={3}
+            className="text-sm"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+          />
+        </div>
+        <Button
+          type="submit"
+          disabled={sending}
+          className="w-full border-0 text-white"
+          style={{ background: 'linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))' }}
+        >
+          {sending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+          {sending ? "Enviando..." : "Enviar mensaje"}
+        </Button>
+        <p className="text-center text-[10px] text-muted-foreground">
+          Al contactar, aceptas nuestros{" "}
+          <Link href="#" className="underline hover:text-foreground">
+            términos de servicio
+          </Link>
+        </p>
+      </form>
+    </div>
+  );
+}
+
 export default function PropertyDetailPage() {
   const { id } = useParams<{ id: string }>();
 
@@ -295,6 +479,7 @@ export default function PropertyDetailPage() {
   const [similarProperties, setSimilarProperties] = useState<SimilarProperty[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
 
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [currentImage, setCurrentImage] = useState(0);
@@ -333,6 +518,10 @@ export default function PropertyDetailPage() {
 
       setProperty(prop as Property);
 
+      // Check if current user is the owner
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      setIsOwner(currentUser?.id === prop.owner_id);
+
       // Fetch media, owner, and similar properties in parallel
       const [mediaResult, ownerResult, similarResult] = await Promise.all([
         supabase
@@ -362,6 +551,11 @@ export default function PropertyDetailPage() {
       }
       if (similarResult.data) {
         setSimilarProperties(similarResult.data as SimilarProperty[]);
+      }
+
+      // Increment view count (fire and forget)
+      if (!id.startsWith("demo-")) {
+        supabase.rpc("increment_property_view_count", { property_id: id }).then();
       }
 
       setLoading(false);
@@ -645,19 +839,25 @@ export default function PropertyDetailPage() {
                   <ShieldCheck className="h-6 w-6 text-muted-foreground" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-sm">Certificación BRC no solicitada</h3>
+                  <h3 className="font-semibold text-sm">
+                    {isOwner ? "Certificación BRC no solicitada" : "Propiedad sin certificación BRC"}
+                  </h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Esta propiedad aún no cuenta con certificación BRC. Solicítala para verificar la documentación legal.
+                    {isOwner
+                      ? "Solicita la certificación BRC para verificar la documentación legal y aumentar la confianza."
+                      : "Esta propiedad aún no cuenta con certificación BRC."}
                   </p>
                 </div>
-                <Button
-                  asChild
-                  size="sm"
-                  variant="outline"
-                  className="ml-auto shrink-0 text-xs"
-                >
-                  <Link href={`/dashboard/propiedades/${property.id}/solicitar-brc`}>Solicitar certificación BRC</Link>
-                </Button>
+                {isOwner && (
+                  <Button
+                    asChild
+                    size="sm"
+                    className="ml-auto shrink-0 text-xs border-0 text-white"
+                    style={{ background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))" }}
+                  >
+                    <Link href={`/dashboard/propiedades/${property.id}/solicitar-brc`}>Solicitar certificación BRC</Link>
+                  </Button>
+                )}
               </div>
             )}
 
@@ -836,44 +1036,7 @@ export default function PropertyDetailPage() {
               </div>
 
               {/* Contact Form */}
-              <div className="rounded-2xl border border-border/50 p-5">
-                <h3 className="font-semibold text-sm mb-4">Agenda una visita</h3>
-                <div className="space-y-3">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="contact-name" className="text-xs">Nombre</Label>
-                    <Input id="contact-name" placeholder="Tu nombre completo" className="text-sm" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="contact-email" className="text-xs">Email</Label>
-                    <Input id="contact-email" type="email" placeholder="tu@email.com" className="text-sm" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="contact-phone" className="text-xs">Teléfono</Label>
-                    <Input id="contact-phone" type="tel" placeholder="+52 55 0000 0000" className="text-sm" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="contact-message" className="text-xs">Mensaje</Label>
-                    <Textarea
-                      id="contact-message"
-                      placeholder="Me interesa esta propiedad..."
-                      rows={3}
-                      className="text-sm"
-                    />
-                  </div>
-                  <Button
-                    className="w-full border-0 text-white"
-                    style={{ background: 'linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))' }}
-                  >
-                    Enviar mensaje
-                  </Button>
-                  <p className="text-center text-[10px] text-muted-foreground">
-                    Al contactar, aceptas nuestros{" "}
-                    <Link href="#" className="underline hover:text-foreground">
-                      términos de servicio
-                    </Link>
-                  </p>
-                </div>
-              </div>
+              <ContactForm propertyId={property.id} ownerId={property.owner_id} />
             </div>
           </div>
         </div>
