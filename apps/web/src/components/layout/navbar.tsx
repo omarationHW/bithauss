@@ -28,9 +28,14 @@ export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [user, setUser] = useState<{ name: string; initials: string; avatarUrl: string | null } | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const isHome = pathname === "/";
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -143,7 +148,9 @@ export function Navbar() {
 
         {/* Right - Auth buttons or User menu */}
         <div className="hidden items-center gap-3 lg:flex">
-          {user ? (
+          {!mounted ? (
+            <div className="h-8 w-24" />
+          ) : user ? (
             <div className="relative">
               <button
                 onClick={(e) => { e.stopPropagation(); setDropdownOpen(!dropdownOpen); }}
@@ -280,7 +287,7 @@ export function Navbar() {
               </div>
 
               <div className="flex flex-col gap-3 border-t border-border/50 pt-6">
-                {user ? (
+                {!mounted ? null : user ? (
                   <>
                     <div className="flex items-center gap-3 px-4 py-2">
                       {user.avatarUrl ? (
