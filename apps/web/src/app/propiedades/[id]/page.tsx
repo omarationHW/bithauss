@@ -333,15 +333,21 @@ function ContactForm({ propertyId, ownerId }: { propertyId: string; ownerId: str
           .select("conversation_id, conversations!inner(property_id)")
           .eq("user_id", currentUser.id);
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const existingConv = existingConvs?.find(
-          (cp: any) => cp.conversations?.property_id === propertyId
-        );
+        let existingConvId: string | null = null;
+        if (existingConvs) {
+          for (const cp of existingConvs) {
+            const conv = cp as unknown as { conversation_id: string; conversations: { property_id: string } };
+            if (conv.conversations?.property_id === propertyId) {
+              existingConvId = conv.conversation_id;
+              break;
+            }
+          }
+        }
 
         let conversationId: string;
 
-        if (existingConv) {
-          conversationId = existingConv.conversation_id;
+        if (existingConvId) {
+          conversationId = existingConvId;
         } else {
           // Create new conversation
           const { data: newConv } = await supabase
