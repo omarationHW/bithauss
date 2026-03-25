@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Send,
@@ -364,6 +365,7 @@ export default function MensajesPage() {
     return () => {
       supabase.removeChannel(channel);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, conversations.length, selectedId, supabase]);
 
   /* ---------------------------------------------------------------- */
@@ -650,9 +652,11 @@ export default function MensajesPage() {
                   >
                     {/* Avatar */}
                     {conv.participant.avatarUrl ? (
-                      <img
+                      <Image
                         src={conv.participant.avatarUrl}
                         alt={conv.participant.fullName}
+                        width={40}
+                        height={40}
                         className="h-10 w-10 flex-shrink-0 rounded-full object-cover"
                       />
                     ) : (
@@ -737,9 +741,11 @@ export default function MensajesPage() {
                   <ArrowLeft className="h-5 w-5" />
                 </button>
                 {selected.participant.avatarUrl ? (
-                  <img
+                  <Image
                     src={selected.participant.avatarUrl}
                     alt={selected.participant.fullName}
+                    width={36}
+                    height={36}
                     className="h-9 w-9 rounded-full object-cover"
                   />
                 ) : (

@@ -64,14 +64,6 @@ const STATUS_MAP: Record<DbStatus, LeadEstado> = {
   DESCARTADO: "Descartado",
 };
 
-const DISPLAY_TO_DB: Record<LeadEstado, DbStatus> = {
-  Nuevo: "NUEVO",
-  Contactado: "CONTACTADO",
-  "En negociación": "EN_NEGOCIACION",
-  Convertido: "CONVERTIDO",
-  Descartado: "DESCARTADO",
-};
-
 const STATUS_FLOW: DbStatus[] = [
   "NUEVO",
   "CONTACTADO",
@@ -137,19 +129,20 @@ export default function LeadsPage() {
       return;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mapped: Lead[] = (data ?? []).map((row: any) => ({
-      id: row.id,
-      nombre: row.name,
-      email: row.email,
-      telefono: row.phone ?? "",
-      mensaje: row.message ?? null,
+      id: row.id as string,
+      nombre: row.name as string,
+      email: row.email as string,
+      telefono: (row.phone as string) ?? "",
+      mensaje: (row.message as string) ?? null,
       propiedad: row.properties?.title ?? "Sin propiedad",
-      propertyId: row.property_id,
-      fecha: formatDateEs(row.created_at),
+      propertyId: row.property_id as string,
+      fecha: formatDateEs(row.created_at as string),
       dbStatus: row.status as DbStatus,
       estado: STATUS_MAP[row.status as DbStatus] ?? "Nuevo",
-      source: row.source,
-      createdAt: row.created_at,
+      source: row.source as string,
+      createdAt: row.created_at as string,
     }));
 
     setLeads(mapped);

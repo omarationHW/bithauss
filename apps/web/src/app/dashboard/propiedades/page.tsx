@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import {
   Plus,
@@ -353,10 +354,11 @@ export default function PropiedadesPage() {
               {/* Image */}
               <div className="relative h-48 w-full overflow-hidden bg-gray-100">
                 {prop.featured_image_url ? (
-                  <img
+                  <Image
                     src={prop.featured_image_url}
                     alt={prop.title}
-                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    fill
+                    className="object-cover transition-transform duration-500 group-hover:scale-105"
                   />
                 ) : (
                   <div

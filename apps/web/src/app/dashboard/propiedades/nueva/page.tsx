@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -920,10 +921,11 @@ export default function NuevaPropiedadPage() {
                   key={idx}
                   className="group relative aspect-[4/3] overflow-hidden rounded-xl border border-gray-200 bg-gray-100"
                 >
-                  <img
+                  <Image
                     src={src}
                     alt={`Imagen ${idx + 1}`}
-                    className="h-full w-full object-cover"
+                    fill
+                    className="object-cover"
                   />
                   {idx === 0 && (
                     <span className="absolute left-2 top-2 rounded-lg bg-blue-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">

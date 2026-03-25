@@ -1,19 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
 import {
   Crown,
   Sparkles,
   Check,
-  Building2,
-  Users,
-  TrendingUp,
   CreditCard,
   Download,
   ArrowUpRight,
-  Zap,
-  Shield,
 } from "lucide-react";
 
 /* ------------------------------------------------------------------ */

@@ -15,7 +15,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   Clock,
-  CheckCircle2,
   MoreHorizontal,
   Eye,
   UserPlus,

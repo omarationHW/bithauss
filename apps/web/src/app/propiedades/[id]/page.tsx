@@ -333,6 +333,7 @@ function ContactForm({ propertyId, ownerId }: { propertyId: string; ownerId: str
           .select("conversation_id, conversations!inner(property_id)")
           .eq("user_id", currentUser.id);
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const existingConv = existingConvs?.find(
           (cp: any) => cp.conversations?.property_id === propertyId
         );

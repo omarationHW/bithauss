@@ -14,7 +14,6 @@ import {
   UserPlus,
   FileCheck,
   CreditCard,
-  Eye,
   AlertTriangle,
   CheckCircle2,
   Clock,

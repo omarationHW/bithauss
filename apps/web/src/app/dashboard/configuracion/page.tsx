@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "../_context/user-context";
@@ -89,9 +88,8 @@ const activeSessions = [
 /* ------------------------------------------------------------------ */
 
 export default function ConfiguracionPage() {
-  const { user, logout } = useUser();
-  const router = useRouter();
-  const [saving, setSaving] = useState(false);
+  const { logout } = useUser();
+  const [, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   const [notifications, setNotifications] = useState({

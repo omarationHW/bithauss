@@ -216,7 +216,7 @@ export default function DashboardLayout({
 
 function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { user, loading, logout } = useUser();
+  const { user, logout } = useUser();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const userName = user?.fullName ?? "Cargando...";

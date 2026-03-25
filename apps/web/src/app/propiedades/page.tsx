@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
-  MapPin,
   ShieldCheck,
   SlidersHorizontal,
   ChevronRight,
@@ -391,7 +390,7 @@ export default function PropiedadesPage() {
   const [viewMode, setViewMode] = useState<"lista" | "mapa">("lista");
   const [activeMarker, setActiveMarker] = useState<string | null>(null);
   const [properties, setProperties] = useState<MappedProperty[]>([]);
-  const [rawProperties, setRawProperties] = useState<PropertyFromDB[]>([]);
+  const [rawProperties] = useState<PropertyFromDB[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
