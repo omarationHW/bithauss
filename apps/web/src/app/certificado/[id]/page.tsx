@@ -40,7 +40,7 @@ interface CertificateData {
     price: number;
     currency: string;
     featured_image_url: string | null;
-  };
+  } | null;
   issued_by_profile: {
     first_name: string;
     last_name: string;
@@ -52,7 +52,7 @@ interface CertificateData {
   brc_expedientes: {
     status: string;
     created_at: string;
-  };
+  } | null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -258,7 +258,7 @@ export default function CertificadoPage() {
   /* ---------------------------------------------------------------- */
 
   const expired = isExpired(certificate.expires_at);
-  const property = certificate.properties;
+  const property = certificate.properties ?? { id: "", title: "Propiedad", address_line: null, city: null, state: null, price: 0, currency: "MXN", featured_image_url: null };
   const address = [property.address_line, property.city, property.state]
     .filter(Boolean)
     .join(", ");
