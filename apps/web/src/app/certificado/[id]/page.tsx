@@ -15,8 +15,6 @@ import {
   AlertCircle,
   CheckCircle2,
   XCircle,
-  QrCode,
-  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
@@ -204,7 +202,7 @@ export default function CertificadoPage() {
       }
 
       setCertificate({
-        ...(certData as any),
+        ...(certData as unknown as CertificateData),
         properties: propertyData,
         brc_expedientes: expedienteData,
         issued_by_profile: issuedByProfile,

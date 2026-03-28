@@ -13,12 +13,10 @@ import {
   XCircle,
   AlertCircle,
   Clock,
-  User,
   Download,
   FileText,
   Loader2,
   MapPin,
-  Building2,
   BedDouble,
   Bath,
   Maximize2,
@@ -26,7 +24,6 @@ import {
   Phone,
   Mail,
   Briefcase,
-  MessageSquare,
   Plus,
   X,
   Upload,
@@ -280,7 +277,7 @@ export default function ExpedienteDetailPage() {
     }
 
     // Map tariff data from join
-    const tariffData = (expData as any).brc_tariffs;
+    const tariffData = (expData as unknown as Record<string, { tariff_amount: number | null; currency: string | null } | null>).brc_tariffs;
     const mappedExp = {
       ...expData,
       tariff_amount: tariffData?.tariff_amount ?? null,
@@ -297,7 +294,7 @@ export default function ExpedienteDetailPage() {
 
     if (propData) {
       const p = propData as unknown as Property;
-      p.property_media = (p.property_media ?? []).sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+      p.property_media = (p.property_media ?? []).sort((a: { sort_order?: number | null }, b: { sort_order?: number | null }) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
       setProperty(p);
 
       // 3. Owner profile

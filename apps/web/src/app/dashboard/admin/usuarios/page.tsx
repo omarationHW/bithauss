@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "../../_context/user-context";
+import Image from "next/image";
 import {
   Users,
   Building2,
@@ -283,10 +284,13 @@ export default function UsuariosPage() {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           {profile.avatar_url ? (
-                            <img
+                            <Image
                               src={profile.avatar_url}
                               alt={fullName}
+                              width={36}
+                              height={36}
                               className="h-9 w-9 rounded-full object-cover"
+                              unoptimized
                             />
                           ) : (
                             <div

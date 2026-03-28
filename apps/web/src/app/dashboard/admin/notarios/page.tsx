@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "../../_context/user-context";
+import Image from "next/image";
 import {
   ShieldCheck,
   Search,
@@ -346,10 +347,13 @@ export default function NotariosVerificacionPage() {
                   {/* Header: avatar + name + badge */}
                   <div className="flex items-start gap-4">
                     {notary.avatar_url ? (
-                      <img
+                      <Image
                         src={notary.avatar_url}
                         alt={fullName}
+                        width={48}
+                        height={48}
                         className="h-12 w-12 rounded-full object-cover ring-2 ring-gray-100"
+                        unoptimized
                       />
                     ) : (
                       <div
