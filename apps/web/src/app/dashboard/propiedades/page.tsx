@@ -28,6 +28,10 @@ type DbStatus = "PUBLICADO" | "BORRADOR" | "PAUSADO" | "ELIMINADO";
 type BrcStatus = "CERTIFICADO" | "EN_REVISION" | "NO_SOLICITADO" | null;
 type TabValue = "todas" | "PUBLICADO" | "BORRADOR" | "PAUSADO";
 
+type OperationType = "VENTA" | "RENTA" | "TRASPASO";
+type BrcFilter = "todas" | "CERTIFICADO" | "EN_REVISION" | "NO_SOLICITADO";
+type OpFilter = "todas" | OperationType;
+
 interface Property {
   id: string;
   title: string;
@@ -38,6 +42,7 @@ interface Property {
   currency: string | null;
   status: DbStatus;
   brc_status: BrcStatus;
+  operation: OperationType;
   lead_count: number;
   view_count: number;
   featured_image_url: string | null;
@@ -137,6 +142,8 @@ export default function PropiedadesPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabValue>("todas");
+  const [brcFilter, setBrcFilter] = useState<BrcFilter>("todas");
+  const [opFilter, setOpFilter] = useState<OpFilter>("todas");
   const [search, setSearch] = useState("");
 
   /* ---- Fetch properties ------------------------------------------ */
@@ -146,7 +153,7 @@ export default function PropiedadesPage() {
     const { data, error } = await supabase
       .from("properties")
       .select(
-        "id, title, address_line, city, state, price, currency, status, brc_status, lead_count, view_count, featured_image_url",
+        "id, title, address_line, city, state, price, currency, status, brc_status, operation, lead_count, view_count, featured_image_url",
       )
       .eq("owner_id", user.id)
       .neq("status", "ELIMINADO")
@@ -200,6 +207,8 @@ export default function PropiedadesPage() {
   /* ---- Filter ---------------------------------------------------- */
   const filtered = properties.filter((p) => {
     if (activeTab !== "todas" && p.status !== activeTab) return false;
+    if (brcFilter !== "todas" && p.brc_status !== brcFilter) return false;
+    if (opFilter !== "todas" && p.operation !== opFilter) return false;
     if (search) {
       const q = search.toLowerCase();
       const location = formatLocation(p.address_line, p.city, p.state);
@@ -294,6 +303,7 @@ export default function PropiedadesPage() {
       {/* ============================================================ */}
       {/*  Filter Tabs + Search                                         */}
       {/* ============================================================ */}
+      <div className="space-y-3">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex gap-2 overflow-x-auto">
           {tabs.map((tab) => {
@@ -332,6 +342,39 @@ export default function PropiedadesPage() {
             className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-10 pr-4 text-sm text-gray-700 placeholder-gray-400 shadow-sm outline-none transition-all duration-300 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
           />
         </div>
+      </div>
+
+      {/* Extra filters */}
+      <div className="flex flex-wrap gap-2">
+        <span className="text-xs font-medium text-gray-400 self-center mr-1">Operación:</span>
+        {([["todas", "Todas"], ["VENTA", "Venta"], ["RENTA", "Renta"], ["TRASPASO", "Traspaso"]] as const).map(([val, label]) => (
+          <button
+            key={val}
+            onClick={() => setOpFilter(val as OpFilter)}
+            className={`rounded-lg px-3 py-1 text-xs font-semibold transition-all ${
+              opFilter === val
+                ? "bg-gray-900 text-white"
+                : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+        <span className="text-xs font-medium text-gray-400 self-center ml-3 mr-1">BRC:</span>
+        {([["todas", "Todas"], ["CERTIFICADO", "Certificado"], ["EN_REVISION", "En revisión"], ["NO_SOLICITADO", "Sin BRC"]] as const).map(([val, label]) => (
+          <button
+            key={val}
+            onClick={() => setBrcFilter(val as BrcFilter)}
+            className={`rounded-lg px-3 py-1 text-xs font-semibold transition-all ${
+              brcFilter === val
+                ? "bg-gray-900 text-white"
+                : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
       </div>
 
       {/* ============================================================ */}

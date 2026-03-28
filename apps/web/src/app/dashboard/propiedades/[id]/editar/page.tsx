@@ -12,6 +12,9 @@ import {
   ImagePlus,
   CheckCircle2,
   AlertCircle,
+  ShieldCheck,
+  ShieldAlert,
+  Clock,
 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
@@ -248,6 +251,8 @@ export default function EditarPropiedadPage() {
   const [originalSlug, setOriginalSlug] = useState<string>("");
   /** Original status */
   const [, setOriginalStatus] = useState<string>("");
+  /** BRC certification status */
+  const [brcStatus, setBrcStatus] = useState<string>("NO_SOLICITADO");
 
   /* ---- Fetch existing property ---- */
 
@@ -271,6 +276,7 @@ export default function EditarPropiedadPage() {
 
       setOriginalSlug(property.slug ?? "");
       setOriginalStatus(property.status ?? "");
+      setBrcStatus(property.brc_status ?? "NO_SOLICITADO");
 
       setForm({
         titulo: property.title ?? "",
@@ -630,6 +636,94 @@ export default function EditarPropiedadPage() {
       )}
 
       {/* ============================================================ */}
+      {/*  BRC Certification Status Banner                               */}
+      {/* ============================================================ */}
+      {brcStatus === "NO_SOLICITADO" && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-4">
+              <div
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+                style={{ background: "hsl(45 93% 47% / 0.15)" }}
+              >
+                <ShieldAlert className="h-5 w-5 text-amber-600" />
+              </div>
+              <div>
+                <h4
+                  className="font-bold text-amber-800"
+                  style={{ fontFamily: "Barlow, Inter, sans-serif" }}
+                >
+                  Sin certificacion BRC
+                </h4>
+                <p className="mt-0.5 text-sm text-amber-700">
+                  Esta propiedad aun no cuenta con certificacion BRC. La certificacion aumenta la confianza de los compradores y mejora la visibilidad.
+                </p>
+              </div>
+            </div>
+            <Link
+              href={`/dashboard/propiedades/${propertyId}/solicitar-brc`}
+              className="inline-flex shrink-0 items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg"
+              style={{
+                background:
+                  "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
+              }}
+            >
+              <ShieldCheck className="h-4 w-4" />
+              Solicitar certificacion BRC
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {brcStatus === "EN_REVISION" && (
+        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5 sm:p-6">
+          <div className="flex items-center gap-4">
+            <div
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+              style={{ background: "hsl(221 83% 53% / 0.15)" }}
+            >
+              <Clock className="h-5 w-5 text-blue-600" />
+            </div>
+            <div>
+              <h4
+                className="font-bold text-blue-800"
+                style={{ fontFamily: "Barlow, Inter, sans-serif" }}
+              >
+                Certificacion BRC en revision
+              </h4>
+              <p className="mt-0.5 text-sm text-blue-700">
+                Tu solicitud esta siendo procesada. Te notificaremos cuando haya una actualizacion.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {brcStatus === "CERTIFICADO" && (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 sm:p-6">
+          <div className="flex items-center gap-4">
+            <div
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+              style={{ background: "hsl(160 84% 39% / 0.15)" }}
+            >
+              <ShieldCheck className="h-5 w-5 text-emerald-600" />
+            </div>
+            <div>
+              <h4
+                className="font-bold text-emerald-800"
+                style={{ fontFamily: "Barlow, Inter, sans-serif" }}
+              >
+                Propiedad Certificada BRC
+              </h4>
+              <p className="mt-0.5 text-sm text-emerald-700">
+                Documentacion legal verificada por Notario Publico.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
       {/*  Informacion Basica                                           */}
       {/* ============================================================ */}
       <SectionCard title="Informacion Basica">
@@ -963,7 +1057,7 @@ export default function EditarPropiedadPage() {
                 <SelectTrigger className="rounded-xl">
                   <SelectValue placeholder="Seleccionar estado" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper" className="max-h-60 overflow-y-auto">
                   {MEXICAN_STATES.map((state) => (
                     <SelectItem key={state} value={state}>
                       {state}

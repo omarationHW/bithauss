@@ -70,6 +70,12 @@ const vendedorActions = [
   { label: "Mis Documentos", icon: FileText, href: "/dashboard/documentos", primary: false },
 ];
 
+const notarioActions = [
+  { label: "Ver Expedientes Asignados", icon: ShieldCheck, href: "/dashboard/expedientes", primary: true },
+  { label: "Certificados Emitidos", icon: FileText, href: "/dashboard/expedientes", primary: false },
+  { label: "Mensajes", icon: MessageSquare, href: "/dashboard/mensajes", primary: false },
+];
+
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
@@ -99,9 +105,18 @@ function getEstadoBadge(estado: string) {
   );
 }
 
+const adminActions = [
+  { label: "Gestionar Usuarios", icon: Users, href: "/dashboard/admin/usuarios", primary: true },
+  { label: "Verificar Notarios", icon: ShieldCheck, href: "/dashboard/admin/notarios", primary: false },
+  { label: "Asignar Expedientes", icon: FileText, href: "/dashboard/admin/asignaciones", primary: false },
+  { label: "Ver Propiedades", icon: Building2, href: "/propiedades", primary: false },
+];
+
 function getActionsForRole(role: string) {
+  if (role === "ADMIN") return adminActions;
   if (role === "COMPRADOR") return compradorActions;
   if (role === "VENDEDOR") return vendedorActions;
+  if (role === "NOTARIO") return notarioActions;
   return brokerActions;
 }
 
@@ -321,6 +336,43 @@ function useDashboardData(userId: string | undefined, role: string) {
       setLoadingStats(false);
     }
 
+    async function fetchNotarioData() {
+      const { count: totalAssigned } = await supabase
+        .from("brc_expedientes")
+        .select("id", { count: "exact", head: true })
+        .eq("assigned_notary_id", userId!);
+
+      const { count: enRevision } = await supabase
+        .from("brc_expedientes")
+        .select("id", { count: "exact", head: true })
+        .eq("assigned_notary_id", userId!)
+        .in("status", ["EN_REVISION", "DOCUMENTACION_PENDIENTE"]);
+
+      const { count: certificados } = await supabase
+        .from("brc_expedientes")
+        .select("id", { count: "exact", head: true })
+        .eq("assigned_notary_id", userId!)
+        .eq("status", "CERTIFICADO");
+
+      const { count: rechazados } = await supabase
+        .from("brc_expedientes")
+        .select("id", { count: "exact", head: true })
+        .eq("assigned_notary_id", userId!)
+        .eq("status", "RECHAZADO");
+
+      if (cancelled) return;
+
+      setKpis([
+        { label: "Expedientes Asignados", value: String(totalAssigned ?? 0), change: "asignados", icon: ShieldCheck },
+        { label: "En Revision", value: String(enRevision ?? 0), change: "pendientes", icon: Eye },
+        { label: "Certificados Emitidos", value: String(certificados ?? 0), change: "emitidos", icon: Building2 },
+        { label: "Rechazados", value: String(rechazados ?? 0), change: "rechazados", icon: Users },
+      ]);
+      setChartData([]);
+      setRecentLeads([]);
+      setLoadingStats(false);
+    }
+
     async function fetchCompradorData() {
       // Comprador tables are not fully connected yet — show zeros where possible
       if (cancelled) return;
@@ -338,10 +390,31 @@ function useDashboardData(userId: string | undefined, role: string) {
 
     setLoadingStats(true);
 
-    if (isBrokerRole(role)) {
+    if (role === "ADMIN") {
+      // Admin sees platform-wide stats
+      (async () => {
+        const { count: totalUsers } = await supabase.from("profiles").select("id", { count: "exact", head: true });
+        const { count: totalProps } = await supabase.from("properties").select("id", { count: "exact", head: true }).eq("status", "PUBLICADO");
+        const { count: activeExps } = await supabase.from("brc_expedientes").select("id", { count: "exact", head: true }).not("status", "in", "(CERTIFICADO,RECHAZADO)");
+        const { count: pendingNotaries } = await supabase.from("notary_profiles").select("id", { count: "exact", head: true }).eq("is_verified", false);
+
+        if (cancelled) return;
+        setKpis([
+          { label: "Total Usuarios", value: String(totalUsers ?? 0), change: "plataforma", icon: Users },
+          { label: "Propiedades Publicadas", value: String(totalProps ?? 0), change: "activas", icon: Building2 },
+          { label: "Expedientes Activos", value: String(activeExps ?? 0), change: "en proceso", icon: ShieldCheck },
+          { label: "Notarios Pendientes", value: String(pendingNotaries ?? 0), change: "por verificar", icon: FileText },
+        ]);
+        setChartData([]);
+        setRecentLeads([]);
+        setLoadingStats(false);
+      })();
+    } else if (isBrokerRole(role)) {
       fetchBrokerData();
     } else if (role === "VENDEDOR") {
       fetchVendedorData();
+    } else if (role === "NOTARIO") {
+      fetchNotarioData();
     } else {
       fetchCompradorData();
     }
@@ -672,12 +745,13 @@ export default function DashboardPage() {
                   </td>
                   <td className="px-6 py-4">{getEstadoBadge(lead.estado)}</td>
                   <td className="px-6 py-4">
-                    <button
+                    <Link
+                      href="/dashboard/leads"
                       className="rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-300 hover:bg-gray-100"
                       style={{ color: "hsl(221 83% 53%)" }}
                     >
                       Ver detalle
-                    </button>
+                    </Link>
                   </td>
                 </tr>
                 ))

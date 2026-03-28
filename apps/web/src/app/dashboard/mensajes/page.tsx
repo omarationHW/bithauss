@@ -116,6 +116,7 @@ export default function MensajesPage() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const messageInputRef = useRef<HTMLInputElement>(null);
 
   const selected = conversations.find((c) => c.id === selectedId) ?? null;
 
@@ -332,6 +333,12 @@ export default function MensajesPage() {
             ]);
 
             if (newMsg.sender_id !== user.id) {
+              // Play notification sound
+              try {
+                const audio = new Audio("data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YVoGAACBhYqFbF1fdH2JkpKNiIJ8eHl+g4mOjoyIg356eHp+g4mNjYqGgn15d3p+g4iMjIqGgX55eHl9goeLjIqHg396eXl8gIWJi4qIhIB8enl7f4OHioqIhYF9e3p7foKGiYmIhYJ+fHt7fYGFiImIhoN/fXx7fICEh4iHhYJ/fXx8foCDhoiHhYOAfn18fX+ChYeHhYOBf318fX+BhIaGhYOBf358fX+BgoWGhYSCgH59fX1/gYSFhYSDgX9+fX1+gIOEhYSDgYB+fn1+f4GDhISEgoGAfn59fn+Bg4OEg4KBgH9+fn5/gYKDg4OCgYB/fn5+f4CCg4OCgoGAf35+fn+AgoKDgoKBgH9/fn5/gIGCgoKBgYB/f35/f4CBgoKCgYGAf39+f3+AgYGCgoGBgIB/f39/f4CBgYGBgYCAf39/f3+AgIGBgYGBgIB/f39/f4CAgYGBgYCAgH9/f39/gICBgYGBgICAf39/f3+AgIGBgYGAgIB/f39/f4CAgYGBgYCAgH9/f39/gICAgYGBgICAf39/f3+AgICBgYGAgIB/f39/f4CAgIGBgYCAgH9/f39/gICAgYGBgICAf39/f3+AgICBgYCAgIB/f39/f4CAgIGBgICAf39/f3+AgICAgYCAgIB/f39/f4CAgICBgICAf39/f39/gICAgICAgH9/f39/f4CAgICAgIB/f39/f3+AgICAgICAf39/f39/gICAgICAgH9/f39/f4CAgICAgIB/f39/f3+AgICAgICAf39/f39/gICAgICAgH9/f39/f3+AgICAgIB/f39/f39/gICAgICAf39/f39/f4CAgICAgH9/f39/f3+AgICAgIB/f39/f39/gICAgICAf39/f39/f4CAgICAgH9/f39/f3+AgICAgH9/f39/f39/gICAgIB/f39/f39/f4CAgICAf39/f39/f4CAgICAgH9/f39/f3+AgICAgIB/f39/f39/gICAgICAf39/f39/f4CAgICAgH9/f39/f3+AgICAgIB/f39/f39/gICAgICAf39/f39/f4CAgICAgH9/f39/f3+AgICAgIB/f39/f39/gA==");
+                audio.volume = 0.8;
+                audio.play().catch(() => {});
+              } catch {}
               supabase
                 .from("messages")
                 .update({ is_read: true })
@@ -396,6 +403,8 @@ export default function MensajesPage() {
     }
 
     setSendingMessage(false);
+    // Re-focus input for continuous typing
+    setTimeout(() => messageInputRef.current?.focus(), 0);
   };
 
   /* ---------------------------------------------------------------- */
@@ -803,28 +812,16 @@ export default function MensajesPage() {
                           }`}
                         >
                           <div
-                            className={`max-w-[80%] rounded-2xl px-4 py-3 ${
-                              isMine
-                                ? "text-white"
-                                : "border border-gray-100 bg-white text-gray-700"
-                            }`}
-                            style={
-                              isMine
-                                ? {
-                                    background:
-                                      "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
-                                  }
-                                : undefined
-                            }
+                            className="max-w-[80%] rounded-2xl px-4 py-3 text-white"
+                            style={{
+                              background: isMine ? "#006DCD" : "#0CAF5B",
+                            }}
                           >
                             <p className="text-sm leading-relaxed whitespace-pre-wrap">
                               {msg.content}
                             </p>
-                            <p
-                              className={`mt-1.5 text-right text-[10px] ${
-                                isMine ? "text-white/70" : "text-gray-400"
-                              }`}
-                            >
+                            <p className="mt-1.5 text-right text-[10px] text-white/70">
+
                               {formatMessageTime(msg.createdAt)}
                             </p>
                           </div>
@@ -840,6 +837,7 @@ export default function MensajesPage() {
               <div className="border-t border-gray-100 bg-white p-4">
                 <div className="flex items-center gap-3">
                   <input
+                    ref={messageInputRef}
                     type="text"
                     placeholder="Escribe un mensaje..."
                     value={newMessage}

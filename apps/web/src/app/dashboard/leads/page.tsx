@@ -238,6 +238,80 @@ export default function LeadsPage() {
     return true;
   });
 
+  /* ---- Chart data ---- */
+  const [chartPeriod, setChartPeriod] = useState<"dia" | "semana" | "mes">("semana");
+
+  const chartData = (() => {
+    const now = new Date();
+
+    if (chartPeriod === "dia") {
+      // Last 24 hours, grouped by hour
+      const hours: { label: string; value: number }[] = [];
+      for (let i = 23; i >= 0; i--) {
+        const hourStart = new Date(now.getTime() - i * 60 * 60 * 1000);
+        const hourEnd = new Date(hourStart.getTime() + 60 * 60 * 1000);
+        const count = leads.filter((l) => {
+          const d = new Date(l.createdAt);
+          return d >= hourStart && d < hourEnd;
+        }).length;
+        hours.push({ label: `${hourStart.getHours()}h`, value: count });
+      }
+      // Show every 3rd hour
+      return hours.filter((_, i) => i % 3 === 0);
+    }
+
+    if (chartPeriod === "semana") {
+      // Last 7 days
+      const days: { label: string; value: number }[] = [];
+      const dayNames = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+      for (let i = 6; i >= 0; i--) {
+        const dayStart = new Date(now);
+        dayStart.setDate(dayStart.getDate() - i);
+        dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(dayStart);
+        dayEnd.setDate(dayEnd.getDate() + 1);
+        const count = leads.filter((l) => {
+          const d = new Date(l.createdAt);
+          return d >= dayStart && d < dayEnd;
+        }).length;
+        days.push({ label: dayNames[dayStart.getDay()] ?? "", value: count });
+      }
+      return days;
+    }
+
+    // Last 6 months
+    const months: { label: string; value: number }[] = [];
+    const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+    for (let i = 5; i >= 0; i--) {
+      const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+      const count = leads.filter((l) => {
+        const d = new Date(l.createdAt);
+        return d >= monthStart && d < monthEnd;
+      }).length;
+      months.push({ label: monthNames[monthStart.getMonth()] ?? "", value: count });
+    }
+    return months;
+  })();
+
+  const maxChartVal = Math.max(...chartData.map((d) => d.value), 1);
+  const totalInPeriod = chartData.reduce((s, d) => s + d.value, 0);
+  const prevPeriodTotal = (() => {
+    const now = new Date();
+    if (chartPeriod === "dia") {
+      const start = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+      const end = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      return leads.filter((l) => { const d = new Date(l.createdAt); return d >= start && d < end; }).length;
+    }
+    if (chartPeriod === "semana") {
+      const start = new Date(now); start.setDate(start.getDate() - 14); start.setHours(0,0,0,0);
+      const end = new Date(now); end.setDate(end.getDate() - 7); end.setHours(0,0,0,0);
+      return leads.filter((l) => { const d = new Date(l.createdAt); return d >= start && d < end; }).length;
+    }
+    return 0;
+  })();
+  const changePercent = prevPeriodTotal > 0 ? Math.round(((totalInPeriod - prevPeriodTotal) / prevPeriodTotal) * 100) : 0;
+
   const estadoOptions: ("todos" | LeadEstado)[] = [
     "todos",
     "Nuevo",
@@ -335,6 +409,64 @@ export default function LeadsPage() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* ============================================================ */}
+      {/*  Chart                                                        */}
+      {/* ============================================================ */}
+      <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
+          <div>
+            <h3 className="text-lg font-bold text-gray-900" style={{ fontFamily: "Barlow, Inter, sans-serif" }}>
+              Tendencia de Leads
+            </h3>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-2xl font-bold text-gray-900">{totalInPeriod}</span>
+              <span className="text-sm text-gray-500">leads en este período</span>
+              {changePercent !== 0 && (
+                <span className={`flex items-center gap-0.5 rounded-lg px-2 py-0.5 text-xs font-semibold ${changePercent > 0 ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600"}`}>
+                  {changePercent > 0 ? "↑" : "↓"} {Math.abs(changePercent)}%
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="flex rounded-xl border border-gray-200 p-0.5">
+            {([["dia", "Día"], ["semana", "Semana"], ["mes", "Mes"]] as const).map(([val, label]) => (
+              <button
+                key={val}
+                onClick={() => setChartPeriod(val)}
+                className={`rounded-lg px-4 py-1.5 text-xs font-semibold transition-all ${
+                  chartPeriod === val
+                    ? "bg-gray-900 text-white shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex items-end gap-2 h-40">
+          {chartData.map((bar, i) => {
+            const height = maxChartVal > 0 ? (bar.value / maxChartVal) * 130 : 0;
+            return (
+              <div key={i} className="group flex flex-1 flex-col items-center gap-1.5">
+                <span className="text-[10px] font-bold text-gray-500 opacity-0 transition-opacity group-hover:opacity-100">
+                  {bar.value}
+                </span>
+                <div
+                  className="w-full rounded-lg transition-all duration-300 group-hover:opacity-90 group-hover:scale-105"
+                  style={{
+                    height: `${Math.max(height, 4)}px`,
+                    background: bar.value > 0 ? "#006DCD" : "#e5e7eb",
+                  }}
+                />
+                <span className="text-[10px] font-medium text-gray-400">{bar.label}</span>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* ============================================================ */}

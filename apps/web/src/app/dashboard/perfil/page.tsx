@@ -16,6 +16,9 @@ import {
   Save,
   Loader2,
   ArrowLeft,
+  ShieldCheck,
+  CheckCircle2,
+  Clock,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -51,6 +54,14 @@ export default function PerfilPage() {
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [profile, setProfile] = useState(mockProfile);
 
+  // Notary profile state
+  const [notaryProfile, setNotaryProfile] = useState<{
+    notaria_numero: string;
+    estado: string;
+    verified: boolean;
+  } | null>(null);
+  const [loadingNotary, setLoadingNotary] = useState(false);
+
   useEffect(() => {
     if (authUser) {
       setProfile((prev) => ({
@@ -60,6 +71,37 @@ export default function PerfilPage() {
         email: authUser.email || prev.email,
       }));
     }
+  }, [authUser]);
+
+  // Fetch notary profile if user is NOTARIO
+  useEffect(() => {
+    if (!authUser || authUser.role !== "NOTARIO") return;
+
+    async function fetchNotaryProfile() {
+      setLoadingNotary(true);
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from("notary_profiles")
+          .select("notary_number, notary_state, is_verified")
+          .eq("profile_id", authUser!.id)
+          .single();
+
+        if (!error && data) {
+          setNotaryProfile({
+            notaria_numero: data.notary_number ?? "",
+            estado: data.notary_state ?? "",
+            verified: data.is_verified ?? false,
+          });
+        }
+      } catch {
+        // ignore
+      } finally {
+        setLoadingNotary(false);
+      }
+    }
+
+    fetchNotaryProfile();
   }, [authUser]);
 
   const userEmail = authUser?.email ?? "";
@@ -116,6 +158,29 @@ export default function PerfilPage() {
     setProfile((prev) => ({ ...prev, [field]: value }));
   }
 
+  function handleNotaryChange(field: string, value: string) {
+    setNotaryProfile((prev) =>
+      prev ? { ...prev, [field]: value } : prev
+    );
+  }
+
+  async function handleSaveNotary() {
+    if (!authUser || !notaryProfile) return;
+    try {
+      const supabase = createClient();
+      await supabase
+        .from("notary_profiles")
+        .update({
+          notary_number: notaryProfile.notaria_numero,
+          notary_state: notaryProfile.estado,
+        })
+        .eq("profile_id", authUser.id);
+    } catch {
+      // ignore
+    }
+    setEditingSection(null);
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -151,82 +216,71 @@ export default function PerfilPage() {
       {/* ============================================================ */}
       {/*  Profile Header Card                                         */}
       {/* ============================================================ */}
-      <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-        {/* Gradient banner */}
-        <div
-          className="h-36 sm:h-44"
-          style={{
-            background:
-              "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
-          }}
-        />
-
-        <div className="px-6 pb-8 pt-4">
-          <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-end -mt-10 sm:-mt-10">
-            {/* Avatar */}
-            <div className="relative">
-              {avatarUrl ? (
-                <Image
-                  src={avatarUrl}
-                  alt="Avatar"
-                  width={96}
-                  height={96}
-                  className="h-20 w-20 sm:h-24 sm:w-24 rounded-2xl border-4 border-white shadow-lg object-cover"
-                />
-              ) : (
-                <div
-                  className="flex h-20 w-20 sm:h-24 sm:w-24 items-center justify-center rounded-2xl border-4 border-white shadow-lg text-2xl sm:text-3xl font-bold text-white"
-                  style={{
-                    background:
-                      "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
-                  }}
-                >
-                  {initials}
-                </div>
-              )}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleAvatarUpload}
+      <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+        <div className="flex items-center gap-5">
+          {/* Avatar */}
+          <div className="relative shrink-0">
+            {avatarUrl ? (
+              <Image
+                src={avatarUrl}
+                alt="Avatar"
+                width={80}
+                height={80}
+                className="h-20 w-20 rounded-full border-2 border-gray-100 shadow-sm object-cover"
               />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploadingAvatar}
-                className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-md border border-gray-200 text-gray-500 transition-all duration-300 hover:text-gray-700 hover:shadow-lg disabled:opacity-50"
+            ) : (
+              <div
+                className="flex h-20 w-20 items-center justify-center rounded-full border-2 border-gray-100 shadow-sm text-2xl font-bold text-white"
+                style={{
+                  background:
+                    "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
+                }}
               >
-                {uploadingAvatar ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Camera className="h-4 w-4" />
-                )}
-              </button>
-            </div>
-
-            {/* Name + role */}
-            <div className="flex-1 pb-1">
-              <h3
-                className="text-xl font-bold text-gray-900 sm:text-2xl"
-                style={{ fontFamily: "Barlow, Inter, sans-serif" }}
-              >
-                {profile.firstName} {profile.lastName}
-              </h3>
-              <div className="mt-1 flex flex-wrap items-center gap-2">
-                <span
-                  className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold text-white"
-                  style={{
-                    background:
-                      "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
-                  }}
-                >
-                  <Award className="h-3 w-3" />
-                  {profile.role}
-                </span>
-                <span className="text-sm text-gray-500">
-                  {userEmail || profile.email}
-                </span>
+                {initials}
               </div>
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleAvatarUpload}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingAvatar}
+              className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-white shadow-md border border-gray-200 text-gray-500 transition-all duration-300 hover:text-gray-700 hover:shadow-lg disabled:opacity-50"
+            >
+              {uploadingAvatar ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Camera className="h-3.5 w-3.5" />
+              )}
+            </button>
+          </div>
+
+          {/* Name + role + email */}
+          <div className="min-w-0">
+            <h3
+              className="text-xl font-bold text-gray-900 sm:text-2xl truncate"
+              style={{ fontFamily: "Barlow, Inter, sans-serif" }}
+            >
+              {profile.firstName} {profile.lastName}
+            </h3>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              <span
+                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold text-white"
+                style={{
+                  background:
+                    "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
+                }}
+              >
+                <Award className="h-3 w-3" />
+                {authUser?.role === "ADMIN" ? "Administrador" : authUser?.role === "BROKER" ? "Broker" : authUser?.role === "INMOBILIARIA" ? "Inmobiliaria" : authUser?.role === "NOTARIO" ? "Notario" : authUser?.role === "VENDEDOR" ? "Vendedor" : authUser?.role === "COMPRADOR" ? "Comprador" : profile.role}
+              </span>
+              <span className="text-sm text-gray-500 truncate">
+                {userEmail || profile.email}
+              </span>
             </div>
           </div>
         </div>
@@ -316,6 +370,119 @@ export default function PerfilPage() {
           </div>
         </div>
       </div>
+
+      {/* ============================================================ */}
+      {/*  Informacion Notarial (only for NOTARIO role)                */}
+      {/* ============================================================ */}
+      {authUser?.role === "NOTARIO" && (
+        <div className="rounded-2xl border border-gray-100 bg-white shadow-sm transition-all duration-300 hover:shadow-md">
+          <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+            <div className="flex items-center gap-3">
+              <div
+                className="flex h-10 w-10 items-center justify-center rounded-xl"
+                style={{
+                  background:
+                    "linear-gradient(135deg, hsl(221 83% 53% / 0.1), hsl(160 84% 39% / 0.1))",
+                }}
+              >
+                <ShieldCheck
+                  className="h-5 w-5"
+                  style={{ color: "hsl(221 83% 53%)" }}
+                />
+              </div>
+              <h3
+                className="text-lg font-bold text-gray-900"
+                style={{ fontFamily: "Barlow, Inter, sans-serif" }}
+              >
+                Informacion Notarial
+              </h3>
+            </div>
+            <button
+              onClick={() => {
+                if (editingSection === "notarial") {
+                  handleSaveNotary();
+                } else {
+                  setEditingSection("notarial");
+                }
+              }}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-semibold text-gray-700 transition-all duration-300 hover:bg-gray-50 hover:shadow-sm"
+            >
+              {editingSection === "notarial" ? (
+                <>
+                  <Save className="h-3.5 w-3.5" />
+                  Guardar
+                </>
+              ) : (
+                <>
+                  <Pencil className="h-3.5 w-3.5" />
+                  Editar
+                </>
+              )}
+            </button>
+          </div>
+
+          <div className="grid gap-5 p-6 sm:grid-cols-3">
+            {loadingNotary ? (
+              <div className="flex items-center justify-center py-6 sm:col-span-3">
+                <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+              </div>
+            ) : notaryProfile ? (
+              <>
+                <div className="space-y-2">
+                  <Label className="text-gray-500">Numero de Notaria</Label>
+                  <div className="relative">
+                    <ShieldCheck className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    <Input
+                      value={notaryProfile.notaria_numero}
+                      onChange={(e) =>
+                        handleNotaryChange("notaria_numero", e.target.value)
+                      }
+                      disabled={editingSection !== "notarial"}
+                      className="rounded-xl border-gray-200 pl-10 disabled:bg-gray-50"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-gray-500">Estado</Label>
+                  <div className="relative">
+                    <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    <Input
+                      value={notaryProfile.estado}
+                      onChange={(e) =>
+                        handleNotaryChange("estado", e.target.value)
+                      }
+                      disabled={editingSection !== "notarial"}
+                      className="rounded-xl border-gray-200 pl-10 disabled:bg-gray-50"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-gray-500">Verificacion</Label>
+                  <div className="flex items-center gap-2 pt-2">
+                    {notaryProfile.verified ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700 border border-emerald-200">
+                        <CheckCircle2 className="h-4 w-4" />
+                        Verificado
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-1.5 text-sm font-semibold text-amber-700 border border-amber-200">
+                        <Clock className="h-4 w-4" />
+                        Pendiente
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="sm:col-span-3 text-center py-6">
+                <p className="text-sm text-gray-400">
+                  No se encontro informacion notarial. Contacta soporte para configurar tu perfil.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ============================================================ */}
       {/*  Informacion Profesional                                     */}

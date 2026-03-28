@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -54,6 +55,9 @@ const allNavItems = [
   { label: "Membresía", icon: CreditCard, href: "/dashboard/membresia", roles: ["BROKER", "INMOBILIARIA", "ADMIN"] },
   { label: "BRC Expedientes", icon: ShieldCheck, href: "/dashboard/expedientes", roles: ["BROKER", "INMOBILIARIA", "VENDEDOR", "NOTARIO", "OPERADOR_BRC", "ADMIN"] },
   { label: "Documentos KYC", icon: FolderOpen, href: "/dashboard/documentos", roles: ["COMPRADOR", "VENDEDOR"] },
+  { label: "Usuarios", icon: Users, href: "/dashboard/admin/usuarios", roles: ["ADMIN"] },
+  { label: "Verificar Notarios", icon: ShieldCheck, href: "/dashboard/admin/notarios", roles: ["ADMIN", "OPERADOR_BRC"] },
+  { label: "Asignar Expedientes", icon: FileText, href: "/dashboard/admin/asignaciones", roles: ["ADMIN", "OPERADOR_BRC"] },
   { label: "Perfil", icon: User, href: "/dashboard/perfil", roles: ["ALL"] },
   { label: "Configuración", icon: Settings, href: "/dashboard/configuracion", roles: ["ALL"] },
 ];
@@ -214,10 +218,76 @@ export default function DashboardLayout({
   );
 }
 
+function useNotificationCount(userId: string | undefined) {
+  const [count, setCount] = useState(0);
+  const supabase = useMemo(() => createClient(), []);
+
+  useEffect(() => {
+    if (!userId) return;
+
+    async function fetchCounts() {
+      // Unread messages
+      const { count: unreadMessages } = await supabase
+        .from("messages")
+        .select("id", { count: "exact", head: true })
+        .neq("sender_id", userId!)
+        .eq("is_read", false);
+
+      // New leads (last 24h)
+      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { data: userProps } = await supabase
+        .from("properties")
+        .select("id")
+        .eq("owner_id", userId!);
+
+      let newLeads = 0;
+      if (userProps?.length) {
+        const propIds = userProps.map((p) => p.id);
+        const { count: leadsCount } = await supabase
+          .from("leads")
+          .select("id", { count: "exact", head: true })
+          .in("property_id", propIds)
+          .eq("status", "NUEVO")
+          .gte("created_at", yesterday);
+        newLeads = leadsCount ?? 0;
+      }
+
+      setCount((unreadMessages ?? 0) + newLeads);
+    }
+
+    fetchCounts();
+
+    // Listen for new messages in realtime
+    const channel = supabase
+      .channel("notifications")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, () => {
+        fetchCounts();
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "leads" }, () => {
+        fetchCounts();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [userId, supabase]);
+
+  return count;
+}
+
 function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, logout } = useUser();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const notificationCount = useNotificationCount(user?.id);
+
+  // Close notification dropdown on outside click
+  useEffect(() => {
+    if (!notifOpen) return;
+    const handleClick = () => setNotifOpen(false);
+    document.addEventListener("click", handleClick);
+    return () => document.removeEventListener("click", handleClick);
+  }, [notifOpen]);
 
   const userName = user?.fullName ?? "Cargando...";
   const userInitials = user?.initials ?? "..";
@@ -280,18 +350,82 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
           <div className="ml-auto flex items-center gap-3">
             {/* Notifications */}
-            <button className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 transition-all duration-300 hover:bg-gray-50 hover:text-gray-700">
-              <Bell className="h-[18px] w-[18px]" />
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold text-white"
-                style={{
-                  background:
-                    "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
-                }}
+            <div className="relative">
+              <button
+                onClick={(e) => { e.stopPropagation(); setNotifOpen(!notifOpen); }}
+                className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 transition-all duration-300 hover:bg-gray-50 hover:text-gray-700"
               >
-                3
-              </span>
-              <span className="sr-only">Notificaciones</span>
-            </button>
+                <Bell className="h-[18px] w-[18px]" />
+                {notificationCount > 0 && (
+                  <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
+                    }}
+                  >
+                    {notificationCount > 9 ? "9+" : notificationCount}
+                  </span>
+                )}
+                <span className="sr-only">Notificaciones</span>
+              </button>
+
+              {notifOpen && (
+                <div className="absolute right-0 top-full mt-2 w-80 rounded-2xl border border-gray-100 bg-white shadow-2xl overflow-hidden z-50 animate-fade-in-up" onClick={(e) => e.stopPropagation()}>
+                  <div className="p-4 border-b border-gray-100">
+                    <h3 className="text-sm font-bold text-gray-900">Notificaciones</h3>
+                  </div>
+                  <div className="max-h-72 overflow-y-auto">
+                    {notificationCount === 0 ? (
+                      <div className="p-6 text-center text-sm text-gray-400">
+                        Sin notificaciones nuevas
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-gray-50">
+                        <Link
+                          href="/dashboard/leads"
+                          className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors"
+                          onClick={() => setNotifOpen(false)}
+                        >
+                          <div className="h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                            <Users className="h-4 w-4 text-blue-500" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-900">Leads nuevos</p>
+                            <p className="text-xs text-gray-500">Tienes leads pendientes por revisar</p>
+                          </div>
+                        </Link>
+                        <Link
+                          href="/dashboard/mensajes"
+                          className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors"
+                          onClick={() => setNotifOpen(false)}
+                        >
+                          <div className="h-8 w-8 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
+                            <MessageSquare className="h-4 w-4 text-emerald-500" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-900">Mensajes sin leer</p>
+                            <p className="text-xs text-gray-500">Revisa tus conversaciones</p>
+                          </div>
+                        </Link>
+                        <Link
+                          href="/dashboard/expedientes"
+                          className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors"
+                          onClick={() => setNotifOpen(false)}
+                        >
+                          <div className="h-8 w-8 rounded-lg bg-purple-50 flex items-center justify-center shrink-0">
+                            <ShieldCheck className="h-4 w-4 text-purple-500" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-900">Expedientes BRC</p>
+                            <p className="text-xs text-gray-500">Revisa el estado de tus certificaciones</p>
+                          </div>
+                        </Link>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* User Dropdown */}
             <DropdownMenu>

@@ -544,7 +544,7 @@ export default function PropertyDetailPage() {
         supabase
           .from("properties")
           .select("id, title, city, state, price, currency, operation, bedrooms, bathrooms, area_total, featured_image_url, brc_status")
-          .eq("status", "PUBLICADA")
+          .eq("status", "PUBLICADO")
           .neq("id", id)
           .or(`city.eq.${prop.city},state.eq.${prop.state}`)
           .limit(3),
@@ -683,7 +683,25 @@ export default function PropertyDetailPage() {
             </nav>
           </div>
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="ghost" className="gap-1.5 text-muted-foreground">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="gap-1.5 text-muted-foreground hover:text-white"
+              style={{ transition: "all 0.3s" }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+              onClick={() => {
+                if (navigator.share) {
+                  navigator.share({
+                    title: property.title,
+                    url: window.location.href,
+                  }).catch(() => {});
+                } else {
+                  navigator.clipboard.writeText(window.location.href);
+                  alert("Link copiado al portapapeles");
+                }
+              }}
+            >
               <Share2 className="h-4 w-4" />
               <span className="hidden sm:inline">Compartir</span>
             </Button>
@@ -828,14 +846,16 @@ export default function PropertyDetailPage() {
                     Documentación legal verificada por Notario Público. Certificado con sello digital verificable.
                   </p>
                 </div>
-                <Button
-                  asChild
-                  size="sm"
-                  className="ml-auto shrink-0 border-0 text-white text-xs"
-                  style={{ background: 'linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))' }}
-                >
-                  <Link href="/como-funciona">Ver certificado</Link>
-                </Button>
+                {property.brc_certificate_id && (
+                  <Button
+                    asChild
+                    size="sm"
+                    className="ml-auto shrink-0 border-0 text-white text-xs"
+                    style={{ background: 'linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))' }}
+                  >
+                    <Link href={`/certificado/${property.brc_certificate_id}`}>Ver certificado</Link>
+                  </Button>
+                )}
               </div>
             )}
 

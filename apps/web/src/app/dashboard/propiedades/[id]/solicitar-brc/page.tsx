@@ -285,11 +285,11 @@ export default function SolicitarBrcPage() {
       {/*  Back link                                                    */}
       {/* ============================================================ */}
       <Link
-        href={`/dashboard/propiedades/${id}`}
+        href="/dashboard/propiedades"
         className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
       >
         <ArrowLeft className="h-4 w-4" />
-        Volver a la propiedad
+        Volver a mis propiedades
       </Link>
 
       {/* ============================================================ */}
@@ -492,6 +492,23 @@ export default function SolicitarBrcPage() {
           placeholder="Escribe tus notas aqui..."
           className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all"
         />
+      </div>
+
+      {/* ============================================================ */}
+      {/*  Privacy Notice                                                */}
+      {/* ============================================================ */}
+      <div className="rounded-xl border border-blue-200 bg-blue-50 p-5">
+        <div className="flex items-start gap-3">
+          <ShieldCheck className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-xs font-semibold text-blue-800 mb-1">
+              Aviso de privacidad
+            </p>
+            <p className="text-xs leading-relaxed text-blue-700">
+              Los documentos proporcionados seran utilizados exclusivamente para la verificacion legal del inmueble y la emision del Certificado BRC. La informacion sera tratada de manera confidencial conforme a la Ley Federal de Proteccion de Datos Personales en Posesion de los Particulares. No se compartiran con terceros no autorizados.
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* ============================================================ */}

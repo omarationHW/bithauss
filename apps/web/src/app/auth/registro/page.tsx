@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { User, Home, Briefcase, Building2, Loader2, Eye, EyeOff } from "lucide-react";
+import { User, Home, Briefcase, Building2, Loader2, Eye, EyeOff, Scale } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,13 +12,14 @@ import { Label } from "@/components/ui/label";
 import { AuthPanel } from "../_components/auth-panel";
 import { createClient } from "@/lib/supabase/client";
 
-type Role = "comprador" | "vendedor" | "broker" | "inmobiliaria";
+type Role = "comprador" | "vendedor" | "broker" | "inmobiliaria" | "notario";
 
 const roles: { id: Role; label: string; icon: React.ElementType }[] = [
   { id: "comprador", label: "Comprador", icon: User },
   { id: "vendedor", label: "Vendedor", icon: Home },
   { id: "broker", label: "Broker", icon: Briefcase },
   { id: "inmobiliaria", label: "Inmobiliaria", icon: Building2 },
+  { id: "notario", label: "Notario", icon: Scale },
 ];
 
 export default function RegistroPage() {
@@ -36,6 +37,9 @@ export default function RegistroPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  // Notary-specific fields
+  const [notaryNumber, setNotaryNumber] = useState("");
+  const [notaryState, setNotaryState] = useState("");
 
   const handleRegistro = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,6 +58,17 @@ export default function RegistroPage() {
     if (password.length < 6) {
       setError("La contraseña debe tener al menos 6 caracteres.");
       return;
+    }
+
+    if (selectedRole === "notario") {
+      if (!notaryNumber.trim()) {
+        setError("El número de notaría es obligatorio.");
+        return;
+      }
+      if (!notaryState.trim()) {
+        setError("El estado de la notaría es obligatorio.");
+        return;
+      }
     }
 
     setLoading(true);
@@ -102,7 +117,18 @@ export default function RegistroPage() {
 
         if (profileError) {
           console.error("Error creating profile:", profileError);
-          // Don't block the user, the profile can be created later
+        }
+
+        // Create notary profile if registering as notario
+        if (selectedRole === "notario") {
+          const { error: notaryError } = await supabase.from("notary_profiles").insert({
+            profile_id: data.user.id,
+            notary_number: notaryNumber.trim(),
+            notary_state: notaryState.trim(),
+          });
+          if (notaryError) {
+            console.error("Error creating notary profile:", notaryError);
+          }
         }
       }
 
@@ -141,7 +167,7 @@ export default function RegistroPage() {
       )}
 
       {/* Role selector */}
-      <div className="mb-6 grid grid-cols-4 gap-3">
+      <div className="mb-6 grid grid-cols-3 sm:grid-cols-5 gap-3">
         {roles.map((role) => {
           const Icon = role.icon;
           const isSelected = selectedRole === role.id;
@@ -266,6 +292,44 @@ export default function RegistroPage() {
             </div>
           </div>
         </div>
+
+      {/* Notary-specific fields */}
+      {selectedRole === "notario" && (
+        <div className="space-y-4 mt-4 p-4 rounded-xl border border-blue-200 bg-blue-50/50">
+          <div className="flex items-center gap-2 text-sm font-semibold text-blue-700">
+            <Scale className="h-4 w-4" />
+            Información Notarial
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="notary-number">Número de Notaría *</Label>
+              <Input
+                id="notary-number"
+                placeholder="Ej: 45"
+                value={notaryNumber}
+                onChange={(e) => setNotaryNumber(e.target.value)}
+                disabled={loading}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="notary-state">Estado *</Label>
+              <select
+                id="notary-state"
+                value={notaryState}
+                onChange={(e) => setNotaryState(e.target.value)}
+                disabled={loading}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="">Seleccionar</option>
+                {["Aguascalientes","Baja California","Baja California Sur","Campeche","Chiapas","Chihuahua","Ciudad de México","Coahuila","Colima","Durango","Estado de México","Guanajuato","Guerrero","Hidalgo","Jalisco","Michoacán","Morelos","Nayarit","Nuevo León","Oaxaca","Puebla","Querétaro","Quintana Roo","San Luis Potosí","Sinaloa","Sonora","Tabasco","Tamaulipas","Tlaxcala","Veracruz","Yucatán","Zacatecas"].map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Terms */}
       <label className="mt-5 flex items-center gap-3 cursor-pointer">

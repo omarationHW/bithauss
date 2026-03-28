@@ -783,7 +783,7 @@ export default function NuevaPropiedadPage() {
                 <SelectTrigger className="rounded-xl">
                   <SelectValue placeholder="Seleccionar estado" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper" className="max-h-60 overflow-y-auto">
                   {MEXICAN_STATES.map((state) => (
                     <SelectItem key={state} value={state}>
                       {state}
