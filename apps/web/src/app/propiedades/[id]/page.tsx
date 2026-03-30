@@ -797,6 +797,12 @@ export default function PropertyDetailPage() {
                     {formatTimeAgo(property.published_at)}
                   </div>
                 )}
+                {property.accepts_crypto && (
+                  <div className="flex items-center gap-1.5 rounded-lg bg-amber-50 border border-amber-200 px-3 py-1.5 text-xs font-semibold text-amber-700">
+                    <span>₿</span>
+                    Acepta criptomonedas
+                  </div>
+                )}
               </div>
             </div>
 
