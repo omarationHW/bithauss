@@ -1,236 +1,411 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import {
-  ShieldCheck,
-  User,
-  Home,
-  Briefcase,
-  Building2,
-} from "lucide-react";
+import Image from "next/image";
+import { User, Home, Briefcase, Building2, Loader2, Eye, EyeOff, Scale } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { AuthPanel } from "../_components/auth-panel";
+import { createClient } from "@/lib/supabase/client";
 
-type Role = "comprador" | "vendedor" | "broker" | "inmobiliaria";
+type Role = "comprador" | "vendedor" | "broker" | "inmobiliaria" | "notario";
 
-const roles: { id: Role; label: string; icon: React.ElementType; description: string }[] = [
-  {
-    id: "comprador",
-    label: "Comprador",
-    icon: User,
-    description: "Busco propiedades",
-  },
-  {
-    id: "vendedor",
-    label: "Vendedor",
-    icon: Home,
-    description: "Vendo mi propiedad",
-  },
-  {
-    id: "broker",
-    label: "Broker",
-    icon: Briefcase,
-    description: "Asesor inmobiliario",
-  },
-  {
-    id: "inmobiliaria",
-    label: "Inmobiliaria",
-    icon: Building2,
-    description: "Empresa inmobiliaria",
-  },
+const roles: { id: Role; label: string; icon: React.ElementType }[] = [
+  { id: "comprador", label: "Comprador", icon: User },
+  { id: "vendedor", label: "Vendedor", icon: Home },
+  { id: "broker", label: "Broker", icon: Briefcase },
+  { id: "inmobiliaria", label: "Inmobiliaria", icon: Building2 },
+  { id: "notario", label: "Notario", icon: Scale },
 ];
 
 export default function RegistroPage() {
+  const router = useRouter();
   const [selectedRole, setSelectedRole] = useState<Role>("comprador");
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const showCompanyField =
-    selectedRole === "broker" || selectedRole === "inmobiliaria";
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  // Notary-specific fields
+  const [notaryNumber, setNotaryNumber] = useState("");
+  const [notaryState, setNotaryState] = useState("");
+
+  const handleRegistro = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (!acceptedTerms) {
+      setError("Debes aceptar los términos de servicio y política de privacidad.");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError("Las contraseñas no coinciden.");
+      return;
+    }
+
+    if (password.length < 6) {
+      setError("La contraseña debe tener al menos 6 caracteres.");
+      return;
+    }
+
+    if (selectedRole === "notario") {
+      if (!notaryNumber.trim()) {
+        setError("El número de notaría es obligatorio.");
+        return;
+      }
+      if (!notaryState.trim()) {
+        setError("El estado de la notaría es obligatorio.");
+        return;
+      }
+    }
+
+    setLoading(true);
+
+    try {
+      const supabase = createClient();
+
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            first_name: firstName,
+            last_name: lastName,
+            phone,
+            role: selectedRole.toUpperCase(),
+          },
+        },
+      });
+
+      if (signUpError) {
+        if (signUpError.message.includes("already registered")) {
+          setError("Este correo electrónico ya está registrado. Intenta iniciar sesión.");
+        } else if (signUpError.message.includes("valid email")) {
+          setError("Por favor ingresa un correo electrónico válido.");
+        } else if (signUpError.message.includes("password")) {
+          setError("La contraseña no cumple con los requisitos mínimos de seguridad.");
+        } else if (signUpError.message.includes("rate limit")) {
+          setError("Demasiados intentos. Por favor espera unos minutos.");
+        } else {
+          setError("Ocurrió un error al crear tu cuenta. Inténtalo de nuevo.");
+        }
+        return;
+      }
+
+      // Create profile in profiles table
+      if (data.user) {
+        const { error: profileError } = await supabase.from("profiles").insert({
+          id: data.user.id,
+          email,
+          first_name: firstName,
+          last_name: lastName,
+          phone,
+          role: selectedRole.toUpperCase(),
+        });
+
+        if (profileError) {
+          console.error("Error creating profile:", profileError);
+        }
+
+        // Create notary profile if registering as notario
+        if (selectedRole === "notario") {
+          const { error: notaryError } = await supabase.from("notary_profiles").insert({
+            profile_id: data.user.id,
+            notary_number: notaryNumber.trim(),
+            notary_state: notaryState.trim(),
+          });
+          if (notaryError) {
+            console.error("Error creating notary profile:", notaryError);
+          }
+        }
+      }
+
+      router.push("/dashboard");
+      router.refresh();
+    } catch {
+      setError("Ocurrió un error inesperado. Inténtalo de nuevo.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <main className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-4 py-12">
-      <Card className="w-full max-w-lg">
-        <CardHeader className="space-y-4 text-center">
-          {/* Logo */}
-          <div className="flex items-center justify-center gap-2">
-            <ShieldCheck className="h-8 w-8 text-primary" />
-            <span className="text-2xl font-bold tracking-tight">BitHauss</span>
-          </div>
-          <div>
-            <CardTitle className="text-xl">Crea tu cuenta</CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Unete a la plataforma de bienes raices certificados
-            </p>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Role selector */}
-          <div>
-            <Label className="mb-3 block text-sm font-semibold">
-              Tipo de cuenta
-            </Label>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {roles.map((role) => {
-                const Icon = role.icon;
-                const isSelected = selectedRole === role.id;
-                return (
-                  <button
-                    key={role.id}
-                    type="button"
-                    onClick={() => setSelectedRole(role.id)}
-                    className={cn(
-                      "flex flex-col items-center gap-2 rounded-lg border-2 p-4 text-center transition-all",
-                      isSelected
-                        ? "border-primary bg-primary/5 text-primary"
-                        : "border-border hover:border-muted-foreground/30 hover:bg-muted/50"
-                    )}
-                  >
-                    <Icon
-                      className={cn(
-                        "h-6 w-6",
-                        isSelected ? "text-primary" : "text-muted-foreground"
-                      )}
-                    />
-                    <span className="text-xs font-medium">{role.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+    <>
+      <AuthPanel image="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Registrarte.jpg" />
+      <div className="flex w-full flex-1 items-center justify-center overflow-y-auto lg:w-[40%]">
+        <main className="flex w-full max-w-md flex-col px-8 py-10">
+      {/* Logo */}
+      <div className="mb-6 flex justify-center">
+        <Image
+          src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Logo-BitHauss.png"
+          alt="BitHauss"
+          width={180}
+          height={50}
+        />
+      </div>
 
-          {/* Form */}
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="nombre">Nombre</Label>
-                <Input id="nombre" placeholder="Tu nombre" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="apellido">Apellido</Label>
-                <Input id="apellido" placeholder="Tu apellido" />
-              </div>
-            </div>
+      {/* Title */}
+      <h2 className="mb-4 text-center text-lg font-semibold">Crea tu cuenta</h2>
 
-            <div className="space-y-2">
-              <Label htmlFor="reg-email">Correo electronico</Label>
-              <Input
-                id="reg-email"
-                type="email"
-                placeholder="tu@email.com"
+      {/* Error message */}
+      {error && (
+        <div className="mb-4 rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+          {error}
+        </div>
+      )}
+
+      {/* Role selector */}
+      <div className="mb-6 grid grid-cols-3 sm:grid-cols-5 gap-3">
+        {roles.map((role) => {
+          const Icon = role.icon;
+          const isSelected = selectedRole === role.id;
+          return (
+            <button
+              key={role.id}
+              type="button"
+              onClick={() => setSelectedRole(role.id)}
+              disabled={loading}
+              className={cn(
+                "relative flex flex-col items-center gap-1.5 rounded-lg p-3 text-center transition-all",
+                isSelected
+                  ? "gradient-border bg-accent/5"
+                  : "border-2 border-border hover:border-muted-foreground/30 hover:bg-muted/50"
+              )}
+            >
+              <Icon
+                className={cn(
+                  "h-5 w-5",
+                  isSelected ? "text-primary" : "text-muted-foreground"
+                )}
               />
-            </div>
+              <span className="text-[10px] font-medium">{role.label}</span>
+            </button>
+          );
+        })}
+      </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="telefono">Telefono</Label>
-              <Input
-                id="telefono"
-                type="tel"
-                placeholder="+52 55 0000 0000"
-              />
-            </div>
-
-            {/* Company field - conditional */}
-            {showCompanyField && (
-              <div className="space-y-2">
-                <Label htmlFor="empresa">Nombre de empresa</Label>
-                <Input
-                  id="empresa"
-                  placeholder={
-                    selectedRole === "broker"
-                      ? "Nombre de tu agencia"
-                      : "Nombre de la inmobiliaria"
-                  }
-                />
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="reg-password">Contrasena</Label>
-                <Input
-                  id="reg-password"
-                  type="password"
-                  placeholder="Min. 8 caracteres"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="confirm-password">Confirmar contrasena</Label>
-                <Input
-                  id="confirm-password"
-                  type="password"
-                  placeholder="Repite tu contrasena"
-                />
-              </div>
-            </div>
+      {/* Form */}
+      <form onSubmit={handleRegistro} className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="nombre">Nombre</Label>
+            <Input
+              id="nombre"
+              placeholder="Tu nombre"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              disabled={loading}
+              required
+            />
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="apellido">Apellido</Label>
+            <Input
+              id="apellido"
+              placeholder="Tu apellido"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              disabled={loading}
+              required
+            />
+          </div>
+        </div>
 
-          {/* Terms checkbox */}
-          <label className="flex items-start gap-3 cursor-pointer">
-            <div className="mt-0.5">
+        <div className="space-y-2">
+          <Label htmlFor="reg-email">Correo electrónico</Label>
+          <Input
+            id="reg-email"
+            type="email"
+            placeholder="Tu correo electrónico"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            disabled={loading}
+            required
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="telefono">Teléfono</Label>
+          <Input
+            id="telefono"
+            type="tel"
+            placeholder="Tu número telefónico"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            disabled={loading}
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="reg-password">Contraseña</Label>
+            <div className="relative">
+              <Input
+                id="reg-password"
+                type={showPassword ? "text" : "password"}
+                placeholder="Tu contraseña"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={loading}
+                required
+              />
               <button
                 type="button"
-                onClick={() => setAcceptedTerms(!acceptedTerms)}
-                className={cn(
-                  "flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 transition-colors",
-                  acceptedTerms
-                    ? "border-primary bg-primary text-white"
-                    : "border-border"
-                )}
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
-                {acceptedTerms && (
-                  <svg
-                    className="h-3 w-3"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={3}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                )}
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
-            <span className="text-sm text-muted-foreground">
-              Acepto los{" "}
-              <Link href="#" className="text-primary hover:underline">
-                terminos de servicio
-              </Link>{" "}
-              y{" "}
-              <Link href="#" className="text-primary hover:underline">
-                politica de privacidad
-              </Link>
-            </span>
-          </label>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="confirm-password">Confirmar contraseña</Label>
+            <div className="relative">
+              <Input
+                id="confirm-password"
+                type={showConfirmPassword ? "text" : "password"}
+                placeholder="Confirmar contraseña"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                disabled={loading}
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+        </div>
 
-          <Button className="w-full" size="lg">
-            Crear Cuenta
-          </Button>
+      {/* Notary-specific fields */}
+      {selectedRole === "notario" && (
+        <div className="space-y-4 mt-4 p-4 rounded-xl border border-blue-200 bg-blue-50/50">
+          <div className="flex items-center gap-2 text-sm font-semibold text-blue-700">
+            <Scale className="h-4 w-4" />
+            Información Notarial
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="notary-number">Número de Notaría *</Label>
+              <Input
+                id="notary-number"
+                placeholder="Ej: 45"
+                value={notaryNumber}
+                onChange={(e) => setNotaryNumber(e.target.value)}
+                disabled={loading}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="notary-state">Estado *</Label>
+              <select
+                id="notary-state"
+                value={notaryState}
+                onChange={(e) => setNotaryState(e.target.value)}
+                disabled={loading}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="">Seleccionar</option>
+                {["Aguascalientes","Baja California","Baja California Sur","Campeche","Chiapas","Chihuahua","Ciudad de México","Coahuila","Colima","Durango","Estado de México","Guanajuato","Guerrero","Hidalgo","Jalisco","Michoacán","Morelos","Nayarit","Nuevo León","Oaxaca","Puebla","Querétaro","Quintana Roo","San Luis Potosí","Sinaloa","Sonora","Tabasco","Tamaulipas","Tlaxcala","Veracruz","Yucatán","Zacatecas"].map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
 
-          {/* Login link */}
-          <p className="text-center text-sm text-muted-foreground">
-            Ya tienes cuenta?{" "}
-            <Link
-              href="/auth/login"
-              className="font-medium text-primary hover:underline"
+      {/* Terms */}
+      <label className="mt-5 flex items-center gap-3 cursor-pointer">
+        <button
+          type="button"
+          onClick={() => setAcceptedTerms(!acceptedTerms)}
+          disabled={loading}
+          className={cn(
+            "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
+            acceptedTerms
+              ? "border-primary bg-primary text-white"
+              : "border-border"
+          )}
+        >
+          {acceptedTerms && (
+            <svg
+              className="h-3 w-3"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={3}
             >
-              Inicia sesion
-            </Link>
-          </p>
-        </CardContent>
-      </Card>
-    </main>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+          )}
+        </button>
+        <span className="text-xs text-muted-foreground">
+          Acepto los{" "}
+          <Link href="#" className="text-primary hover:underline">
+            términos de servicio y política de privacidad
+          </Link>
+        </span>
+      </label>
+
+      {/* Submit button */}
+      <Button
+        type="submit"
+        className="mt-5 w-full border-0 text-white"
+        size="lg"
+        disabled={loading}
+        style={{
+          background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
+        }}
+      >
+        {loading ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Creando cuenta...
+          </>
+        ) : (
+          "Crear cuenta"
+        )}
+      </Button>
+      </form>
+
+      {/* Login link */}
+      <p className="mt-5 text-center text-sm text-muted-foreground">
+        Ya tienes cuenta?{" "}
+        <Link
+          href="/auth/login"
+          className="font-medium text-primary hover:underline"
+        >
+          Inicia sesión
+        </Link>
+      </p>
+
+      {/* Footer */}
+      <p className="mt-4 text-center text-xs text-muted-foreground">
+        © 2026 BitHauss
+      </p>
+        </main>
+      </div>
+    </>
   );
 }

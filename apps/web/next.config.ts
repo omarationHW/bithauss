@@ -4,6 +4,7 @@ const nextConfig: NextConfig = {
   output: "standalone",
   transpilePackages: ["@bithauss/types", "@bithauss/validators", "@bithauss/config"],
   images: {
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: "https",

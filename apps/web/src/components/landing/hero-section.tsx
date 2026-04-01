@@ -76,6 +76,17 @@ export function HeroSection() {
         className="object-cover"
         sizes="100vw"
         priority
+        placeholder="blur"
+        blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzNnLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiIGZpbGw9IiMyMDIwMjAiLz48L3N2Zz4="
+      />
+
+      {/* Brand gradient overlay */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
+          opacity: 0.17,
+        }}
       />
 
       {/* Dark overlay */}
@@ -84,7 +95,7 @@ export function HeroSection() {
       <div className="relative z-10 mx-auto w-full max-w-5xl px-4 sm:px-6 lg:px-8 py-20 text-center">
         {/* Headline */}
         <h1 className="text-4xl font-bold tracking-tight text-white sm:text-5xl md:text-6xl lg:text-7xl">
-          Compra, Vende e Invierte{" "}
+          Compra, Vende y Renta{" "}
           <br className="hidden sm:block" />
           en Bienes Raíces{" "}
           <span className="relative inline-block">
