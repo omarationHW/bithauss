@@ -33,7 +33,7 @@ export function Footer() {
                 height={48}
                 className="h-12 w-auto"
                 style={{
-                  filter: 'brightness(0) saturate(100%) invert(32%) sepia(93%) saturate(1800%) hue-rotate(212deg) brightness(97%) contrast(93%)',
+                  filter: 'brightness(0) saturate(100%) invert(37%) sepia(65%) saturate(5000%) hue-rotate(217deg) brightness(100%) contrast(95%)',
                 }}
               />
               <span className="text-3xl font-bold tracking-tight text-white">BitHauss</span>

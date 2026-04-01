@@ -95,7 +95,7 @@ export function HeroSection() {
       <div className="relative z-10 mx-auto w-full max-w-5xl px-4 sm:px-6 lg:px-8 py-20 text-center">
         {/* Headline */}
         <h1 className="text-4xl font-bold tracking-tight text-white sm:text-5xl md:text-6xl lg:text-7xl">
-          Compra, Vende e Invierte{" "}
+          Compra, Vende y Renta{" "}
           <br className="hidden sm:block" />
           en Bienes Raíces{" "}
           <span className="relative inline-block">

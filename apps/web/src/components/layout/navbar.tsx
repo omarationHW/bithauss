@@ -18,7 +18,7 @@ import { createClient } from "@/lib/supabase/client";
 const navLinks = [
   { label: "Compra", href: "/propiedades" },
   { label: "Venta", href: "/propiedades" },
-  { label: "Inversión", href: "/propiedades" },
+  { label: "Renta", href: "/propiedades" },
   { label: "Certificado BRC", href: "/como-funciona" },
   { label: "Nosotros", href: "/nosotros" },
 ];
