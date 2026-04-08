@@ -60,9 +60,17 @@ interface Property {
   property_media: PropertyMedia[];
 }
 
-interface BrcDocumentType {
+interface BrcDocumentTypeNested {
   name: string;
   is_required: boolean;
+}
+
+interface BrcDocumentTypeFull {
+  id: string;
+  name: string;
+  description: string | null;
+  is_required: boolean;
+  sort_order: number;
 }
 
 interface BrcDocument {
@@ -73,7 +81,11 @@ interface BrcDocument {
   file_size: number | null;
   status: string;
   rejection_reason: string | null;
-  brc_document_types: BrcDocumentType | null;
+  owner_instruction: string | null;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  created_at: string;
+  brc_document_types: BrcDocumentTypeNested | null;
 }
 
 interface ExpedienteLog {
@@ -243,8 +255,10 @@ export default function ExpedienteDetailPage() {
   const [owner, setOwner] = useState<OwnerProfile | null>(null);
   const [newNote, setNewNote] = useState("");
   const [submittingNote, setSubmittingNote] = useState(false);
+  const [allDocumentTypes, setAllDocumentTypes] = useState<BrcDocumentTypeFull[]>([]);
   const [rejectingDocId, setRejectingDocId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [rejectInstruction, setRejectInstruction] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showCertModal, setShowCertModal] = useState(false);
   const [certNumber] = useState(() => generateCertificateNumber());
@@ -310,11 +324,19 @@ export default function ExpedienteDetailPage() {
     // 4. Documents
     const { data: docsData } = await supabase
       .from("brc_documents")
-      .select("id, document_type_id, file_name, file_url, file_size, status, rejection_reason, brc_document_types ( name, is_required )")
+      .select("id, document_type_id, file_name, file_url, file_size, status, rejection_reason, owner_instruction, reviewed_at, reviewed_by, created_at, brc_document_types ( name, is_required )")
       .eq("expediente_id", expedienteId)
       .order("created_at", { ascending: true });
 
     if (docsData) setDocuments(docsData as unknown as BrcDocument[]);
+
+    // 4b. All document types (for full table)
+    const { data: allDocTypes } = await supabase
+      .from("brc_document_types")
+      .select("id, name, description, is_required, sort_order")
+      .order("sort_order", { ascending: true });
+
+    if (allDocTypes) setAllDocumentTypes(allDocTypes as BrcDocumentTypeFull[]);
 
     // 5. Logs
     const { data: logsData } = await supabase
@@ -349,9 +371,10 @@ export default function ExpedienteDetailPage() {
 
   async function handleApproveDoc(docId: string) {
     setActionLoading(docId);
+    const now = new Date().toISOString();
     await supabase
       .from("brc_documents")
-      .update({ status: "VALIDADO" })
+      .update({ status: "VALIDADO", reviewed_by: user!.id, reviewed_at: now })
       .eq("id", docId);
 
     await supabase.from("brc_expediente_logs").insert({
@@ -362,7 +385,7 @@ export default function ExpedienteDetailPage() {
     });
 
     setDocuments((prev) =>
-      prev.map((d) => (d.id === docId ? { ...d, status: "VALIDADO", rejection_reason: null } : d))
+      prev.map((d) => (d.id === docId ? { ...d, status: "VALIDADO", rejection_reason: null, owner_instruction: null, reviewed_by: user!.id, reviewed_at: now } : d))
     );
     setActionLoading(null);
     // Refresh logs
@@ -377,26 +400,34 @@ export default function ExpedienteDetailPage() {
   async function handleRejectDoc(docId: string) {
     if (!rejectReason.trim()) return;
     setActionLoading(docId);
+    const now = new Date().toISOString();
 
     await supabase
       .from("brc_documents")
-      .update({ status: "RECHAZADO", rejection_reason: rejectReason.trim() })
+      .update({
+        status: "RECHAZADO",
+        rejection_reason: rejectReason.trim(),
+        owner_instruction: rejectInstruction.trim() || null,
+        reviewed_by: user!.id,
+        reviewed_at: now,
+      })
       .eq("id", docId);
 
     await supabase.from("brc_expediente_logs").insert({
       expediente_id: expedienteId,
       action: "DOCUMENTO_RECHAZADO",
       performed_by: user!.id,
-      metadata: { doc_id: docId, reason: rejectReason.trim() },
+      metadata: { doc_id: docId, reason: rejectReason.trim(), instruction: rejectInstruction.trim() || null },
     });
 
     setDocuments((prev) =>
       prev.map((d) =>
-        d.id === docId ? { ...d, status: "RECHAZADO", rejection_reason: rejectReason.trim() } : d
+        d.id === docId ? { ...d, status: "RECHAZADO", rejection_reason: rejectReason.trim(), owner_instruction: rejectInstruction.trim() || null, reviewed_by: user!.id, reviewed_at: now } : d
       )
     );
     setRejectingDocId(null);
     setRejectReason("");
+    setRejectInstruction("");
     setActionLoading(null);
     // Refresh logs
     const { data: logsData } = await supabase
@@ -556,6 +587,15 @@ export default function ExpedienteDetailPage() {
     if (required.length === 0) return false;
     return required.every((d) => d.status === "VALIDADO" || d.status === "APROBADO");
   }, [documents]);
+
+  const tableRows = useMemo(() => {
+    return allDocumentTypes.map((dt) => {
+      const doc = documents.find((d) => d.document_type_id === dt.id) ?? null;
+      return { docType: dt, doc };
+    });
+  }, [allDocumentTypes, documents]);
+
+  const notaryDisplayName = user?.fullName ?? "Notario";
 
   const progressStep = expediente ? getProgressStep(expediente.status) : 0;
 
@@ -835,159 +875,6 @@ export default function ExpedienteDetailPage() {
             </div>
           )}
 
-          {/* ---- Documents Section ---- */}
-          <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-            <h3
-              className="text-lg font-bold text-gray-900 mb-4"
-              style={{ fontFamily: "Barlow, Inter, sans-serif" }}
-            >
-              Documentos del Expediente
-            </h3>
-
-            {documents.length === 0 ? (
-              <div className="rounded-xl bg-gray-50 p-8 text-center">
-                <FileText className="mx-auto h-10 w-10 text-gray-300 mb-2" />
-                <p className="text-sm text-gray-400">No se han subido documentos aun.</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {documents.map((doc) => {
-                  const docName = doc.brc_document_types?.name ?? doc.file_name;
-                  const isRequired = doc.brc_document_types?.is_required ?? false;
-                  const isRejecting = rejectingDocId === doc.id;
-
-                  return (
-                    <div
-                      key={doc.id}
-                      className="rounded-xl border border-gray-100 p-4 transition-all duration-200 hover:border-gray-200"
-                    >
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div
-                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-                              doc.status === "VALIDADO" || doc.status === "APROBADO"
-                                ? "bg-emerald-50"
-                                : doc.status === "RECHAZADO"
-                                ? "bg-red-50"
-                                : "bg-blue-50"
-                            }`}
-                          >
-                            <FileText
-                              className={`h-4 w-4 ${
-                                doc.status === "VALIDADO" || doc.status === "APROBADO"
-                                  ? "text-emerald-500"
-                                  : doc.status === "RECHAZADO"
-                                  ? "text-red-500"
-                                  : "text-blue-500"
-                              }`}
-                            />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="text-sm font-semibold text-gray-900 truncate">
-                                {docName}
-                              </p>
-                              {isRequired && (
-                                <span className="shrink-0 rounded bg-orange-50 px-1.5 py-0.5 text-[10px] font-bold text-orange-600 border border-orange-200">
-                                  Requerido
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-3 mt-0.5">
-                              <p className="text-xs text-gray-400 truncate">{doc.file_name}</p>
-                              <span className="text-xs text-gray-300">|</span>
-                              <p className="text-xs text-gray-400">{formatFileSize(doc.file_size)}</p>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          {getDocStatusBadge(doc.status)}
-
-                          {doc.file_url && (
-                            <a
-                              href={doc.file_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-400 transition-all hover:bg-gray-50 hover:text-gray-600"
-                              title="Descargar"
-                            >
-                              <Download className="h-3.5 w-3.5" />
-                            </a>
-                          )}
-
-                          {isNotario && doc.status !== "VALIDADO" && doc.status !== "APROBADO" && (
-                            <>
-                              <button
-                                onClick={() => handleApproveDoc(doc.id)}
-                                disabled={actionLoading === doc.id}
-                                className="flex h-8 items-center gap-1 rounded-lg bg-emerald-50 px-3 text-xs font-semibold text-emerald-600 transition-all hover:bg-emerald-100 disabled:opacity-50"
-                              >
-                                {actionLoading === doc.id ? (
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                ) : (
-                                  <CheckCircle2 className="h-3 w-3" />
-                                )}
-                                Aprobar
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setRejectingDocId(doc.id);
-                                  setRejectReason("");
-                                }}
-                                disabled={actionLoading === doc.id}
-                                className="flex h-8 items-center gap-1 rounded-lg bg-red-50 px-3 text-xs font-semibold text-red-600 transition-all hover:bg-red-100 disabled:opacity-50"
-                              >
-                                <XCircle className="h-3 w-3" />
-                                Rechazar
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Rejection reason display */}
-                      {doc.status === "RECHAZADO" && doc.rejection_reason && (
-                        <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 border border-red-100">
-                          <span className="font-semibold">Motivo de rechazo:</span> {doc.rejection_reason}
-                        </div>
-                      )}
-
-                      {/* Rejection input */}
-                      {isRejecting && (
-                        <div className="mt-3 flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={rejectReason}
-                            onChange={(e) => setRejectReason(e.target.value)}
-                            placeholder="Motivo del rechazo..."
-                            className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none transition-all focus:border-red-300 focus:ring-2 focus:ring-red-100"
-                            autoFocus
-                          />
-                          <button
-                            onClick={() => handleRejectDoc(doc.id)}
-                            disabled={!rejectReason.trim() || actionLoading === doc.id}
-                            className="rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white transition-all hover:bg-red-700 disabled:opacity-50"
-                          >
-                            Confirmar
-                          </button>
-                          <button
-                            onClick={() => {
-                              setRejectingDocId(null);
-                              setRejectReason("");
-                            }}
-                            className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-500 transition-all hover:bg-gray-50"
-                          >
-                            Cancelar
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
         </div>
 
         {/* RIGHT COLUMN (1/3) */}
@@ -1195,6 +1082,225 @@ export default function ExpedienteDetailPage() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* ============================================================ */}
+      {/*  Documents Table (full width - Módulo Notarial)              */}
+      {/* ============================================================ */}
+      <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+        <div className="p-6 pb-0">
+          <h3
+            className="text-lg font-bold text-gray-900 mb-1"
+            style={{ fontFamily: "Barlow, Inter, sans-serif" }}
+          >
+            Documentos del Expediente
+          </h3>
+          <p className="text-xs text-gray-400 mb-4">
+            Revisión y dictamen jurídico de documentos
+          </p>
+        </div>
+
+        {tableRows.length === 0 ? (
+          <div className="rounded-xl bg-gray-50 p-8 text-center mx-6 mb-6">
+            <FileText className="mx-auto h-10 w-10 text-gray-300 mb-2" />
+            <p className="text-sm text-gray-400">No se encontraron tipos de documentos.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto pb-2">
+            <table className="w-full text-left">
+              <thead>
+                <tr
+                  className="text-[11px] font-bold text-white uppercase tracking-wider"
+                  style={{ background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(210 80% 45%))" }}
+                >
+                  <th className="px-4 py-3">Documento</th>
+                  <th className="px-3 py-3">Fecha Revisión</th>
+                  <th className="px-3 py-3">Validación de Documentos</th>
+                  <th className="px-3 py-3">Certificado Recibido</th>
+                  <th className="px-3 py-3">Resultado del Dictamen</th>
+                  <th className="px-3 py-3">Dictaminador Jurídico de Notaría</th>
+                  <th className="px-3 py-3">Inconsistencia Detectada</th>
+                  <th className="px-3 py-3">Instrucción al Propietario</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {tableRows.map(({ docType, doc }) => {
+                  const hasFile = !!doc;
+                  const isReviewed = doc?.reviewed_at != null;
+                  const isApproved = doc?.status === "VALIDADO" || doc?.status === "APROBADO";
+                  const isRejected = doc?.status === "RECHAZADO";
+                  const isRejecting = doc && rejectingDocId === doc.id;
+
+                  const isConditional = !docType.is_required;
+
+                  return (
+                    <tr
+                      key={docType.id}
+                      className={`text-xs transition-colors ${
+                        isRejected ? "bg-red-50/40" : isApproved ? "bg-emerald-50/30" : "bg-white hover:bg-gray-50/50"
+                      }`}
+                    >
+                      {/* DOCUMENTO */}
+                      <td className="px-4 py-3 align-top">
+                        <div>
+                          <p className="font-bold text-gray-900 text-[12px] leading-tight">
+                            {docType.name}
+                          </p>
+                          {isConditional && docType.description && (
+                            <span className="text-[10px] text-amber-600 leading-tight block">{docType.description}</span>
+                          )}
+                          {hasFile && doc.file_url && (
+                            <a
+                              href={doc.file_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="mt-1 flex items-center gap-1 text-[10px] text-blue-500 hover:text-blue-700 hover:underline"
+                            >
+                              <Download className="h-3 w-3" />
+                              {doc.file_name}
+                            </a>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* FECHA REVISIÓN */}
+                      <td className="px-3 py-3 align-top text-gray-600">
+                        {doc?.reviewed_at ? formatDate(doc.reviewed_at) : doc?.created_at ? formatDate(doc.created_at) : "—"}
+                      </td>
+
+                      {/* VALIDACIÓN DE DOCUMENTOS */}
+                      <td className="px-3 py-3 align-top">
+                        {isReviewed ? (
+                          <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
+                            REALIZADO
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-600 border border-amber-200">
+                            PENDIENTE
+                          </span>
+                        )}
+                      </td>
+
+                      {/* CERTIFICADO RECIBIDO */}
+                      <td className="px-3 py-3 align-top">
+                        {hasFile ? (
+                          <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700 border border-blue-200">
+                            RECIBIDO
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center rounded-md bg-gray-50 px-2 py-0.5 text-[10px] font-bold text-gray-400 border border-gray-200">
+                            —
+                          </span>
+                        )}
+                      </td>
+
+                      {/* RESULTADO DEL DICTAMEN */}
+                      <td className="px-3 py-3 align-top">
+                        {isApproved ? (
+                          <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
+                            APROBADO
+                          </span>
+                        ) : isRejected ? (
+                          <span className="inline-flex items-center rounded-md bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-600 border border-red-200">
+                            RECHAZADO
+                          </span>
+                        ) : hasFile && isNotario && doc.status !== "VALIDADO" ? (
+                          <div className="flex flex-col gap-1">
+                            <button
+                              onClick={() => handleApproveDoc(doc.id)}
+                              disabled={actionLoading === doc.id}
+                              className="flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-600 border border-emerald-200 transition-all hover:bg-emerald-100 disabled:opacity-50"
+                            >
+                              {actionLoading === doc.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+                              Aprobar
+                            </button>
+                            <button
+                              onClick={() => {
+                                setRejectingDocId(doc.id);
+                                setRejectReason(doc.rejection_reason ?? "");
+                                setRejectInstruction(doc.owner_instruction ?? "");
+                              }}
+                              disabled={actionLoading === doc.id}
+                              className="flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-[10px] font-bold text-red-600 border border-red-200 transition-all hover:bg-red-100 disabled:opacity-50"
+                            >
+                              <XCircle className="h-3 w-3" />
+                              Rechazar
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-gray-400">—</span>
+                        )}
+                      </td>
+
+                      {/* DICTAMINADOR JURÍDICO */}
+                      <td className="px-3 py-3 align-top text-gray-700">
+                        {(isApproved || isRejected) && doc?.reviewed_by
+                          ? notaryDisplayName
+                          : ""}
+                      </td>
+
+                      {/* INCONSISTENCIA DETECTADA */}
+                      <td className="px-3 py-3 align-top">
+                        {isRejecting ? (
+                          <textarea
+                            value={rejectReason}
+                            onChange={(e) => setRejectReason(e.target.value)}
+                            placeholder="Describir la inconsistencia..."
+                            rows={2}
+                            className="w-full rounded-md border border-red-200 px-2 py-1.5 text-[11px] text-gray-800 outline-none focus:border-red-300 focus:ring-1 focus:ring-red-100 resize-none"
+                            autoFocus
+                          />
+                        ) : isRejected && doc?.rejection_reason ? (
+                          <p className="text-[11px] text-red-700 leading-relaxed">{doc.rejection_reason}</p>
+                        ) : (
+                          <span className="text-[10px] text-gray-300">—</span>
+                        )}
+                      </td>
+
+                      {/* INSTRUCCIÓN AL PROPIETARIO */}
+                      <td className="px-3 py-3 align-top">
+                        {isRejecting ? (
+                          <div className="space-y-1.5">
+                            <textarea
+                              value={rejectInstruction}
+                              onChange={(e) => setRejectInstruction(e.target.value)}
+                              placeholder="Instrucción para el propietario..."
+                              rows={2}
+                              className="w-full rounded-md border border-red-200 px-2 py-1.5 text-[11px] text-gray-800 outline-none focus:border-red-300 focus:ring-1 focus:ring-red-100 resize-none"
+                            />
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => doc && handleRejectDoc(doc.id)}
+                                disabled={!rejectReason.trim() || actionLoading === doc?.id}
+                                className="rounded-md bg-red-600 px-2.5 py-1 text-[10px] font-bold text-white transition-all hover:bg-red-700 disabled:opacity-50"
+                              >
+                                Confirmar
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setRejectingDocId(null);
+                                  setRejectReason("");
+                                  setRejectInstruction("");
+                                }}
+                                className="rounded-md border border-gray-200 px-2.5 py-1 text-[10px] font-semibold text-gray-500 transition-all hover:bg-gray-50"
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                          </div>
+                        ) : isRejected && doc?.owner_instruction ? (
+                          <p className="text-[11px] text-red-700 leading-relaxed">{doc.owner_instruction}</p>
+                        ) : (
+                          <span className="text-[10px] text-gray-300">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* ============================================================ */}

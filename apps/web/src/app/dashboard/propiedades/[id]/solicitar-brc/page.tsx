@@ -75,6 +75,8 @@ export default function SolicitarBrcPage() {
   const [tariff, setTariff] = useState<BrcTariff | null>(null);
   const [documentTypes, setDocumentTypes] = useState<BrcDocumentType[]>([]);
   const [files, setFiles] = useState<Record<string, File | null>>({});
+  const [validatingDocId, setValidatingDocId] = useState<string | null>(null);
+  const [ocrResults, setOcrResults] = useState<Record<string, { valid: boolean; confidence: string; message: string; detectedType: string; extractedData: Record<string, unknown> }>>({});
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -135,13 +137,97 @@ export default function SolicitarBrcPage() {
     fetchData();
   }, [id]);
 
-  /* ---- File handlers ---- */
-  function handleFileChange(docTypeId: string, file: File | null) {
-    setFiles((prev) => ({ ...prev, [docTypeId]: file }));
+  /* ---- File handlers with OCR validation ---- */
+  async function handleFileChange(docTypeId: string, file: File | null) {
+    if (!file) {
+      setFiles((prev) => ({ ...prev, [docTypeId]: null }));
+      setOcrResults((prev) => {
+        const next = { ...prev };
+        delete next[docTypeId];
+        return next;
+      });
+      return;
+    }
+
+    // Find document type name for OCR
+    const docType = documentTypes.find((dt) => dt.id === docTypeId);
+    if (!docType) {
+      setFiles((prev) => ({ ...prev, [docTypeId]: file }));
+      return;
+    }
+
+    // Start OCR validation
+    setValidatingDocId(docTypeId);
+    setError(null);
+
+    try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("documentName", docType.name);
+
+      const res = await fetch("/api/v1/ocr/validate", {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+
+      if (!res.ok) {
+        // If OCR service is unavailable, accept file with warning
+        setFiles((prev) => ({ ...prev, [docTypeId]: file }));
+        setOcrResults((prev) => ({
+          ...prev,
+          [docTypeId]: {
+            valid: true,
+            confidence: "low",
+            message: "No se pudo validar automáticamente. Se aceptó para revisión manual.",
+            detectedType: "No verificado",
+            extractedData: {},
+          },
+        }));
+        return;
+      }
+
+      const result = await res.json();
+
+      if (result.valid) {
+        setFiles((prev) => ({ ...prev, [docTypeId]: file }));
+        setOcrResults((prev) => ({ ...prev, [docTypeId]: result }));
+      } else {
+        // Document rejected — clear file
+        const input = fileInputRefs.current[docTypeId];
+        if (input) input.value = "";
+        setOcrResults((prev) => ({ ...prev, [docTypeId]: result }));
+        // Don't set the file — it's rejected
+      }
+    } catch {
+      // On network error, accept file
+      setFiles((prev) => ({ ...prev, [docTypeId]: file }));
+      setOcrResults((prev) => ({
+        ...prev,
+        [docTypeId]: {
+          valid: true,
+          confidence: "low",
+          message: "Validación no disponible. Se aceptó para revisión manual.",
+          detectedType: "No verificado",
+          extractedData: {},
+        },
+      }));
+    } finally {
+      setValidatingDocId(null);
+    }
   }
 
   function removeFile(docTypeId: string) {
     setFiles((prev) => ({ ...prev, [docTypeId]: null }));
+    setOcrResults((prev) => {
+      const next = { ...prev };
+      delete next[docTypeId];
+      return next;
+    });
     const input = fileInputRefs.current[docTypeId];
     if (input) input.value = "";
   }
@@ -166,6 +252,8 @@ export default function SolicitarBrcPage() {
     try {
       const supabase = createClient();
 
+      const fullNotes = notes.trim() || null;
+
       // 1. Create expediente
       const { data: expediente, error: expError } = await supabase
         .from("brc_expedientes")
@@ -173,7 +261,7 @@ export default function SolicitarBrcPage() {
           property_id: property.id,
           requested_by: user.id,
           tariff_id: tariff?.id ?? null,
-          notes: notes.trim() || null,
+          notes: fullNotes,
           status: "EN_REVISION",
         })
         .select("id")
@@ -399,14 +487,25 @@ export default function SolicitarBrcPage() {
         <div className="space-y-4">
           {documentTypes.map((dt) => {
             const file = files[dt.id];
+            const isConditional = !dt.is_required;
+            const isValidating = validatingDocId === dt.id;
+            const ocrResult = ocrResults[dt.id];
+            const ocrRejected = ocrResult && !ocrResult.valid;
+
             return (
               <div
                 key={dt.id}
-                className="rounded-xl border border-gray-100 p-4 transition-all duration-200 hover:border-gray-200"
+                className={`rounded-xl border p-4 transition-all duration-200 ${
+                  ocrRejected
+                    ? "border-red-200 bg-red-50/30"
+                    : ocrResult?.valid && ocrResult.confidence === "high"
+                    ? "border-emerald-200 bg-emerald-50/20"
+                    : "border-gray-100 hover:border-gray-200"
+                }`}
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-semibold text-gray-900 text-sm">
                         {dt.name}
                       </p>
@@ -415,17 +514,22 @@ export default function SolicitarBrcPage() {
                           Requerido
                         </span>
                       ) : (
-                        <span className="inline-flex items-center rounded-md bg-gray-50 px-2 py-0.5 text-[10px] font-semibold text-gray-500 border border-gray-100">
-                          (Opcional)
+                        <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-600 border border-amber-100">
+                          Condicional
                         </span>
                       )}
                     </div>
                     {dt.description && (
-                      <p className="mt-1 text-xs text-gray-400">{dt.description}</p>
+                      <p className={`mt-1 text-xs ${isConditional ? "text-amber-500 font-medium" : "text-gray-400"}`}>{dt.description}</p>
                     )}
                   </div>
 
-                  {file ? (
+                  {isValidating ? (
+                    <div className="flex items-center gap-2 shrink-0 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Validando documento...
+                    </div>
+                  ) : file ? (
                     <div className="flex items-center gap-2 shrink-0">
                       <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700">
                         <CheckCircle2 className="h-3.5 w-3.5" />
@@ -440,7 +544,7 @@ export default function SolicitarBrcPage() {
                       </button>
                     </div>
                   ) : (
-                    <label className="inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-semibold text-gray-700 transition-all duration-200 hover:bg-gray-50 hover:shadow-sm">
+                    <label className={`inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-semibold text-gray-700 transition-all duration-200 hover:bg-gray-50 hover:shadow-sm ${isValidating ? "pointer-events-none opacity-50" : ""}`}>
                       <Upload className="h-3.5 w-3.5" />
                       Subir archivo
                       <input
@@ -457,6 +561,47 @@ export default function SolicitarBrcPage() {
                     </label>
                   )}
                 </div>
+
+                {/* OCR Validation Result */}
+                {ocrResult && (
+                  <div className={`mt-3 rounded-lg px-3 py-2 text-xs border ${
+                    ocrRejected
+                      ? "bg-red-50 text-red-700 border-red-200"
+                      : ocrResult.confidence === "high"
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      : "bg-amber-50 text-amber-700 border-amber-200"
+                  }`}>
+                    <div className="flex items-start gap-2">
+                      {ocrRejected ? (
+                        <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                      ) : ocrResult.confidence === "high" ? (
+                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                      ) : (
+                        <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                      )}
+                      <div>
+                        <p className="font-semibold">{ocrResult.message}</p>
+                        {ocrResult.valid && ocrResult.extractedData && Object.keys(ocrResult.extractedData).length > 1 && (
+                          <details className="mt-1">
+                            <summary className="cursor-pointer text-[10px] opacity-70 hover:opacity-100">
+                              Ver datos extraídos
+                            </summary>
+                            <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-0.5 text-[10px]">
+                              {Object.entries(ocrResult.extractedData)
+                                .filter(([k]) => k !== "tipo_documento" && k !== "raw_text")
+                                .map(([key, val]) => (
+                                  <div key={key} className="flex gap-1">
+                                    <span className="opacity-60">{key.replace(/_/g, " ")}:</span>
+                                    <span className="font-medium truncate">{String(val ?? "—")}</span>
+                                  </div>
+                                ))}
+                            </div>
+                          </details>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}

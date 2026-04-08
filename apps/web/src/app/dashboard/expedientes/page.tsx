@@ -43,6 +43,8 @@ interface BrcDocument {
   document_type_id: string;
   file_name: string;
   status: string;
+  rejection_reason: string | null;
+  reviewed_at: string | null;
   brc_document_types: {
     name: string;
   } | null;
@@ -208,6 +210,8 @@ export default function ExpedientesPage() {
             document_type_id,
             file_name,
             status,
+            rejection_reason,
+            reviewed_at,
             brc_document_types ( name )
           )
         `
@@ -384,91 +388,195 @@ export default function ExpedientesPage() {
       {/* ============================================================ */}
       {/*  Expedientes List                                            */}
       {/* ============================================================ */}
-      <div className="space-y-4">
-        {expedientes.map((exp) => {
-          const docProgress = getProgressFromDocs(exp.brc_documents);
-          const progreso = getStatusProgress(exp.status, docProgress);
-          const notaryName = exp.notary_profile
-            ? `Lic. ${exp.notary_profile.first_name} ${exp.notary_profile.last_name}`
-            : "Sin asignar";
-          const requesterName = exp.requester_profile
-            ? `${exp.requester_profile.first_name} ${exp.requester_profile.last_name}`
-            : "Sin nombre";
-          const propertyTitle = exp.properties?.title ?? "Propiedad";
+      {isNotario ? (
+        /* ── Notary Table View ── */
+        <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[900px] text-left">
+              <thead>
+                <tr
+                  className="text-[11px] font-bold text-white uppercase tracking-wider"
+                  style={{ background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(210 80% 45%))" }}
+                >
+                  <th className="px-5 py-3">Propiedad</th>
+                  <th className="px-4 py-3">Solicitante</th>
+                  <th className="px-4 py-3">Fecha</th>
+                  <th className="px-4 py-3">Estado</th>
+                  <th className="px-4 py-3">Docs Recibidos</th>
+                  <th className="px-4 py-3">Docs Validados</th>
+                  <th className="px-4 py-3">Docs Rechazados</th>
+                  <th className="px-4 py-3 text-center">Progreso</th>
+                  <th className="px-4 py-3 text-center">Acción</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {expedientes.map((exp) => {
+                  const docProgress = getProgressFromDocs(exp.brc_documents);
+                  const progreso = getStatusProgress(exp.status, docProgress);
+                  const requesterName = exp.requester_profile
+                    ? `${exp.requester_profile.first_name} ${exp.requester_profile.last_name}`
+                    : "Sin nombre";
+                  const propertyTitle = exp.properties?.title ?? "Propiedad";
 
-          return (
-            <div
-              key={exp.id}
-              className="rounded-2xl border border-gray-100 bg-white shadow-sm transition-all duration-300 hover:shadow-md"
-            >
-              {/* Main row */}
-              <div className="p-6">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  {/* Left: Property + Date */}
-                  <div className="flex items-center gap-4 min-w-0">
-                    <div
-                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl"
-                      style={{
-                        background:
-                          "linear-gradient(135deg, hsl(221 83% 53% / 0.1), hsl(160 84% 39% / 0.1))",
-                      }}
-                    >
-                      <ShieldCheck
-                        className="h-5 w-5"
-                        style={{ color: "hsl(221 83% 53%)" }}
-                      />
-                    </div>
-                    <div className="min-w-0">
-                      <h4
-                        className="font-bold text-gray-900 truncate"
-                        style={{ fontFamily: "Barlow, Inter, sans-serif" }}
-                      >
-                        {propertyTitle}
-                      </h4>
-                      <p className="mt-0.5 text-sm text-gray-500">
-                        Solicitud: {formatDate(exp.created_at)}
-                      </p>
-                    </div>
-                  </div>
+                  const totalDocs = exp.brc_documents.length;
+                  const validados = exp.brc_documents.filter(
+                    (d) => d.status === "VALIDADO" || d.status === "APROBADO"
+                  ).length;
+                  const rechazados = exp.brc_documents.filter(
+                    (d) => d.status === "RECHAZADO"
+                  ).length;
 
-                  {/* Center: Status + Person */}
-                  <div className="flex flex-wrap items-center gap-3">
-                    {getEstadoBadge(exp.status)}
-                    <div className="flex items-center gap-1.5 text-sm text-gray-500">
-                      <User className="h-3.5 w-3.5" />
-                      {isNotario ? requesterName : notaryName}
-                    </div>
-                  </div>
-
-                  {/* Right: Progress + Actions */}
-                  <div className="flex items-center gap-4">
-                    {/* Progress bar */}
-                    <div className="flex items-center gap-3 min-w-[160px]">
-                      <div className="h-2 flex-1 rounded-full bg-gray-100">
-                        <div
-                          className="h-2 rounded-full transition-all duration-500"
-                          style={{
-                            width: `${progreso}%`,
-                            background: getProgressColor(progreso),
-                          }}
-                        />
-                      </div>
-                      <span className="text-sm font-semibold text-gray-600 w-10 text-right">
-                        {progreso}%
-                      </span>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex items-center gap-2">
-                      {isNotario ? (
+                  return (
+                    <tr key={exp.id} className="text-sm hover:bg-gray-50/50 transition-colors">
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+                            style={{
+                              background: "linear-gradient(135deg, hsl(221 83% 53% / 0.1), hsl(160 84% 39% / 0.1))",
+                            }}
+                          >
+                            <ShieldCheck className="h-4 w-4" style={{ color: "hsl(221 83% 53%)" }} />
+                          </div>
+                          <p className="font-bold text-gray-900 truncate max-w-[200px]" style={{ fontFamily: "Barlow, Inter, sans-serif" }}>
+                            {propertyTitle}
+                          </p>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-1.5 text-gray-600">
+                          <User className="h-3.5 w-3.5 text-gray-400" />
+                          <span className="text-xs">{requesterName}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 text-xs text-gray-500">
+                        {formatDate(exp.created_at)}
+                      </td>
+                      <td className="px-4 py-4">
+                        {getEstadoBadge(exp.status)}
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-bold text-blue-700 border border-blue-200">
+                          {totalDocs}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-bold border ${
+                          validados > 0 ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-gray-50 text-gray-400 border-gray-200"
+                        }`}>
+                          {validados}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-bold border ${
+                          rechazados > 0 ? "bg-red-50 text-red-600 border-red-200" : "bg-gray-50 text-gray-400 border-gray-200"
+                        }`}>
+                          {rechazados}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-2 min-w-[100px]">
+                          <div className="h-1.5 flex-1 rounded-full bg-gray-100">
+                            <div
+                              className="h-1.5 rounded-full transition-all duration-500"
+                              style={{ width: `${progreso}%`, background: getProgressColor(progreso) }}
+                            />
+                          </div>
+                          <span className="text-[11px] font-bold text-gray-500 w-8 text-right">{progreso}%</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 text-center">
                         <Link
                           href={`/dashboard/expedientes/${exp.id}`}
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-semibold text-gray-700 transition-all duration-300 hover:bg-gray-50 hover:shadow-sm"
+                          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-bold text-white transition-all hover:opacity-90 hover:shadow-sm"
+                          style={{ background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))" }}
                         >
-                          Revisar Expediente
+                          Revisar
                           <ArrowUpRight className="h-3 w-3" />
                         </Link>
-                      ) : (
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        /* ── Owner Card View ── */
+        <div className="space-y-4">
+          {expedientes.map((exp) => {
+            const docProgress = getProgressFromDocs(exp.brc_documents);
+            const progreso = getStatusProgress(exp.status, docProgress);
+            const notaryName = exp.notary_profile
+              ? `Lic. ${exp.notary_profile.first_name} ${exp.notary_profile.last_name}`
+              : "Sin asignar";
+            const propertyTitle = exp.properties?.title ?? "Propiedad";
+
+            return (
+              <div
+                key={exp.id}
+                className="rounded-2xl border border-gray-100 bg-white shadow-sm transition-all duration-300 hover:shadow-md"
+              >
+                {/* Main row */}
+                <div className="p-6">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    {/* Left: Property + Date */}
+                    <div className="flex items-center gap-4 min-w-0">
+                      <div
+                        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl"
+                        style={{
+                          background:
+                            "linear-gradient(135deg, hsl(221 83% 53% / 0.1), hsl(160 84% 39% / 0.1))",
+                        }}
+                      >
+                        <ShieldCheck
+                          className="h-5 w-5"
+                          style={{ color: "hsl(221 83% 53%)" }}
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <h4
+                          className="font-bold text-gray-900 truncate"
+                          style={{ fontFamily: "Barlow, Inter, sans-serif" }}
+                        >
+                          {propertyTitle}
+                        </h4>
+                        <p className="mt-0.5 text-sm text-gray-500">
+                          Solicitud: {formatDate(exp.created_at)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Center: Status + Person */}
+                    <div className="flex flex-wrap items-center gap-3">
+                      {getEstadoBadge(exp.status)}
+                      <div className="flex items-center gap-1.5 text-sm text-gray-500">
+                        <User className="h-3.5 w-3.5" />
+                        {notaryName}
+                      </div>
+                    </div>
+
+                    {/* Right: Progress + Actions */}
+                    <div className="flex items-center gap-4">
+                      {/* Progress bar */}
+                      <div className="flex items-center gap-3 min-w-[160px]">
+                        <div className="h-2 flex-1 rounded-full bg-gray-100">
+                          <div
+                            className="h-2 rounded-full transition-all duration-500"
+                            style={{
+                              width: `${progreso}%`,
+                              background: getProgressColor(progreso),
+                            }}
+                          />
+                        </div>
+                        <span className="text-sm font-semibold text-gray-600 w-10 text-right">
+                          {progreso}%
+                        </span>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-2">
                         <button
                           onClick={() => setSelectedExp(exp)}
                           className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-semibold text-gray-700 transition-all duration-300 hover:bg-gray-50 hover:shadow-sm"
@@ -476,67 +584,72 @@ export default function ExpedientesPage() {
                           Ver Expediente
                           <ArrowUpRight className="h-3 w-3" />
                         </button>
-                      )}
-                      <button
-                        onClick={() =>
-                          setExpandedId(expandedId === exp.id ? null : exp.id)
-                        }
-                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-400 transition-all duration-300 hover:bg-gray-50 hover:text-gray-600"
-                      >
-                        {expandedId === exp.id ? (
-                          <ChevronUp className="h-4 w-4" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4" />
-                        )}
-                      </button>
+                        <button
+                          onClick={() =>
+                            setExpandedId(expandedId === exp.id ? null : exp.id)
+                          }
+                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-400 transition-all duration-300 hover:bg-gray-50 hover:text-gray-600"
+                        >
+                          {expandedId === exp.id ? (
+                            <ChevronUp className="h-4 w-4" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4" />
+                          )}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Expanded: Document Checklist */}
-              {expandedId === exp.id && (
-                <div className="border-t border-gray-100 bg-gray-50/50 px-6 py-4">
-                  <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
-                    Checklist de Documentos
-                  </p>
-                  <div className="flex flex-wrap gap-3">
-                    {exp.brc_documents.length > 0 ? (
-                      exp.brc_documents.map((doc) => {
-                        const completado =
-                          doc.status === "APROBADO" || doc.status === "VALIDADO";
-                        const docName =
-                          doc.brc_document_types?.name ?? doc.file_name;
-                        return (
-                          <div
-                            key={doc.id}
-                            className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 text-sm font-medium transition-all duration-200 ${
-                              completado
-                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                                : "border-amber-200 bg-amber-50 text-amber-700"
-                            }`}
-                          >
-                            {completado ? (
-                              <CheckCircle2 className="h-4 w-4" />
-                            ) : (
-                              <AlertCircle className="h-4 w-4" />
-                            )}
-                            {docName}
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <p className="text-sm text-gray-400">
-                        No se han subido documentos aun.
-                      </p>
-                    )}
+                {/* Expanded: Document Checklist */}
+                {expandedId === exp.id && (
+                  <div className="border-t border-gray-100 bg-gray-50/50 px-6 py-4">
+                    <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
+                      Checklist de Documentos
+                    </p>
+                    <div className="flex flex-wrap gap-3">
+                      {exp.brc_documents.length > 0 ? (
+                        exp.brc_documents.map((doc) => {
+                          const completado =
+                            doc.status === "APROBADO" || doc.status === "VALIDADO";
+                          const rechazado = doc.status === "RECHAZADO";
+                          const docName =
+                            doc.brc_document_types?.name ?? doc.file_name;
+                          return (
+                            <div
+                              key={doc.id}
+                              className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 text-sm font-medium transition-all duration-200 ${
+                                completado
+                                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                  : rechazado
+                                  ? "border-red-200 bg-red-50 text-red-700"
+                                  : "border-amber-200 bg-amber-50 text-amber-700"
+                              }`}
+                            >
+                              {completado ? (
+                                <CheckCircle2 className="h-4 w-4" />
+                              ) : rechazado ? (
+                                <XCircle className="h-4 w-4" />
+                              ) : (
+                                <AlertCircle className="h-4 w-4" />
+                              )}
+                              {docName}
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <p className="text-sm text-gray-400">
+                          No se han subido documentos aun.
+                        </p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* ============================================================ */}
       {/*  Nueva Solicitud Modal                                       */}
