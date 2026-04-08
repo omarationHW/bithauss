@@ -136,22 +136,6 @@ const STATUS_BADGE_STYLES: Record<string, string> = {
   RECHAZADO: "bg-red-50 text-red-600 border border-red-200",
 };
 
-const DOC_STATUS_STYLES: Record<string, string> = {
-  PENDIENTE: "bg-gray-50 text-gray-600 border border-gray-200",
-  RECIBIDO: "bg-blue-50 text-blue-600 border border-blue-200",
-  VALIDADO: "bg-emerald-50 text-emerald-600 border border-emerald-200",
-  RECHAZADO: "bg-red-50 text-red-600 border border-red-200",
-  APROBADO: "bg-emerald-50 text-emerald-600 border border-emerald-200",
-};
-
-const DOC_STATUS_LABELS: Record<string, string> = {
-  PENDIENTE: "Pendiente",
-  RECIBIDO: "Recibido",
-  VALIDADO: "Validado",
-  RECHAZADO: "Rechazado",
-  APROBADO: "Aprobado",
-};
-
 const STATUS_STEPS = [
   { key: "EN_REVISION", label: "En Revision" },
   { key: "DOCUMENTACION_PENDIENTE", label: "Documentacion" },
@@ -173,16 +157,6 @@ function getStatusBadge(status: string) {
   );
 }
 
-function getDocStatusBadge(status: string) {
-  const label = DOC_STATUS_LABELS[status] ?? status;
-  const style = DOC_STATUS_STYLES[status] ?? "bg-gray-100 text-gray-600 border border-gray-200";
-  return (
-    <span className={`inline-flex items-center rounded-lg px-2 py-0.5 text-[11px] font-semibold ${style}`}>
-      {label}
-    </span>
-  );
-}
-
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("es-MX", {
     day: "numeric",
@@ -199,13 +173,6 @@ function formatDateTime(dateStr: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-function formatFileSize(bytes: number | null) {
-  if (!bytes) return "N/A";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function formatCurrency(amount: number, currency: string = "MXN") {

@@ -165,7 +165,7 @@ function DataRenderer({ data }: { data: Record<string, unknown> }) {
 /* ------------------------------------------------------------------ */
 
 export default function OcrTestPage() {
-  const [selectedType, setSelectedType] = useState(TEST_DOCUMENT_TYPES[0].slug);
+  const [selectedType, setSelectedType] = useState(TEST_DOCUMENT_TYPES[0]?.slug ?? "escritura_propiedad");
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<OcrResult | null>(null);
