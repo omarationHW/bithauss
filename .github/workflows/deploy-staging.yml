@@ -77,7 +77,7 @@ jobs:
       - run: pnpm turbo run build --filter=@bithauss/api
 
       - name: Create deploy bundle
-        run: pnpm --filter=@bithauss/api deploy --prod deploy-api
+        run: pnpm --filter=@bithauss/api --legacy deploy --prod deploy-api
 
       - uses: azure/login@v2
         with:
