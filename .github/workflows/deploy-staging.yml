@@ -44,6 +44,7 @@ jobs:
               WEBSITES_PORT=3000 \
               NEXT_PUBLIC_SUPABASE_URL="${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}" \
               NEXT_PUBLIC_SUPABASE_ANON_KEY="${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" \
+              API_URL="https://bithauss-api.azurewebsites.net" \
             --output none
 
       - name: Configure startup
@@ -58,3 +59,57 @@ jobs:
         with:
           app-name: bithauss-web
           package: apps/web/.next/standalone
+
+  deploy-api:
+    name: Deploy API to Staging
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo run build --filter=@bithauss/api
+
+      - name: Create deploy bundle
+        run: pnpm --filter=@bithauss/api deploy --prod deploy-api
+
+      - uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Set app settings
+        run: |
+          az webapp config appsettings set \
+            --name bithauss-api \
+            --resource-group bithauss-rg \
+            --settings \
+              SCM_DO_BUILD_DURING_DEPLOYMENT=false \
+              FRONTEND_URL="https://bithauss-web.azurewebsites.net" \
+              SUPABASE_URL="${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}" \
+              SUPABASE_ANON_KEY="${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" \
+              SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+              AZURE_DOC_INTELLIGENCE_ENDPOINT="${{ secrets.AZURE_DOC_INTELLIGENCE_ENDPOINT }}" \
+              AZURE_DOC_INTELLIGENCE_KEY="${{ secrets.AZURE_DOC_INTELLIGENCE_KEY }}" \
+              AZURE_OPENAI_ENDPOINT="${{ secrets.AZURE_OPENAI_ENDPOINT }}" \
+              AZURE_OPENAI_KEY="${{ secrets.AZURE_OPENAI_KEY }}" \
+              AZURE_OPENAI_DEPLOYMENT="${{ secrets.AZURE_OPENAI_DEPLOYMENT }}" \
+            --output none
+
+      - name: Configure startup
+        run: |
+          az webapp config set \
+            --name bithauss-api \
+            --resource-group bithauss-rg \
+            --startup-file "node dist/main" \
+            --output none
+
+      - uses: azure/webapps-deploy@v3
+        with:
+          app-name: bithauss-api
+          package: deploy-api
