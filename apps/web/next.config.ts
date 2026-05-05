@@ -4,7 +4,11 @@ const nextConfig: NextConfig = {
   output: "standalone",
   transpilePackages: ["@bithauss/types", "@bithauss/validators", "@bithauss/config"],
   async rewrites() {
-    const apiUrl = process.env.API_URL || "http://localhost:3001";
+    const apiUrl =
+      process.env.API_URL ||
+      (process.env.NODE_ENV === "production"
+        ? "https://bithauss-api.azurewebsites.net"
+        : "http://localhost:3001");
     return [
       {
         source: "/api/v1/:path*",

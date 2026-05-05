@@ -4,7 +4,15 @@
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
-      "inputs": ["$TURBO_DEFAULT$", ".env", ".env.*"]
+      "inputs": ["$TURBO_DEFAULT$", ".env", ".env.*"],
+      "env": [
+        "NODE_ENV",
+        "API_URL",
+        "NEXT_PUBLIC_*",
+        "AZURE_*",
+        "SUPABASE_*",
+        "FRONTEND_URL"
+      ]
     },
     "dev": {
       "cache": false,
