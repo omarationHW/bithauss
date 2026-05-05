@@ -6,6 +6,8 @@ export async function middleware(request: NextRequest) {
   if (host === "www.bithauss.com") {
     const url = new URL(request.url);
     url.host = "bithauss.com";
+    url.port = "";
+    url.protocol = "https:";
     return NextResponse.redirect(url, 301);
   }
 
