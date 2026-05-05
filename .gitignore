@@ -59,6 +59,7 @@ skills-lock.json
 # Project docs (local only)
 ARCHITECTURE.md
 requerimiento.md
+OCR_API_INVESTIGACION.md
 
 # Security
 *.pem

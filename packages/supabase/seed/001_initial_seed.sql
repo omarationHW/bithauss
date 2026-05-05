@@ -42,58 +42,76 @@ insert into membership_plans (tier, name, description, price_monthly, price_year
 -- ────────────────────────────────────────────────
 insert into brc_document_types (name, description, is_required, sort_order) values
 (
-  'Escritura pública',
-  'Escritura pública de la propiedad inscrita en el Registro Público de la Propiedad.',
+  'Escritura de Propiedad del Inmueble a Certificar',
+  'Escritura pública de propiedad inscrita en el Registro Público de la Propiedad.',
   true,
   1
 ),
 (
-  'INE del propietario',
-  'Identificación oficial vigente (INE/IFE) del propietario o representante legal.',
-  true,
+  'Folio Real del Inmueble (Constancia de Inscripción en el RPP)',
+  'En caso de no venir agregada a la Escritura.',
+  false,
   2
 ),
 (
-  'Boleta predial',
-  'Último recibo de pago del impuesto predial actualizado.',
-  true,
+  'Resolución Judicial',
+  'Sólo en caso de Usucapión.',
+  false,
   3
 ),
 (
-  'Recibo de agua',
-  'Último recibo de pago de servicio de agua potable.',
+  'Última Boleta Predial del Inmueble',
+  'Último recibo de pago del impuesto predial actualizado.',
   true,
   4
 ),
 (
-  'Acta de matrimonio',
-  'Acta de matrimonio del propietario (cuando aplique régimen de sociedad conyugal).',
-  false,
+  'Última Boleta de Agua del Inmueble',
+  'Último recibo de pago de servicio de agua potable.',
+  true,
   5
 ),
 (
-  'Poder notarial',
-  'Poder notarial cuando la propiedad se vende mediante representante legal.',
-  false,
+  'Constancia de Uso de Suelo autorizado del Inmueble',
+  'Documento oficial que acredita el uso de suelo permitido para el inmueble.',
+  true,
   6
 ),
 (
-  'Certificado de libertad de gravamen',
-  'Certificado emitido por el Registro Público que acredita que el inmueble está libre de gravámenes.',
+  'Constancia de No Adeudo de Cuotas de Mantenimiento',
+  'Sólo en caso de ser un Inmueble en Condominio.',
   false,
   7
 ),
 (
-  'Avalúo',
-  'Avalúo comercial realizado por un perito valuador certificado.',
+  'Escritura de Régimen de Propiedad en Condominio',
+  'Sólo en caso de ser Condominio.',
   false,
   8
 ),
 (
-  'Plano catastral',
-  'Plano catastral oficial del inmueble.',
-  false,
+  'Identificación del Propietario',
+  'INE o Pasaporte vigentes. En caso de Copropietarios, identificación de cada uno.',
+  true,
   9
+),
+(
+  'Acta de Matrimonio del Propietario',
+  'Acta de matrimonio del propietario.',
+  true,
+  10
+),
+(
+  'Comprobante de Domicilio con la dirección del Inmueble',
+  'Comprobante de domicilio reciente con la dirección del inmueble a certificar.',
+  true,
+  11
+),
+(
+  'Poder Notarial para actos de Administración',
+  'En caso de que se solicite el trámite por medio de Representante Legal.',
+  false,
+  12
 );
 
 -- ────────────────────────────────────────────────

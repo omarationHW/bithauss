@@ -3,6 +3,15 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone",
   transpilePackages: ["@bithauss/types", "@bithauss/validators", "@bithauss/config"],
+  async rewrites() {
+    const apiUrl = process.env.API_URL || "http://localhost:3001";
+    return [
+      {
+        source: "/api/v1/:path*",
+        destination: `${apiUrl}/api/v1/:path*`,
+      },
+    ];
+  },
   images: {
     unoptimized: true,
     remotePatterns: [
