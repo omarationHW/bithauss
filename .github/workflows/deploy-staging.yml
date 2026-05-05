@@ -2,7 +2,7 @@ name: Deploy Staging
 
 on:
   push:
-    branches: [develop]
+    branches: [main]
 
 jobs:
   deploy-web:
@@ -54,6 +54,9 @@ jobs:
             --resource-group bithauss-rg \
             --startup-file "node apps/web/server.js" \
             --output none
+
+      - name: Wait for SCM container to stabilize
+        run: sleep 30
 
       - uses: azure/webapps-deploy@v3
         with:
@@ -108,6 +111,9 @@ jobs:
             --resource-group bithauss-rg \
             --startup-file "node dist/main" \
             --output none
+
+      - name: Wait for SCM container to stabilize
+        run: sleep 30
 
       - uses: azure/webapps-deploy@v3
         with:
