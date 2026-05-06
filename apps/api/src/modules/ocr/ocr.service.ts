@@ -180,18 +180,41 @@ export class OcrService {
       const structured = await this.analyzeWithOpenAI(extractedText, config.prompt);
 
       // Step 3: Validate the result
-      const detectedType = String(structured.tipoDocumento ?? '');
-      const isMatch = detectedType.toLowerCase().includes(config.expectedType.toLowerCase())
-        || config.expectedType.toLowerCase().includes(detectedType.toLowerCase());
+      const detectedType = String(structured.tipoDocumento ?? '').trim();
+      const expected = config.expectedType.trim();
+
+      // Count meaningful extracted fields (everything except tipoDocumento)
+      const dataFields = Object.entries(structured).filter(
+        ([k]) => k !== 'tipoDocumento' && k !== 'tipo_documento',
+      );
+      const populatedFields = dataFields.filter(([, v]) => {
+        if (v == null) return false;
+        if (typeof v === 'string' && v.trim() === '') return false;
+        if (Array.isArray(v) && v.length === 0) return false;
+        if (typeof v === 'object' && v !== null && Object.keys(v).length === 0) return false;
+        return true;
+      });
+      const populationRatio = dataFields.length > 0
+        ? populatedFields.length / dataFields.length
+        : 0;
+
+      const typeMatches =
+        detectedType !== '' &&
+        (detectedType.toLowerCase().includes(expected.toLowerCase()) ||
+          expected.toLowerCase().includes(detectedType.toLowerCase()));
 
       let confidence: 'high' | 'medium' | 'low';
       let valid: boolean;
 
-      if (isMatch && detectedType) {
+      if (typeMatches && populationRatio >= 0.5) {
         confidence = 'high';
         valid = true;
-      } else if (detectedType && detectedType !== 'No identificado') {
-        // OpenAI identified the document as something else
+      } else if (typeMatches && populationRatio >= 0.25) {
+        // Type matches but few fields extracted — accept with caution
+        confidence = 'medium';
+        valid = true;
+      } else if (typeMatches) {
+        // Claims type match but extracted almost nothing — model is hallucinating the type
         confidence = 'low';
         valid = false;
       } else {
@@ -204,6 +227,10 @@ export class OcrService {
       let message: string;
       if (valid && confidence === 'high') {
         message = `Documento verificado correctamente como "${config.expectedType}".`;
+      } else if (valid && confidence === 'medium') {
+        message = `Documento aceptado como "${config.expectedType}" pero con datos limitados. Verificar manualmente.`;
+      } else if (typeMatches && !valid) {
+        message = `El documento se etiquetó como "${config.expectedType}" pero no se encontraron los datos esperados. Probablemente no es del tipo correcto.`;
       } else if (detectedType && !valid) {
         message = `El documento no parece ser "${config.expectedType}". Se detectó: "${detectedType}". Por favor sube el documento correcto.`;
       } else {
@@ -304,8 +331,12 @@ export class OcrService {
             role: 'system',
             content:
               'Eres un asistente de verificación documental inmobiliaria en México para la plataforma BitHauss. ' +
-              'Analizas texto extraído de documentos y devuelves ÚNICAMENTE JSON válido con los campos solicitados. ' +
-              'No incluyas explicaciones, solo el JSON.',
+              'Tu tarea es clasificar y extraer datos de documentos con RIGOR. ' +
+              'REGLA CRÍTICA: en el campo tipoDocumento debes poner EXACTAMENTE lo que ES el documento, no lo que se espera. ' +
+              'Si te preguntan por una "Boleta Predial" pero el documento es una INE, pon tipoDocumento: "INE" — NO "Boleta Predial". ' +
+              'Solo pon el tipo esperado en tipoDocumento si el documento REALMENTE coincide. ' +
+              'Si los campos solicitados no aparecen en el texto, déjalos como null — nunca inventes valores. ' +
+              'Devuelves ÚNICAMENTE JSON válido, sin explicaciones.',
           },
           {
             role: 'user',
