@@ -1,16 +1,7 @@
 import { updateSession } from "@/lib/supabase/middleware";
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
-  const host = request.headers.get("host");
-  if (host === "www.bithauss.com") {
-    const url = new URL(request.url);
-    url.host = "bithauss.com";
-    url.port = "";
-    url.protocol = "https:";
-    return NextResponse.redirect(url, 301);
-  }
-
   return await updateSession(request);
 }
 
