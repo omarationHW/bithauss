@@ -541,12 +541,15 @@ export default function PropertyDetailPage() {
           .select("*")
           .eq("id", prop.owner_id)
           .single(),
+        // Related properties: separate parameterized queries instead of .or() with
+        // string interpolation, which would let crafted city/state values inject
+        // PostgREST filter operators.
         supabase
           .from("properties")
           .select("id, title, city, state, price, currency, operation, bedrooms, bathrooms, area_total, featured_image_url, brc_status")
           .eq("status", "PUBLICADO")
+          .eq("city", prop.city ?? "")
           .neq("id", id)
-          .or(`city.eq.${prop.city},state.eq.${prop.state}`)
           .limit(3),
       ]);
 

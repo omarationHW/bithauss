@@ -7,19 +7,30 @@ import {
 } from '@nestjs/common';
 import { SupabaseConfigService } from '../../config/supabase.config';
 
-export interface CreateProfileDto {
-  id: string;
-  first_name?: string;
-  last_name?: string;
-  phone?: string;
-  avatar_url?: string;
+import {
+  IsString,
+  IsOptional,
+  IsUUID,
+  IsEmail,
+  IsUrl,
+  Length,
+  Matches,
+} from 'class-validator';
+
+export class CreateProfileDto {
+  @IsUUID() id!: string;
+  @IsEmail() email!: string;
+  @IsOptional() @IsString() @Length(0, 100) first_name?: string;
+  @IsOptional() @IsString() @Length(0, 100) last_name?: string;
+  @IsOptional() @IsString() @Matches(/^[+()\d\s-]{6,30}$/) phone?: string;
+  @IsOptional() @IsUrl({ require_tld: false }) avatar_url?: string;
 }
 
-export interface UpdateProfileDto {
-  first_name?: string;
-  last_name?: string;
-  phone?: string;
-  avatar_url?: string;
+export class UpdateProfileDto {
+  @IsOptional() @IsString() @Length(0, 100) first_name?: string;
+  @IsOptional() @IsString() @Length(0, 100) last_name?: string;
+  @IsOptional() @IsString() @Matches(/^[+()\d\s-]{6,30}$/) phone?: string;
+  @IsOptional() @IsUrl({ require_tld: false }) avatar_url?: string;
 }
 
 export interface Profile {
@@ -69,6 +80,7 @@ export class ProfilesService {
       .from('profiles')
       .insert({
         id: dto.id,
+        email: dto.email,
         first_name: dto.first_name ?? null,
         last_name: dto.last_name ?? null,
         phone: dto.phone ?? null,

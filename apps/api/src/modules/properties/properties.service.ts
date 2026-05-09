@@ -11,73 +11,110 @@ import { randomBytes } from 'crypto';
 // DTOs
 // ────────────────────────────────────────────────────────────
 
-export interface CreatePropertyDto {
-  company_id?: string;
-  title: string;
-  description?: string;
-  type: string;
-  operation: string;
-  price: number;
-  currency?: string;
-  accepts_crypto?: boolean;
-  area_total?: number;
-  area_built?: number;
-  bedrooms?: number;
-  bathrooms?: number;
-  parking_spaces?: number;
-  floors?: number;
-  address_line?: string;
-  neighborhood?: string;
-  city: string;
-  state: string;
-  zip_code?: string;
-  country?: string;
-  latitude?: number;
-  longitude?: number;
-  amenities?: unknown[];
-  featured_image_url?: string;
+// ────────────────────────────────────────────────────────────
+// DTOs (class-validator)
+// ────────────────────────────────────────────────────────────
+import {
+  IsString,
+  IsOptional,
+  IsBoolean,
+  IsNumber,
+  IsUUID,
+  IsIn,
+  Length,
+  Min,
+  Max,
+  IsArray,
+  IsUrl,
+} from 'class-validator';
+
+const PROPERTY_TYPES = ['CASA', 'DEPARTAMENTO', 'TERRENO', 'OFICINA', 'LOCAL_COMERCIAL', 'BODEGA', 'OTRO'] as const;
+const PROPERTY_OPERATIONS = ['VENTA', 'RENTA', 'VENTA_RENTA'] as const;
+const PROPERTY_STATUSES = ['BORRADOR', 'PENDIENTE', 'PUBLICADO', 'PAUSADO', 'VENDIDO', 'RENTADO'] as const;
+const PROPERTY_BRC_STATUSES = ['SIN_BRC', 'EN_PROCESO', 'CERTIFICADO', 'RECHAZADO'] as const;
+const CURRENCIES = ['MXN', 'USD'] as const;
+
+export class CreatePropertyDto {
+  @IsOptional() @IsUUID() company_id?: string;
+
+  @IsString() @Length(3, 200) title!: string;
+
+  @IsOptional() @IsString() @Length(0, 5000) description?: string;
+
+  @IsString() @IsIn(PROPERTY_TYPES as unknown as string[]) type!: string;
+
+  @IsString() @IsIn(PROPERTY_OPERATIONS as unknown as string[]) operation!: string;
+
+  @IsNumber() @Min(0) @Max(1_000_000_000_000) price!: number;
+
+  @IsOptional() @IsString() @IsIn(CURRENCIES as unknown as string[]) currency?: string;
+
+  @IsOptional() @IsBoolean() accepts_crypto?: boolean;
+
+  @IsOptional() @IsNumber() @Min(0) area_total?: number;
+  @IsOptional() @IsNumber() @Min(0) area_built?: number;
+  @IsOptional() @IsNumber() @Min(0) @Max(100) bedrooms?: number;
+  @IsOptional() @IsNumber() @Min(0) @Max(100) bathrooms?: number;
+  @IsOptional() @IsNumber() @Min(0) @Max(100) parking_spaces?: number;
+  @IsOptional() @IsNumber() @Min(0) @Max(200) floors?: number;
+
+  @IsOptional() @IsString() @Length(0, 300) address_line?: string;
+  @IsOptional() @IsString() @Length(0, 200) neighborhood?: string;
+
+  @IsString() @Length(1, 100) city!: string;
+  @IsString() @Length(1, 100) state!: string;
+
+  @IsOptional() @IsString() @Length(0, 20) zip_code?: string;
+  @IsOptional() @IsString() @Length(0, 100) country?: string;
+
+  @IsOptional() @IsNumber() @Min(-90) @Max(90) latitude?: number;
+  @IsOptional() @IsNumber() @Min(-180) @Max(180) longitude?: number;
+
+  @IsOptional() @IsArray() amenities?: unknown[];
+
+  @IsOptional() @IsUrl({ require_tld: false }) featured_image_url?: string;
 }
 
-export interface UpdatePropertyDto {
-  company_id?: string;
-  title?: string;
-  description?: string;
-  type?: string;
-  operation?: string;
-  price?: number;
-  currency?: string;
-  accepts_crypto?: boolean;
-  area_total?: number;
-  area_built?: number;
-  bedrooms?: number;
-  bathrooms?: number;
-  parking_spaces?: number;
-  floors?: number;
-  address_line?: string;
-  neighborhood?: string;
-  city?: string;
-  state?: string;
-  zip_code?: string;
-  country?: string;
-  latitude?: number;
-  longitude?: number;
-  amenities?: unknown[];
-  featured_image_url?: string;
+export class UpdatePropertyDto {
+  @IsOptional() @IsUUID() company_id?: string;
+  @IsOptional() @IsString() @Length(3, 200) title?: string;
+  @IsOptional() @IsString() @Length(0, 5000) description?: string;
+  @IsOptional() @IsString() @IsIn(PROPERTY_TYPES as unknown as string[]) type?: string;
+  @IsOptional() @IsString() @IsIn(PROPERTY_OPERATIONS as unknown as string[]) operation?: string;
+  @IsOptional() @IsNumber() @Min(0) @Max(1_000_000_000_000) price?: number;
+  @IsOptional() @IsString() @IsIn(CURRENCIES as unknown as string[]) currency?: string;
+  @IsOptional() @IsBoolean() accepts_crypto?: boolean;
+  @IsOptional() @IsNumber() @Min(0) area_total?: number;
+  @IsOptional() @IsNumber() @Min(0) area_built?: number;
+  @IsOptional() @IsNumber() @Min(0) @Max(100) bedrooms?: number;
+  @IsOptional() @IsNumber() @Min(0) @Max(100) bathrooms?: number;
+  @IsOptional() @IsNumber() @Min(0) @Max(100) parking_spaces?: number;
+  @IsOptional() @IsNumber() @Min(0) @Max(200) floors?: number;
+  @IsOptional() @IsString() @Length(0, 300) address_line?: string;
+  @IsOptional() @IsString() @Length(0, 200) neighborhood?: string;
+  @IsOptional() @IsString() @Length(1, 100) city?: string;
+  @IsOptional() @IsString() @Length(1, 100) state?: string;
+  @IsOptional() @IsString() @Length(0, 20) zip_code?: string;
+  @IsOptional() @IsString() @Length(0, 100) country?: string;
+  @IsOptional() @IsNumber() @Min(-90) @Max(90) latitude?: number;
+  @IsOptional() @IsNumber() @Min(-180) @Max(180) longitude?: number;
+  @IsOptional() @IsArray() amenities?: unknown[];
+  @IsOptional() @IsUrl({ require_tld: false }) featured_image_url?: string;
 }
 
-export interface PropertyFilters {
-  page?: number;
-  limit?: number;
-  search?: string;
-  type?: string;
-  operation?: string;
-  status?: string;
-  city?: string;
-  state?: string;
-  price_min?: number;
-  price_max?: number;
-  bedrooms?: number;
-  brc_status?: string;
+export class PropertyFilters {
+  @IsOptional() @IsNumber() @Min(1) @Max(1000) page?: number;
+  @IsOptional() @IsNumber() @Min(1) @Max(100) limit?: number;
+  @IsOptional() @IsString() @Length(0, 200) search?: string;
+  @IsOptional() @IsString() @IsIn(PROPERTY_TYPES as unknown as string[]) type?: string;
+  @IsOptional() @IsString() @IsIn(PROPERTY_OPERATIONS as unknown as string[]) operation?: string;
+  @IsOptional() @IsString() @IsIn(PROPERTY_STATUSES as unknown as string[]) status?: string;
+  @IsOptional() @IsString() @Length(0, 100) city?: string;
+  @IsOptional() @IsString() @Length(0, 100) state?: string;
+  @IsOptional() @IsNumber() @Min(0) price_min?: number;
+  @IsOptional() @IsNumber() @Min(0) price_max?: number;
+  @IsOptional() @IsNumber() @Min(0) @Max(100) bedrooms?: number;
+  @IsOptional() @IsString() @IsIn(PROPERTY_BRC_STATUSES as unknown as string[]) brc_status?: string;
 }
 
 // ────────────────────────────────────────────────────────────
@@ -204,14 +241,18 @@ export class PropertiesService {
       .from('properties')
       .select('*, property_media(*)', { count: 'exact' });
 
-    // Full-text search via the search_vector column
+    // Full-text search via the search_vector column.
+    // Use websearch_to_tsquery (sanitization-aware) and additionally strip
+    // characters that could be misinterpreted by Postgres tsquery operators.
     if (filters.search) {
-      const tsQuery = filters.search
+      const sanitized = filters.search
+        .normalize('NFKC')
+        .replace(/[^\p{L}\p{N}\s'-]+/gu, ' ')
         .trim()
-        .split(/\s+/)
-        .map((w) => `'${w}'`)
-        .join(' & ');
-      query = query.textSearch('search_vector', tsQuery);
+        .slice(0, 200);
+      if (sanitized) {
+        query = query.textSearch('search_vector', sanitized, { type: 'websearch' });
+      }
     }
 
     if (filters.type) query = query.eq('type', filters.type);

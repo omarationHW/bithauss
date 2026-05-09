@@ -1,5 +1,4 @@
 import { Controller, Get, Put, Post, Delete, Body } from '@nestjs/common';
-import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import {
   ProfilesService,
@@ -34,14 +33,20 @@ export class ProfilesController {
 
   /**
    * POST /api/v1/profiles
-   * Creates a new profile. Marked @Public() because the user
-   * has just signed up and may not have a profile yet.
-   * The caller must provide the user's ID in the body.
+   * Creates the authenticated user's profile. Forces id = caller's id
+   * to prevent pre-creating profiles for other UUIDs.
    */
-  @Public()
   @Post()
-  async createProfile(@Body() dto: CreateProfileDto) {
-    return this.profilesService.createProfile(dto);
+  async createProfile(
+    @CurrentUser('id') userId: string,
+    @CurrentUser('email') userEmail: string,
+    @Body() dto: CreateProfileDto,
+  ) {
+    return this.profilesService.createProfile({
+      ...dto,
+      id: userId,
+      email: dto.email ?? userEmail,
+    });
   }
 
   /**
