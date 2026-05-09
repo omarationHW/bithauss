@@ -391,22 +391,71 @@ function useDashboardData(userId: string | undefined, role: string) {
     setLoadingStats(true);
 
     if (role === "ADMIN") {
-      // Admin sees platform-wide stats
+      // Admin sees platform-wide stats + leads activity (same scope as the leads page)
       (async () => {
         const { count: totalUsers } = await supabase.from("profiles").select("id", { count: "exact", head: true });
         const { count: totalProps } = await supabase.from("properties").select("id", { count: "exact", head: true }).eq("status", "PUBLICADO");
         const { count: activeExps } = await supabase.from("brc_expedientes").select("id", { count: "exact", head: true }).not("status", "in", "(CERTIFICADO,RECHAZADO)");
         const { count: pendingNotaries } = await supabase.from("notary_profiles").select("id", { count: "exact", head: true }).eq("is_verified", false);
 
+        // Recent leads (no owner filter — admin RLS reads platform-wide if allowed,
+        // otherwise this returns the admin's own leads, matching /dashboard/leads)
+        const { data: leadsData } = await supabase
+          .from("leads")
+          .select("id, name, status, created_at, property_id, properties(title)")
+          .order("created_at", { ascending: false })
+          .limit(5);
+
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+        sixMonthsAgo.setDate(1);
+        sixMonthsAgo.setHours(0, 0, 0, 0);
+
+        const { data: leadsForChart } = await supabase
+          .from("leads")
+          .select("created_at")
+          .gte("created_at", sixMonthsAgo.toISOString())
+          .order("created_at", { ascending: true });
+
         if (cancelled) return;
+
+        const fetchedLeads: RecentLead[] = (leadsData ?? []).map((l) => ({
+          id: l.id,
+          nombre: l.name ?? "Sin nombre",
+          propiedad:
+            (l.properties as unknown as { title: string } | null)?.title ?? "Propiedad",
+          fecha: new Date(l.created_at).toLocaleDateString("es-MX", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          }),
+          estado: estadoMap[l.status] ?? l.status,
+        }));
+
+        const monthMap = new Map<string, number>();
+        const now = new Date();
+        for (let i = 5; i >= 0; i--) {
+          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          monthMap.set(`${d.getFullYear()}-${d.getMonth()}`, 0);
+        }
+        for (const row of leadsForChart ?? []) {
+          const d = new Date(row.created_at);
+          const key = `${d.getFullYear()}-${d.getMonth()}`;
+          if (monthMap.has(key)) monthMap.set(key, (monthMap.get(key) ?? 0) + 1);
+        }
+        const chart = Array.from(monthMap.entries()).map(([key, value]) => {
+          const monthIdx = parseInt(key.split("-")[1] ?? "0", 10);
+          return { month: MONTH_LABELS[monthIdx] ?? "N/A", value };
+        });
+
         setKpis([
           { label: "Total Usuarios", value: String(totalUsers ?? 0), change: "plataforma", icon: Users },
           { label: "Propiedades Publicadas", value: String(totalProps ?? 0), change: "activas", icon: Building2 },
           { label: "Expedientes Activos", value: String(activeExps ?? 0), change: "en proceso", icon: ShieldCheck },
           { label: "Notarios Pendientes", value: String(pendingNotaries ?? 0), change: "por verificar", icon: FileText },
         ]);
-        setChartData([]);
-        setRecentLeads([]);
+        setChartData(chart);
+        setRecentLeads(fetchedLeads);
         setLoadingStats(false);
       })();
     } else if (isBrokerRole(role)) {
