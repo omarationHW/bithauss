@@ -60,6 +60,7 @@ const allNavItems = [
   { label: "Verificar Notarios", icon: ShieldCheck, href: "/dashboard/admin/notarios", roles: ["ADMIN", "OPERADOR_BRC"] },
   { label: "Asignar Expedientes", icon: FileText, href: "/dashboard/admin/asignaciones", roles: ["ADMIN", "OPERADOR_BRC"] },
   { label: "Prueba OCR", icon: ScanSearch, href: "/dashboard/admin/ocr-test", roles: ["ADMIN"] },
+  { label: "Prueba OCR Escritura", icon: ScanSearch, href: "/dashboard/admin/ocr-escritura", roles: ["ADMIN"] },
   { label: "Perfil", icon: User, href: "/dashboard/perfil", roles: ["ALL"] },
   { label: "Configuración", icon: Settings, href: "/dashboard/configuracion", roles: ["ALL"] },
 ];

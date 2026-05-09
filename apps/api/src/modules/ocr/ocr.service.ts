@@ -10,7 +10,26 @@ const DOCUMENT_PROMPTS: Record<string, { expectedType: string; prompt: string }>
     expectedType: 'Escritura de Propiedad',
     prompt:
       'Verifica si este texto corresponde a una ESCRITURA PÚBLICA DE PROPIEDAD de un inmueble en México. ' +
-      'Extrae en JSON: tipoDocumento (si es escritura pon "Escritura de Propiedad", si no indica qué es), numeroEscritura, volumen, nombreNotario, numeroNotaria, nombrePropietario, direccionInmueble, fechaEscritura, ciudad, estado.',
+      'Extrae en JSON con TODOS estos campos (usa null si no aparece): ' +
+      'tipoDocumento (si es escritura pon "Escritura de Propiedad", si no indica qué es), ' +
+      'numeroEscritura, volumen, fechaEscritura, ' +
+      'nombreNotario, numeroNotaria, ciudadNotaria (ciudad donde el notario tiene su sede), ' +
+      'nombreComprador (nombre completo del adquirente principal), curpComprador, rfcComprador, ' +
+      'estadoCivilComprador (responde exactamente "soltero" o "casado" o null), ' +
+      'regimenMatrimonial (responde exactamente "sociedad conyugal" o "separacion de bienes" o null), ' +
+      'copropietarios (array de strings con los nombres de los demás compradores si hay varios, si solo hay uno deja []), ' +
+      'nombreVendedor, ' +
+      'direccionInmueble (string ÚNICO con calle, número, colonia, código postal — NUNCA un objeto), ' +
+      'ciudadInmueble (ciudad/municipio/delegación donde se ubica físicamente el inmueble — string), ' +
+      'estadoInmueble (entidad federativa, ej: "Ciudad de México", "Jalisco"), ' +
+      'tipoInmueble ("casa" | "departamento" | "terreno" | "local" | "otro"), ' +
+      'folioReal (referenciado en la escritura), cuentaPredial (referenciada), cuentaAgua (referenciada), ' +
+      'precioVenta (número en pesos, sin símbolos), valorCatastralEnEscritura (número si lo menciona, si no null), ' +
+      'metrosCuadradosTerreno (número, m² del terreno asociado a la unidad — para departamentos suele ser indiviso o nulo), ' +
+      'metrosCuadradosConstruccion (número, m² construidos de la unidad), ' +
+      'pagoAPlazos (boolean: true SOLO si menciona explícitamente pago a plazos o crédito hipotecario sin liquidar), ' +
+      'reservaDominio (boolean: true SOLO si menciona explícitamente reserva de dominio), ' +
+      'escrituraAntecedente (número o referencia de la escritura previa de origen mencionada en antecedentes, o null).',
   },
   folio_real: {
     expectedType: 'Folio Real',
@@ -28,7 +47,11 @@ const DOCUMENT_PROMPTS: Record<string, { expectedType: string; prompt: string }>
     expectedType: 'Boleta Predial',
     prompt:
       'Verifica si este texto corresponde a una BOLETA DE PAGO DE IMPUESTO PREDIAL de un inmueble en México. ' +
-      'Extrae en JSON: tipoDocumento (si es boleta predial pon "Boleta Predial", si no indica qué es), cuentaPredial, nombrePropietario, direccionInmueble, superficieTerreno, superficieConstruccion, valorCatastral, montoPagado, periodo, fechaPago.',
+      'Extrae en JSON: tipoDocumento (si es boleta predial pon "Boleta Predial", si no indica qué es), ' +
+      'cuentaPredial, nombrePropietario, direccionInmueble, ciudadInmueble, ' +
+      'superficieTerreno (m² como número), superficieConstruccion (m² como número), ' +
+      'valorCatastral (número), valorComercial (número, si se menciona, si no null), ' +
+      'montoPagado (número), periodo, fechaEmision (formato YYYY-MM-DD si es posible), fechaPago.',
   },
   ultima_boleta_agua: {
     expectedType: 'Boleta de Agua',
@@ -58,7 +81,14 @@ const DOCUMENT_PROMPTS: Record<string, { expectedType: string; prompt: string }>
     expectedType: 'Identificación Oficial',
     prompt:
       'Verifica si este texto corresponde a una IDENTIFICACIÓN OFICIAL de México (INE, IFE o Pasaporte). ' +
-      'Extrae en JSON: tipoDocumento (si es identificación pon "Identificación Oficial", si no indica qué es), nombreCompleto, curp, claveElector, seccion, vigencia, fechaNacimiento, domicilio, numeroDocumento.',
+      'Extrae en JSON: ' +
+      'tipoDocumento (si es identificación pon "Identificación Oficial", si no indica qué es), ' +
+      'nombreCompleto, ' +
+      'curp (18 caracteres alfanuméricos — búscalo aunque no esté etiquetado como "CURP"), ' +
+      'rfc (13 caracteres alfanuméricos para personas físicas — búscalo aunque no esté etiquetado), ' +
+      'claveElector, seccion, ' +
+      'vigencia (puede ser "2024", "2014 - 2024", "vigencia hasta 2030", o una fecha completa — extrae el rango o fecha tal como aparece), ' +
+      'fechaNacimiento, domicilio (string ÚNICO completo, NUNCA un objeto), numeroDocumento.',
   },
   acta_matrimonio: {
     expectedType: 'Acta de Matrimonio',
@@ -376,4 +406,577 @@ export class OcrService {
       return { tipoDocumento: 'No identificado', textoExtraido: text.substring(0, 500) };
     }
   }
+
+  /* ---- Cross-check: Escritura de Propiedad against supporting docs ---- */
+  crossCheckEscritura(payload: EscrituraCrossCheckInput): EscrituraCrossCheckResult {
+    const checks: EscrituraCheck[] = [];
+    const e = payload.escritura ?? {};
+    const ine = payload.identificacion ?? null;
+    const acta = payload.actaMatrimonio ?? null;
+    const folio = payload.folioReal ?? null;
+    const libertad = payload.certificadoLibertadGravamen ?? null;
+    const predial = payload.boletaPredial ?? null;
+    const agua = payload.boletaAgua ?? null;
+    const antecedente = payload.escrituraAntecedente ?? null;
+
+    const todayMs = Date.now();
+    const threeMonthsMs = 1000 * 60 * 60 * 24 * 92;
+
+    /* 1. Ciudad de la notaría = ciudad del inmueble */
+    push(checks, 'ciudad_notaria_inmueble', 'La ciudad de la Notaría coincide con la del inmueble',
+      e.ciudadNotaria && e.ciudadInmueble
+        ? citiesMatch(e.ciudadNotaria, e.ciudadInmueble)
+          ? pass(`"${coerceText(e.ciudadNotaria)}" ≈ "${coerceText(e.ciudadInmueble)}" (misma ciudad).`)
+          : fail(`Notaría: "${coerceText(e.ciudadNotaria)}" ≠ Inmueble: "${coerceText(e.ciudadInmueble)}".`)
+        : skip('La escritura no especifica ambas ciudades.'),
+    );
+
+    /* 2. Nombre del comprador en escritura = INE/Pasaporte */
+    push(checks, 'nombre_comprador_ine', 'El nombre del propietario coincide con la identificación oficial',
+      ine && e.nombreComprador && ine.nombreCompleto
+        ? namesMatch(e.nombreComprador, ine.nombreCompleto)
+          ? pass(`"${e.nombreComprador}" coincide con la identificación.`)
+          : fail(`Escritura: "${e.nombreComprador}" ≠ ID: "${ine.nombreCompleto}".`)
+        : skip('Falta identificación oficial o nombre del propietario.'),
+    );
+
+    /* 3. Si hay copropietarios, deben proveerse identificaciones y actas */
+    push(checks, 'copropietarios_documentos', 'Identificaciones y actas de todos los copropietarios',
+      Array.isArray(e.copropietarios) && e.copropietarios.length > 0
+        ? warn(`Hay ${e.copropietarios.length} copropietario(s) adicional(es): ${e.copropietarios.join(', ')}. Verifica que cada uno tenga su identificación y acta de matrimonio adjuntas.`)
+        : Array.isArray(e.copropietarios)
+          ? pass('No hay copropietarios adicionales.')
+          : skip('La escritura no especifica si hay copropietarios.'),
+    );
+
+    /* 4. CURP/RFC consistente entre docs */
+    push(checks, 'curp_rfc_consistente', 'CURP / RFC del propietario consistente entre documentos',
+      checkCurpRfc(e, ine),
+    );
+
+    /* 5. Estado civil declarado en la escritura */
+    push(checks, 'estado_civil_declarado', 'La escritura declara el estado civil del propietario',
+      e.estadoCivilComprador
+        ? e.estadoCivilComprador === 'casado'
+          ? pass(`Casado bajo régimen de "${e.regimenMatrimonial ?? 'no especificado'}".`)
+          : pass(`Estado civil: "${e.estadoCivilComprador}".`)
+        : skip('La escritura no menciona estado civil del propietario.'),
+    );
+
+    /* 6. Si está casado: nombre del propietario aparece en el acta de matrimonio */
+    push(checks, 'nombre_comprador_acta', 'El nombre del propietario coincide con el acta de matrimonio',
+      e.estadoCivilComprador === 'casado'
+        ? acta && e.nombreComprador
+          ? namesMatch(e.nombreComprador, acta.contrayente1) || namesMatch(e.nombreComprador, acta.contrayente2)
+            ? pass(`"${e.nombreComprador}" aparece como contrayente en el acta.`)
+            : fail(`"${e.nombreComprador}" no coincide con los contrayentes (${acta.contrayente1} / ${acta.contrayente2}).`)
+          : skip('Falta acta de matrimonio.')
+        : skip('No aplica (propietario no casado).'),
+    );
+
+    /* 7. Folio Real consistente entre escritura, RPP y libertad de gravamen */
+    push(checks, 'folio_real_consistente', 'El Folio Real es el mismo en escritura, RPP y libertad de gravamen',
+      checkFolioReal(e, folio, libertad),
+    );
+
+    /* 8. Cuenta predial en escritura = boleta predial */
+    push(checks, 'cuenta_predial_consistente', 'La cuenta predial coincide entre escritura y boleta predial',
+      e.cuentaPredial && predial?.cuentaPredial
+        ? normalizeStr(e.cuentaPredial) === normalizeStr(predial.cuentaPredial)
+          ? pass(`Cuenta ${e.cuentaPredial}.`)
+          : fail(`Escritura: "${e.cuentaPredial}" ≠ Boleta: "${predial.cuentaPredial}".`)
+        : skip('Falta cuenta predial en escritura o boleta.'),
+    );
+
+    /* 9. Domicilio del inmueble = boleta predial */
+    push(checks, 'domicilio_predial', 'Domicilio del inmueble coincide con la boleta predial',
+      e.direccionInmueble && predial?.direccionInmueble
+        ? addressesMatch(e.direccionInmueble, predial.direccionInmueble)
+          ? pass(`Direcciones coinciden.`)
+          : fail(`Escritura: "${coerceText(e.direccionInmueble)}" ≠ Predial: "${coerceText(predial.direccionInmueble)}".`)
+        : skip('Falta domicilio en escritura o boleta predial.'),
+    );
+
+    /* 10. Precio > valor catastral y comercial */
+    push(checks, 'precio_mayor_valor_catastral', 'El precio de venta es mayor a los valores catastrales y comerciales',
+      checkPrecioVsValores(e, predial),
+    );
+
+    /* 11. Cuenta agua en escritura = boleta agua */
+    push(checks, 'cuenta_agua_consistente', 'El número de cuenta de agua coincide entre escritura y boleta',
+      e.cuentaAgua && agua?.numeroCuenta
+        ? normalizeStr(e.cuentaAgua) === normalizeStr(agua.numeroCuenta)
+          ? pass(`Cuenta ${e.cuentaAgua}.`)
+          : fail(`Escritura: "${e.cuentaAgua}" ≠ Boleta: "${agua.numeroCuenta}".`)
+        : skip('Falta cuenta de agua en escritura o boleta.'),
+    );
+
+    /* 12. Domicilio del inmueble = boleta agua */
+    push(checks, 'domicilio_agua', 'Domicilio del inmueble coincide con la boleta de agua',
+      e.direccionInmueble && agua?.direccion
+        ? addressesMatch(e.direccionInmueble, agua.direccion)
+          ? pass(`Direcciones coinciden.`)
+          : fail(`Escritura: "${coerceText(e.direccionInmueble)}" ≠ Agua: "${coerceText(agua.direccion)}".`)
+        : skip('Falta domicilio en escritura o boleta de agua.'),
+    );
+
+    /* 13. m² terreno y construcción consistentes */
+    push(checks, 'metros_cuadrados_consistentes', 'Los metros cuadrados de terreno y construcción coinciden con la boleta predial',
+      checkMetrosCuadrados(e, predial),
+    );
+
+    /* 14. No tiene "Pago a Plazos" ni "Reserva de Dominio" */
+    push(checks, 'sin_gravamenes_compraventa', 'La escritura no tiene pago a plazos ni reserva de dominio',
+      e.pagoAPlazos === true
+        ? fail('La escritura indica pago a plazos.')
+        : e.reservaDominio === true
+          ? fail('La escritura indica reserva de dominio.')
+          : e.pagoAPlazos === false && e.reservaDominio === false
+            ? pass('Sin pago a plazos ni reserva de dominio.')
+            : skip('No fue posible determinar si tiene pago a plazos o reserva de dominio.'),
+    );
+
+    /* 15. Escritura antecedente: vendedor, dirección y m² coinciden */
+    push(checks, 'escritura_antecedente_consistente', 'Datos de la escritura antecedente coinciden',
+      checkAntecedente(e, antecedente),
+    );
+
+    /* 16. Boleta predial no mayor a 3 meses */
+    push(checks, 'antiguedad_boleta_predial', 'La boleta predial no tiene más de 3 meses',
+      checkBoletaAntiguedad(predial?.fechaEmision ?? predial?.fechaPago ?? predial?.periodo, todayMs, threeMonthsMs, 'predial'),
+    );
+
+    /* 17. Boleta agua no mayor a 3 meses */
+    push(checks, 'antiguedad_boleta_agua', 'La boleta de agua no tiene más de 3 meses',
+      checkBoletaAntiguedad(agua?.fechaPago ?? agua?.periodo, todayMs, threeMonthsMs, 'agua'),
+    );
+
+    /* 18. INE vigente */
+    push(checks, 'ine_vigente', 'La identificación oficial está vigente',
+      checkIneVigente(ine, todayMs),
+    );
+
+    const summary = checks.reduce(
+      (acc, c) => {
+        acc[c.status]++;
+        return acc;
+      },
+      { pass: 0, fail: 0, warn: 0, skip: 0 },
+    );
+
+    return { checks, summary };
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Cross-check helpers                                                */
+/* ------------------------------------------------------------------ */
+
+interface EscrituraData {
+  ciudadNotaria?: string | null;
+  ciudadInmueble?: string | null;
+  nombreComprador?: string | null;
+  curpComprador?: string | null;
+  rfcComprador?: string | null;
+  estadoCivilComprador?: string | null;
+  regimenMatrimonial?: string | null;
+  copropietarios?: string[] | null;
+  nombreVendedor?: string | null;
+  direccionInmueble?: string | Record<string, unknown> | null;
+  tipoInmueble?: string | null;
+  folioReal?: string | null;
+  cuentaPredial?: string | null;
+  cuentaAgua?: string | null;
+  precioVenta?: number | null;
+  valorCatastralEnEscritura?: number | null;
+  metrosCuadradosTerreno?: number | null;
+  metrosCuadradosConstruccion?: number | null;
+  pagoAPlazos?: boolean | null;
+  reservaDominio?: boolean | null;
+  escrituraAntecedente?: string | null;
+}
+
+interface IneData {
+  nombreCompleto?: string | null;
+  curp?: string | null;
+  rfc?: string | null;
+  vigencia?: string | null;
+}
+
+interface ActaData {
+  contrayente1?: string | null;
+  contrayente2?: string | null;
+  regimenMatrimonial?: string | null;
+}
+
+interface FolioRealData {
+  folioReal?: string | null;
+}
+
+interface BoletaPredialData {
+  cuentaPredial?: string | null;
+  direccionInmueble?: string | null;
+  superficieTerreno?: number | null;
+  superficieConstruccion?: number | null;
+  valorCatastral?: number | null;
+  valorComercial?: number | null;
+  fechaEmision?: string | null;
+  fechaPago?: string | null;
+  periodo?: string | null;
+}
+
+interface BoletaAguaData {
+  numeroCuenta?: string | null;
+  direccion?: string | null;
+  fechaPago?: string | null;
+  periodo?: string | null;
+}
+
+interface AntecedenteData {
+  nombreVendedor?: string | null;
+  direccionInmueble?: string | null;
+  metrosCuadradosTerreno?: number | null;
+  metrosCuadradosConstruccion?: number | null;
+}
+
+export interface EscrituraCrossCheckInput {
+  escritura: EscrituraData;
+  identificacion?: IneData | null;
+  actaMatrimonio?: ActaData | null;
+  folioReal?: FolioRealData | null;
+  certificadoLibertadGravamen?: FolioRealData | null;
+  boletaPredial?: BoletaPredialData | null;
+  boletaAgua?: BoletaAguaData | null;
+  escrituraAntecedente?: AntecedenteData | null;
+}
+
+export interface EscrituraCheck {
+  rule: string;
+  label: string;
+  status: 'pass' | 'fail' | 'warn' | 'skip';
+  message: string;
+}
+
+export interface EscrituraCrossCheckResult {
+  checks: EscrituraCheck[];
+  summary: { pass: number; fail: number; warn: number; skip: number };
+}
+
+type CheckOutcome = { status: 'pass' | 'fail' | 'warn' | 'skip'; message: string };
+
+function pass(message: string): CheckOutcome { return { status: 'pass', message }; }
+function fail(message: string): CheckOutcome { return { status: 'fail', message }; }
+function warn(message: string): CheckOutcome { return { status: 'warn', message }; }
+function skip(message: string): CheckOutcome { return { status: 'skip', message }; }
+
+function push(arr: EscrituraCheck[], rule: string, label: string, outcome: CheckOutcome) {
+  arr.push({ rule, label, ...outcome });
+}
+
+function coerceText(v: unknown): string {
+  if (v == null) return '';
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  if (Array.isArray(v)) return v.map(coerceText).filter(Boolean).join(' ');
+  if (typeof v === 'object') {
+    return Object.values(v as Record<string, unknown>)
+      .map(coerceText)
+      .filter(Boolean)
+      .join(' ');
+  }
+  return '';
+}
+
+function normalizeStr(s?: unknown): string {
+  return coerceText(s)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/* CDMX y sus 16 alcaldías comparten ciudad. Si ambos lados caen en este set, consideramos misma ciudad. */
+const CDMX_SYNONYMS = new Set([
+  'cdmx',
+  'ciudad de mexico',
+  'distrito federal',
+  'df',
+  'mexico df',
+  'mexico distrito federal',
+  // alcaldías / delegaciones
+  'alvaro obregon',
+  'azcapotzalco',
+  'benito juarez',
+  'coyoacan',
+  'cuajimalpa',
+  'cuajimalpa de morelos',
+  'cuauhtemoc',
+  'gustavo a madero',
+  'iztacalco',
+  'iztapalapa',
+  'la magdalena contreras',
+  'magdalena contreras',
+  'miguel hidalgo',
+  'milpa alta',
+  'tlahuac',
+  'tlalpan',
+  'venustiano carranza',
+  'xochimilco',
+  // prefijos comunes
+  'delegacion benito juarez',
+  'delegacion coyoacan',
+  'delegacion cuauhtemoc',
+  'delegacion miguel hidalgo',
+  'delegacion alvaro obregon',
+]);
+
+function citiesMatch(a?: unknown, b?: unknown): boolean {
+  const na = normalizeStr(a).replace(/^delegacion\s+/, '').replace(/^alcaldia\s+/, '').trim();
+  const nb = normalizeStr(b).replace(/^delegacion\s+/, '').replace(/^alcaldia\s+/, '').trim();
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  // both inside CDMX synonyms set → same city
+  const aIsCdmx = CDMX_SYNONYMS.has(na) || na.includes('mexico') || na.includes('distrito federal');
+  const bIsCdmx = CDMX_SYNONYMS.has(nb) || nb.includes('mexico') || nb.includes('distrito federal');
+  if (aIsCdmx && bIsCdmx) return true;
+  // partial inclusion (e.g., "guadalajara, jalisco" vs "guadalajara")
+  return na.includes(nb) || nb.includes(na);
+}
+
+function namesMatch(a?: unknown, b?: unknown): boolean {
+  const na = normalizeStr(a);
+  const nb = normalizeStr(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const wa = na.split(' ').filter(Boolean);
+  const wb = nb.split(' ').filter(Boolean);
+  if (wa.length === 0 || wb.length === 0) return false;
+  return wa.every((w) => wb.includes(w)) || wb.every((w) => wa.includes(w));
+}
+
+function addressesMatch(a?: unknown, b?: unknown): boolean {
+  const na = normalizeStr(a);
+  const nb = normalizeStr(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const wa = new Set(na.split(' ').filter((w) => w.length > 1));
+  const wb = new Set(nb.split(' ').filter((w) => w.length > 1));
+  if (wa.size === 0 || wb.size === 0) return false;
+  let intersection = 0;
+  for (const w of wa) if (wb.has(w)) intersection++;
+  return intersection / Math.max(wa.size, wb.size) >= 0.4;
+}
+
+function checkCurpRfc(e: EscrituraData, ine: IneData | null): CheckOutcome {
+  if (!ine) return skip('Falta identificación oficial.');
+  const curpE = normalizeStr(e.curpComprador);
+  const curpI = normalizeStr(ine.curp);
+  const rfcE = normalizeStr(e.rfcComprador);
+  const rfcI = normalizeStr(ine.rfc);
+
+  const curpAvailable = curpE && curpI;
+  const rfcAvailable = rfcE && rfcI;
+
+  if (!curpAvailable && !rfcAvailable) return skip('No se encontró CURP ni RFC en ambos documentos.');
+
+  const curpMatch = curpAvailable ? curpE === curpI : null;
+  const rfcMatch = rfcAvailable ? rfcE === rfcI : null;
+
+  if ((curpMatch === false) || (rfcMatch === false)) {
+    const issues: string[] = [];
+    if (curpMatch === false) issues.push(`CURP escritura "${e.curpComprador}" ≠ INE "${ine.curp}"`);
+    if (rfcMatch === false) issues.push(`RFC escritura "${e.rfcComprador}" ≠ INE "${ine.rfc}"`);
+    return fail(issues.join(' | '));
+  }
+  return pass(`Coinciden: ${curpAvailable ? 'CURP' : ''}${curpAvailable && rfcAvailable ? ' y ' : ''}${rfcAvailable ? 'RFC' : ''}.`);
+}
+
+function checkFolioReal(
+  e: EscrituraData,
+  folio: FolioRealData | null,
+  libertad: FolioRealData | null,
+): CheckOutcome {
+  const values = [e.folioReal, folio?.folioReal, libertad?.folioReal]
+    .filter((v): v is string => Boolean(v))
+    .map(normalizeStr);
+
+  if (values.length < 2) return skip('Se necesita el folio real en al menos 2 documentos para comparar.');
+
+  const allMatch = values.every((v) => v === values[0]);
+  if (allMatch) return pass(`Folio Real consistente: "${e.folioReal ?? folio?.folioReal ?? libertad?.folioReal}".`);
+
+  const labels: string[] = [];
+  if (e.folioReal) labels.push(`Escritura: "${e.folioReal}"`);
+  if (folio?.folioReal) labels.push(`RPP: "${folio.folioReal}"`);
+  if (libertad?.folioReal) labels.push(`Libertad de Gravamen: "${libertad.folioReal}"`);
+  return fail(labels.join(' | '));
+}
+
+function checkPrecioVsValores(e: EscrituraData, predial: BoletaPredialData | null): CheckOutcome {
+  const precio = e.precioVenta;
+  if (typeof precio !== 'number' || precio <= 0) return skip('No se encontró precio de venta en la escritura.');
+
+  const valores: { label: string; valor: number }[] = [];
+  if (predial?.valorCatastral && predial.valorCatastral > 0) valores.push({ label: 'catastral (boleta predial)', valor: predial.valorCatastral });
+  if (predial?.valorComercial && predial.valorComercial > 0) valores.push({ label: 'comercial (boleta predial)', valor: predial.valorComercial });
+  if (e.valorCatastralEnEscritura && e.valorCatastralEnEscritura > 0) valores.push({ label: 'catastral (escritura)', valor: e.valorCatastralEnEscritura });
+
+  if (valores.length === 0) return skip('No se encontraron valores catastrales o comerciales para comparar.');
+
+  const failures = valores.filter((v) => precio <= v.valor);
+  if (failures.length > 0) {
+    return fail(`Precio $${precio.toLocaleString()} no es mayor a: ${failures.map((f) => `${f.label} $${f.valor.toLocaleString()}`).join(', ')}.`);
+  }
+  return pass(`Precio $${precio.toLocaleString()} es mayor a todos los valores comparados.`);
+}
+
+function checkMetrosCuadrados(e: EscrituraData, predial: BoletaPredialData | null): CheckOutcome {
+  if (!predial) return skip('Falta boleta predial.');
+  const issues: string[] = [];
+  const passes: string[] = [];
+  const skipReasons: string[] = [];
+  const isApartment = normalizeStr(e.tipoInmueble) === 'departamento';
+
+  const compare = (a?: number | null, b?: number | null, label?: string) => {
+    if (typeof a !== 'number' || typeof b !== 'number') return;
+    const tolerance = Math.max(1, a * 0.05); // 5% o 1 m² mínimo (más laxo para errores de OCR)
+    if (Math.abs(a - b) <= tolerance) passes.push(`${label}: ${a} m² ≈ ${b} m²`);
+    else issues.push(`${label}: escritura ${a} m² ≠ predial ${b} m²`);
+  };
+
+  // m² construcción: SIEMPRE comparable (es la unidad)
+  compare(e.metrosCuadradosConstruccion, predial.superficieConstruccion, 'Construcción');
+
+  if (isApartment) {
+    // Para departamentos, el terreno de la escritura suele ser del edificio entero
+    // o el indiviso. El de la boleta es el del condominio. No tiene sentido comparar.
+    skipReasons.push('Departamento: m² de terreno no se comparan (escritura suele tener el del edificio entero).');
+  } else {
+    compare(e.metrosCuadradosTerreno, predial.superficieTerreno, 'Terreno');
+  }
+
+  if (passes.length === 0 && issues.length === 0 && skipReasons.length === 0) {
+    return skip('No se encontraron metros cuadrados para comparar.');
+  }
+  if (issues.length > 0) return fail(issues.join(' | '));
+  const msg = [...passes, ...skipReasons].join(' | ');
+  return pass(msg);
+}
+
+function checkAntecedente(e: EscrituraData, ant: AntecedenteData | null): CheckOutcome {
+  if (!e.escrituraAntecedente) return skip('La escritura no menciona escritura antecedente.');
+  if (!ant) return warn(`La escritura referencia la antecedente "${e.escrituraAntecedente}". Súbela para validarla.`);
+
+  const issues: string[] = [];
+  const okSet: string[] = [];
+  if (e.nombreVendedor && ant.nombreVendedor) {
+    if (namesMatch(e.nombreVendedor, ant.nombreVendedor)) okSet.push('vendedor');
+    else issues.push(`Vendedor: "${e.nombreVendedor}" ≠ antecedente "${ant.nombreVendedor}"`);
+  }
+  if (e.direccionInmueble && ant.direccionInmueble) {
+    if (addressesMatch(e.direccionInmueble, ant.direccionInmueble)) okSet.push('dirección');
+    else issues.push(`Dirección: "${e.direccionInmueble}" ≠ "${ant.direccionInmueble}"`);
+  }
+  if (typeof e.metrosCuadradosTerreno === 'number' && typeof ant.metrosCuadradosTerreno === 'number') {
+    if (Math.abs(e.metrosCuadradosTerreno - ant.metrosCuadradosTerreno) <= 0.5) okSet.push('m² terreno');
+    else issues.push(`m² terreno: ${e.metrosCuadradosTerreno} ≠ ${ant.metrosCuadradosTerreno}`);
+  }
+  if (typeof e.metrosCuadradosConstruccion === 'number' && typeof ant.metrosCuadradosConstruccion === 'number') {
+    if (Math.abs(e.metrosCuadradosConstruccion - ant.metrosCuadradosConstruccion) <= 0.5) okSet.push('m² construcción');
+    else issues.push(`m² construcción: ${e.metrosCuadradosConstruccion} ≠ ${ant.metrosCuadradosConstruccion}`);
+  }
+  if (issues.length > 0) return fail(issues.join(' | '));
+  if (okSet.length === 0) return skip('No hay campos comparables entre la escritura y la antecedente.');
+  return pass(`Coinciden: ${okSet.join(', ')}.`);
+}
+
+function parseFlexibleDate(value?: string | null): Date | null {
+  if (!value) return null;
+  const v = value.trim();
+  // ISO yyyy-mm-dd
+  const iso = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (iso) {
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  // dd/mm/yyyy or dd-mm-yyyy
+  const num = v.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})/);
+  if (num && num[1] && num[2] && num[3]) {
+    const day = Number(num[1]);
+    const month = Number(num[2]);
+    const yearRaw = num[3];
+    const year = yearRaw.length === 2 ? 2000 + Number(yearRaw) : Number(yearRaw);
+    const d = new Date(year, month - 1, day);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  // dd-MMM-yyyy spanish: 18-SEP-2024
+  const months: Record<string, number> = { ENE: 0, FEB: 1, MAR: 2, ABR: 3, MAY: 4, JUN: 5, JUL: 6, AGO: 7, SEP: 8, OCT: 9, NOV: 10, DIC: 11 };
+  const sp = v.match(/^(\d{1,2})[-/]([A-Za-zÁÉÍÓÚáéíóú]+)[-/](\d{2,4})/);
+  if (sp && sp[1] && sp[2] && sp[3]) {
+    const month = months[sp[2].toUpperCase().substring(0, 3)];
+    if (month != null) {
+      const yearRaw = sp[3];
+      const year = yearRaw.length === 2 ? 2000 + Number(yearRaw) : Number(yearRaw);
+      const d = new Date(year, month, Number(sp[1]));
+      return isNaN(d.getTime()) ? null : d;
+    }
+  }
+  // mm/yyyy or m/yyyy (period like "4/2024") — interpret as last day of that month
+  const mY = v.match(/^(\d{1,2})\/(\d{4})$/);
+  if (mY && mY[1] && mY[2]) {
+    const d = new Date(Number(mY[2]), Number(mY[1]), 0); // last day of month
+    return isNaN(d.getTime()) ? null : d;
+  }
+  // Year range like "2014 - 2024" or "2014-2024" → take last year as Dec 31
+  const range = v.match(/(\d{4})\s*[-–—]\s*(\d{4})/);
+  if (range && range[2]) {
+    return new Date(Number(range[2]), 11, 31);
+  }
+  // "vigencia 2030", "vigencia hasta 2030", "hasta 2030"
+  const phraseYear = v.match(/(?:vigencia\s*(?:hasta\s*)?|hasta\s*)(\d{4})/i);
+  if (phraseYear && phraseYear[1]) {
+    return new Date(Number(phraseYear[1]), 11, 31);
+  }
+  // Just a year
+  const onlyYear = v.match(/^(\d{4})$/);
+  if (onlyYear && onlyYear[1]) {
+    return new Date(Number(onlyYear[1]), 11, 31);
+  }
+  // Last fallback: any 4-digit year in the string, take the largest one
+  const allYears = [...v.matchAll(/(\d{4})/g)].map((m) => Number(m[1])).filter((y) => y > 1900 && y < 2100);
+  if (allYears.length > 0) {
+    const lastYear = Math.max(...allYears);
+    return new Date(lastYear, 11, 31);
+  }
+  return null;
+}
+
+function checkBoletaAntiguedad(
+  rawDate: string | null | undefined,
+  todayMs: number,
+  threeMonthsMs: number,
+  kind: 'predial' | 'agua',
+): CheckOutcome {
+  if (!rawDate) return skip(`No se encontró fecha en la boleta de ${kind}.`);
+  const d = parseFlexibleDate(rawDate);
+  if (!d) return skip(`No fue posible interpretar la fecha "${rawDate}" en la boleta de ${kind}.`);
+  const ageMs = todayMs - d.getTime();
+  const ageDays = Math.round(ageMs / (1000 * 60 * 60 * 24));
+  if (ageMs < 0) return warn(`Fecha futura (${d.toISOString().slice(0, 10)}) en la boleta de ${kind}. Verifica.`);
+  if (ageMs <= threeMonthsMs) return pass(`Boleta de ${kind} con ${ageDays} día(s) de antigüedad (límite 92).`);
+  return fail(`Boleta de ${kind} de ${d.toISOString().slice(0, 10)} (${ageDays} días). Excede 3 meses.`);
+}
+
+function checkIneVigente(ine: IneData | null, todayMs: number): CheckOutcome {
+  if (!ine) return skip('Falta identificación oficial.');
+  const raw = ine.vigencia;
+  if (!raw) return skip('La identificación no muestra fecha de vigencia.');
+  const d = parseFlexibleDate(raw);
+  if (!d) return skip(`No fue posible interpretar la vigencia "${raw}".`);
+  if (d.getTime() < todayMs) return fail(`Vencida desde ${d.toISOString().slice(0, 10)}.`);
+  const daysRemaining = Math.round((d.getTime() - todayMs) / (1000 * 60 * 60 * 24));
+  if (daysRemaining < 60) return warn(`Vence en ${daysRemaining} día(s) (${d.toISOString().slice(0, 10)}).`);
+  return pass(`Vigente hasta ${d.toISOString().slice(0, 10)} (${daysRemaining} días).`);
 }
