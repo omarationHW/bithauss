@@ -81,7 +81,9 @@ jobs:
       - run: pnpm turbo run build --filter=@bithauss/api
 
       - name: Create deploy bundle
-        run: pnpm --filter=@bithauss/api --legacy deploy --prod deploy-api
+        # node-linker=hoisted produces a flat node_modules without pnpm symlinks,
+        # which Azure App Service's zip deploy can preserve reliably.
+        run: pnpm --filter=@bithauss/api --legacy --config.node-linker=hoisted deploy --prod deploy-api
 
       - uses: azure/login@v2
         with:
