@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useUser } from "../_context/user-context";
 import { createClient } from "@/lib/supabase/client";
+import { logError } from "@/lib/log";
 
 /* ------------------------------------------------------------------ */
 /*  Mock profile data (fallback)                                       */
@@ -143,7 +144,7 @@ export default function PerfilPage() {
       setAvatarUrl(newUrl);
       updateUser({ avatarUrl: newUrl });
     } catch (err) {
-      console.error("Error uploading avatar:", err);
+      logError("Error uploading avatar:", err);
     }
     setUploadingAvatar(false);
   }

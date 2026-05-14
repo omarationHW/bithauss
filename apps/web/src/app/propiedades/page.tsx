@@ -33,6 +33,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { createClient } from "@/lib/supabase/client";
+import { logError } from "@/lib/log";
 
 interface PropertyFromDB {
   id: string;
@@ -404,7 +405,7 @@ export default function PropiedadesPage() {
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.error("Error fetching properties:", error);
+        logError("Error fetching properties:", error);
         setProperties(demoProperties);
       } else {
         const dbProperties = (data || []) as PropertyFromDB[];

@@ -17,6 +17,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { logError } from "@/lib/log";
 import { useUser } from "../_context/user-context";
 
 /* ------------------------------------------------------------------ */
@@ -124,7 +125,7 @@ export default function LeadsPage() {
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("Error fetching leads:", error);
+      logError("Error fetching leads:", error);
       setLoading(false);
       return;
     }
@@ -172,7 +173,7 @@ export default function LeadsPage() {
       .eq("id", lead.id);
 
     if (error) {
-      console.error("Error updating lead status:", error);
+      logError("Error updating lead status:", error);
       setUpdatingStatus(null);
       return;
     }

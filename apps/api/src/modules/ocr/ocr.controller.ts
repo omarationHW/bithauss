@@ -7,10 +7,10 @@ import {
   BadRequestException,
   ParseFilePipe,
   MaxFileSizeValidator,
-  FileTypeValidator,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
+import { MagicBytesValidator } from '../../common/validators/magic-bytes.validator';
 import { OcrService, EscrituraCrossCheckInput } from './ocr.service';
 
 @Controller('ocr')
@@ -25,8 +25,8 @@ export class OcrController {
     @UploadedFile(
       new ParseFilePipe({
         validators: [
-          new MaxFileSizeValidator({ maxSize: 15 * 1024 * 1024 }), // 15MB (was 50MB)
-          new FileTypeValidator({ fileType: /(pdf|jpeg|jpg|png)$/i }),
+          new MaxFileSizeValidator({ maxSize: 15 * 1024 * 1024 }),
+          new MagicBytesValidator({ allowed: ['pdf', 'jpeg', 'png'] }),
         ],
       }),
     )

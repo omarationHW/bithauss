@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { logError } from "@/lib/log";
 import { useUser } from "@/app/dashboard/_context/user-context";
 
 /* ------------------------------------------------------------------ */
@@ -290,7 +291,7 @@ export default function SolicitarBrcPage() {
           .upload(filePath, file);
 
         if (uploadError) {
-          console.error("Upload error:", uploadError);
+          logError("Upload error:", uploadError);
           continue;
         }
 

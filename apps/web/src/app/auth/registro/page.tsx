@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthPanel } from "../_components/auth-panel";
 import { createClient } from "@/lib/supabase/client";
+import { logError } from "@/lib/log";
 
 type Role = "comprador" | "vendedor" | "broker" | "inmobiliaria" | "notario";
 
@@ -116,7 +117,7 @@ export default function RegistroPage() {
         });
 
         if (profileError) {
-          console.error("Error creating profile:", profileError);
+          logError("Error creating profile:", profileError);
         }
 
         // Create notary profile if registering as notario
@@ -127,7 +128,7 @@ export default function RegistroPage() {
             notary_state: notaryState.trim(),
           });
           if (notaryError) {
-            console.error("Error creating notary profile:", notaryError);
+            logError("Error creating notary profile:", notaryError);
           }
         }
       }

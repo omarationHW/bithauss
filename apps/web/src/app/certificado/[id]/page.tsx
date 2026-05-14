@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
+import { logError } from "@/lib/log";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -152,7 +153,7 @@ export default function CertificadoPage() {
         .maybeSingle();
 
       if (!certData || certError) {
-        console.error("Cert fetch error:", certError);
+        logError("Cert fetch error:", certError);
         setLoading(false);
         return;
       }

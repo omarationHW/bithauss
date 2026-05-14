@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
+import { logError } from "@/lib/log";
 import { useUser } from "../../_context/user-context";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -390,7 +391,7 @@ export default function NuevaPropiedadPage() {
           .from("property_media")
           .insert(mediaInserts);
 
-        if (mediaError) console.error("Error saving media:", mediaError);
+        if (mediaError) logError("Error saving media:", mediaError);
       }
 
       setSuccess(
