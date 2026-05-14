@@ -187,17 +187,23 @@ export default function AsignacionesPage() {
     setNotarySearch("");
   }
 
-  /* ---------- Assign notary ---------- */
+  /* ---------- Assign notary via API (server-side @Roles enforcement) ---------- */
   async function handleAssignNotary(notaryUserId: string) {
     if (!modalExpedienteId) return;
     setAssigningNotaryId(notaryUserId);
 
-    const { error } = await supabase
-      .from("brc_expedientes")
-      .update({ assigned_notary_id: notaryUserId })
-      .eq("id", modalExpedienteId);
+    const { data: { session } } = await supabase.auth.getSession();
+    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "";
+    const res = await fetch(`${apiBase}/api/v1/admin/expedientes/${modalExpedienteId}/assign`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
+      body: JSON.stringify({ notary_id: notaryUserId }),
+    });
 
-    if (!error) {
+    if (res.ok) {
       const assignedNotary = notaries.find((n) => n.user_id === notaryUserId);
       setExpedientes((prev) =>
         prev.map((e) =>

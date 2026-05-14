@@ -114,15 +114,21 @@ export default function NotariosVerificacionPage() {
     return { total, verificados, pendientes };
   }, [notaries]);
 
-  /* Verify notary ------------------------------------------------- */
+  /* Verify notary via API (server-side @Roles('ADMIN') enforcement) */
   async function handleVerify(profileId: string) {
     setUpdatingId(profileId);
-    const { error } = await supabase
-      .from("notary_profiles")
-      .update({ is_verified: true })
-      .eq("profile_id", profileId);
+    const { data: { session } } = await supabase.auth.getSession();
+    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "";
+    const res = await fetch(`${apiBase}/api/v1/admin/notaries/${profileId}/verify`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
+      body: JSON.stringify({ verified: true }),
+    });
 
-    if (!error) {
+    if (res.ok) {
       setNotaries((prev) =>
         prev.map((n) =>
           n.id === profileId

@@ -113,15 +113,20 @@ export default function UsuariosPage() {
     };
   }, [profiles]);
 
-  // Change role
+  // Change role via API (server-side @Roles('ADMIN') enforcement)
   async function handleChangeRole(profileId: string, newRole: UserRole) {
     setUpdatingId(profileId);
-    const { error } = await supabase
-      .from("profiles")
-      .update({ role: newRole })
-      .eq("id", profileId);
-
-    if (!error) {
+    const { data: { session } } = await supabase.auth.getSession();
+    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "";
+    const res = await fetch(`${apiBase}/api/v1/admin/users/${profileId}/role`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
+      body: JSON.stringify({ role: newRole }),
+    });
+    if (res.ok) {
       setProfiles((prev) =>
         prev.map((p) => (p.id === profileId ? { ...p, role: newRole } : p))
       );
@@ -129,15 +134,20 @@ export default function UsuariosPage() {
     setUpdatingId(null);
   }
 
-  // Toggle active
+  // Toggle active via API
   async function handleToggleActive(profileId: string, currentActive: boolean) {
     setUpdatingId(profileId);
-    const { error } = await supabase
-      .from("profiles")
-      .update({ is_active: !currentActive })
-      .eq("id", profileId);
-
-    if (!error) {
+    const { data: { session } } = await supabase.auth.getSession();
+    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "";
+    const res = await fetch(`${apiBase}/api/v1/admin/users/${profileId}/active`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
+      body: JSON.stringify({ is_active: !currentActive }),
+    });
+    if (res.ok) {
       setProfiles((prev) =>
         prev.map((p) => (p.id === profileId ? { ...p, is_active: !currentActive } : p))
       );

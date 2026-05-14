@@ -7,6 +7,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { ProfilesModule } from './modules/profiles/profiles.module';
 import { PropertiesModule } from './modules/properties/properties.module';
 import { OcrModule } from './modules/ocr/ocr.module';
+import { AdminModule } from './modules/admin/admin.module';
 import { AuthGuard } from './common/guards/auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
@@ -32,6 +33,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     ProfilesModule,
     PropertiesModule,
     OcrModule,
+    AdminModule,
   ],
   providers: [
     // Global throttler guard
