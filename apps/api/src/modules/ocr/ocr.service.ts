@@ -731,7 +731,7 @@ function push(arr: EscrituraCheck[], rule: string, label: string, outcome: Check
   arr.push({ rule, label, ...outcome });
 }
 
-function coerceText(v: unknown): string {
+export function coerceText(v: unknown): string {
   if (v == null) return '';
   if (typeof v === 'string') return v;
   if (typeof v === 'number' || typeof v === 'boolean') return String(v);
@@ -745,7 +745,7 @@ function coerceText(v: unknown): string {
   return '';
 }
 
-function normalizeStr(s?: unknown): string {
+export function normalizeStr(s?: unknown): string {
   return coerceText(s)
     .toLowerCase()
     .normalize('NFD')
@@ -790,7 +790,7 @@ const CDMX_SYNONYMS = new Set([
   'delegacion alvaro obregon',
 ]);
 
-function citiesMatch(a?: unknown, b?: unknown): boolean {
+export function citiesMatch(a?: unknown, b?: unknown): boolean {
   const na = normalizeStr(a).replace(/^delegacion\s+/, '').replace(/^alcaldia\s+/, '').trim();
   const nb = normalizeStr(b).replace(/^delegacion\s+/, '').replace(/^alcaldia\s+/, '').trim();
   if (!na || !nb) return false;
@@ -803,7 +803,7 @@ function citiesMatch(a?: unknown, b?: unknown): boolean {
   return na.includes(nb) || nb.includes(na);
 }
 
-function namesMatch(a?: unknown, b?: unknown): boolean {
+export function namesMatch(a?: unknown, b?: unknown): boolean {
   const na = normalizeStr(a);
   const nb = normalizeStr(b);
   if (!na || !nb) return false;
@@ -814,7 +814,7 @@ function namesMatch(a?: unknown, b?: unknown): boolean {
   return wa.every((w) => wb.includes(w)) || wb.every((w) => wa.includes(w));
 }
 
-function addressesMatch(a?: unknown, b?: unknown): boolean {
+export function addressesMatch(a?: unknown, b?: unknown): boolean {
   const na = normalizeStr(a);
   const nb = normalizeStr(b);
   if (!na || !nb) return false;
@@ -835,7 +835,7 @@ function addressesMatch(a?: unknown, b?: unknown): boolean {
  *   - match the first 9 digits (account body without verifier/sub-account)
  * Tolerant to extra zeros, different segment counts, and missing check digits.
  */
-function cuentasPredialMatch(a?: unknown, b?: unknown): boolean {
+export function cuentasPredialMatch(a?: unknown, b?: unknown): boolean {
   const da = String(a ?? '').replace(/\D/g, '');
   const db = String(b ?? '').replace(/\D/g, '');
   if (!da || !db) return false;
@@ -851,7 +851,7 @@ function cuentasPredialMatch(a?: unknown, b?: unknown): boolean {
 }
 
 /** Cuenta agua: tolerant numeric match, ignores separators like ':' '-' '/' '.' */
-function cuentaAguaMatch(a?: unknown, b?: unknown): boolean {
+export function cuentaAguaMatch(a?: unknown, b?: unknown): boolean {
   const da = String(a ?? '').replace(/\D/g, '');
   const db = String(b ?? '').replace(/\D/g, '');
   if (!da || !db) return false;
@@ -972,7 +972,7 @@ function checkAntecedente(e: EscrituraData, ant: AntecedenteData | null): CheckO
   return pass(`Coinciden: ${okSet.join(', ')}.`);
 }
 
-function parseFlexibleDate(value?: string | null): Date | null {
+export function parseFlexibleDate(value?: string | null): Date | null {
   if (!value) return null;
   const v = value.trim();
   // ISO yyyy-mm-dd
