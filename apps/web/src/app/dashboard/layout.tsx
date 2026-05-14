@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import Image from "next/image";
@@ -221,60 +221,89 @@ export default function DashboardLayout({
   );
 }
 
-function useNotificationCount(userId: string | undefined) {
+interface NotificationItem {
+  id: string;
+  type: string;
+  title: string;
+  body: string | null;
+  link: string | null;
+  is_read: boolean;
+  created_at: string;
+}
+
+function useNotifications(userId: string | undefined) {
+  const [items, setItems] = useState<NotificationItem[]>([]);
   const [count, setCount] = useState(0);
   const supabase = useMemo(() => createClient(), []);
 
+  const refresh = useCallback(async () => {
+    if (!userId) return;
+    const { data } = await supabase
+      .from("notifications")
+      .select("id, type, title, body, link, is_read, created_at")
+      .eq("recipient_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    const list = (data as NotificationItem[]) ?? [];
+    setItems(list);
+    setCount(list.filter((n) => !n.is_read).length);
+  }, [userId, supabase]);
+
   useEffect(() => {
     if (!userId) return;
+    refresh();
 
-    async function fetchCounts() {
-      // Unread messages
-      const { count: unreadMessages } = await supabase
-        .from("messages")
-        .select("id", { count: "exact", head: true })
-        .neq("sender_id", userId!)
-        .eq("is_read", false);
-
-      // New leads (last 24h)
-      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      const { data: userProps } = await supabase
-        .from("properties")
-        .select("id")
-        .eq("owner_id", userId!);
-
-      let newLeads = 0;
-      if (userProps?.length) {
-        const propIds = userProps.map((p) => p.id);
-        const { count: leadsCount } = await supabase
-          .from("leads")
-          .select("id", { count: "exact", head: true })
-          .in("property_id", propIds)
-          .eq("status", "NUEVO")
-          .gte("created_at", yesterday);
-        newLeads = leadsCount ?? 0;
-      }
-
-      setCount((unreadMessages ?? 0) + newLeads);
-    }
-
-    fetchCounts();
-
-    // Listen for new messages in realtime
     const channel = supabase
-      .channel("notifications")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, () => {
-        fetchCounts();
-      })
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "leads" }, () => {
-        fetchCounts();
-      })
+      .channel(`notif-${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `recipient_id=eq.${userId}`,
+        },
+        () => refresh(),
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "notifications",
+          filter: `recipient_id=eq.${userId}`,
+        },
+        () => refresh(),
+      )
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
+  }, [userId, supabase, refresh]);
+
+  const markAsRead = useCallback(
+    async (id: string) => {
+      await supabase
+        .from("notifications")
+        .update({ is_read: true, read_at: new Date().toISOString() })
+        .eq("id", id);
+      setItems((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)));
+      setCount((c) => Math.max(0, c - 1));
+    },
+    [supabase],
+  );
+
+  const markAllAsRead = useCallback(async () => {
+    if (!userId) return;
+    await supabase
+      .from("notifications")
+      .update({ is_read: true, read_at: new Date().toISOString() })
+      .eq("recipient_id", userId)
+      .eq("is_read", false);
+    setItems((prev) => prev.map((n) => ({ ...n, is_read: true })));
+    setCount(0);
   }, [userId, supabase]);
 
-  return count;
+  return { items, count, markAsRead, markAllAsRead };
 }
 
 function DashboardShell({ children }: { children: React.ReactNode }) {
@@ -282,7 +311,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useUser();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-  const notificationCount = useNotificationCount(user?.id);
+  const { items: notifications, count: notificationCount, markAsRead, markAllAsRead } = useNotifications(user?.id);
 
   // Close notification dropdown on outside click
   useEffect(() => {
@@ -373,17 +402,77 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
               </button>
 
               {notifOpen && (
-                <div className="absolute right-0 top-full mt-2 w-80 rounded-2xl border border-gray-100 bg-white shadow-2xl overflow-hidden z-50 animate-fade-in-up" onClick={(e) => e.stopPropagation()}>
-                  <div className="p-4 border-b border-gray-100">
+                <div className="absolute right-0 top-full mt-2 w-96 rounded-2xl border border-gray-100 bg-white shadow-2xl overflow-hidden z-50 animate-fade-in-up" onClick={(e) => e.stopPropagation()}>
+                  <div className="p-4 border-b border-gray-100 flex items-center justify-between">
                     <h3 className="text-sm font-bold text-gray-900">Notificaciones</h3>
+                    {notificationCount > 0 && (
+                      <button
+                        onClick={() => markAllAsRead()}
+                        className="text-[11px] text-blue-500 hover:text-blue-700 font-semibold"
+                      >
+                        Marcar todas como leídas
+                      </button>
+                    )}
                   </div>
-                  <div className="max-h-72 overflow-y-auto">
-                    {notificationCount === 0 ? (
+                  <div className="max-h-96 overflow-y-auto">
+                    {notifications.length === 0 ? (
                       <div className="p-6 text-center text-sm text-gray-400">
-                        Sin notificaciones nuevas
+                        Sin notificaciones
                       </div>
                     ) : (
                       <div className="divide-y divide-gray-50">
+                        {notifications.map((n) => {
+                          const Icon =
+                            n.type === "BRC_ESTADO_CAMBIO" ? ShieldCheck :
+                            n.type === "LEAD_RECIBIDO" ? Users :
+                            n.type === "COMPRA_SOLICITUD" ? Building2 :
+                            Bell;
+                          const iconBg =
+                            n.type === "BRC_ESTADO_CAMBIO" ? "bg-blue-50" :
+                            n.type === "LEAD_RECIBIDO" ? "bg-emerald-50" :
+                            n.type === "COMPRA_SOLICITUD" ? "bg-amber-50" :
+                            "bg-gray-50";
+                          const iconColor =
+                            n.type === "BRC_ESTADO_CAMBIO" ? "text-blue-500" :
+                            n.type === "LEAD_RECIBIDO" ? "text-emerald-500" :
+                            n.type === "COMPRA_SOLICITUD" ? "text-amber-500" :
+                            "text-gray-500";
+                          const content = (
+                            <div
+                              className={`flex items-start gap-3 px-4 py-3 transition-colors cursor-pointer ${
+                                n.is_read ? "hover:bg-gray-50" : "bg-blue-50/30 hover:bg-blue-50/50"
+                              }`}
+                              onClick={async () => {
+                                if (!n.is_read) await markAsRead(n.id);
+                                setNotifOpen(false);
+                              }}
+                            >
+                              <div className={`h-8 w-8 rounded-lg ${iconBg} flex items-center justify-center shrink-0`}>
+                                <Icon className={`h-4 w-4 ${iconColor}`} />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className={`text-sm ${n.is_read ? "font-medium" : "font-bold"} text-gray-900 leading-tight`}>
+                                  {n.title}
+                                </p>
+                                {n.body && (
+                                  <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{n.body}</p>
+                                )}
+                                <p className="text-[10px] text-gray-400 mt-1">
+                                  {new Date(n.created_at).toLocaleString("es-MX", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                                </p>
+                              </div>
+                              {!n.is_read && <span className="h-2 w-2 rounded-full bg-blue-500 shrink-0 mt-1.5" />}
+                            </div>
+                          );
+                          return n.link ? (
+                            <Link key={n.id} href={n.link} className="block">
+                              {content}
+                            </Link>
+                          ) : (
+                            <div key={n.id}>{content}</div>
+                          );
+                        })}
+                        {/* Legacy quick links kept as fallback at bottom */}
                         <Link
                           href="/dashboard/leads"
                           className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors"
@@ -393,8 +482,8 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
                             <Users className="h-4 w-4 text-blue-500" />
                           </div>
                           <div className="min-w-0">
-                            <p className="text-sm font-medium text-gray-900">Leads nuevos</p>
-                            <p className="text-xs text-gray-500">Tienes leads pendientes por revisar</p>
+                            <p className="text-sm font-medium text-gray-900">Ver todas tus leads</p>
+                            <p className="text-xs text-gray-500">Acceso rápido al inbox de leads</p>
                           </div>
                         </Link>
                         <Link
@@ -406,7 +495,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
                             <MessageSquare className="h-4 w-4 text-emerald-500" />
                           </div>
                           <div className="min-w-0">
-                            <p className="text-sm font-medium text-gray-900">Mensajes sin leer</p>
+                            <p className="text-sm font-medium text-gray-900">Mensajes</p>
                             <p className="text-xs text-gray-500">Revisa tus conversaciones</p>
                           </div>
                         </Link>
