@@ -85,7 +85,6 @@ const DOCUMENT_PROMPTS: Record<string, { expectedType: string; prompt: string }>
       'tipoDocumento (si es identificación pon "Identificación Oficial", si no indica qué es), ' +
       'nombreCompleto, ' +
       'curp (18 caracteres alfanuméricos — búscalo aunque no esté etiquetado como "CURP"), ' +
-      'rfc (13 caracteres alfanuméricos para personas físicas — búscalo aunque no esté etiquetado), ' +
       'claveElector, seccion, ' +
       'vigencia (puede ser "2024", "2014 - 2024", "vigencia hasta 2030", o una fecha completa — extrae el rango o fecha tal como aparece), ' +
       'fechaNacimiento, domicilio (string ÚNICO completo, NUNCA un objeto), numeroDocumento.',
@@ -208,6 +207,10 @@ export class OcrService {
       // Step 2: Send extracted text to Azure OpenAI for structured analysis
       this.logger.log(`Analyzing text with OpenAI for ${documentSlug}...`);
       const structured = await this.analyzeWithOpenAI(extractedText, config.prompt);
+
+      // Step 2b: Regex post-processing for high-format-confidence fields the
+      // model sometimes misses (CURP/RFC have strict patterns).
+      this.regexFallback(extractedText, structured);
 
       // Step 3: Validate the result
       const detectedType = String(structured.tipoDocumento ?? '').trim();
@@ -407,6 +410,61 @@ export class OcrService {
     }
   }
 
+  /* ---- Regex fallback for strict-format fields (CURP, RFC) ---- */
+  // CURP: 18 chars: AAAA######H/MAAAAA[A-Z0-9]\d  (homoclave = 2 chars: 1 alphanumeric + 1 digit)
+  // Persona física RFC: 13 chars: AAAA######AAA  (homoclave = 3 alphanumeric)
+  // Both extracted from the raw DocIntelligence text — strip whitespace and dashes first.
+  private regexFallback(rawText: string, structured: Record<string, unknown>) {
+    const flat = rawText
+      .toUpperCase()
+      .replace(/[\s\-_]+/g, '')
+      .replace(/[^A-Z0-9ÑÁÉÍÓÚÜ\n]/g, ' ');
+
+    const curpRegex = /[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z0-9]\d/g;
+    const curps = [...flat.matchAll(curpRegex)].map((m) => m[0]);
+    if (curps.length > 0) {
+      // Pick the most common (in case OCR repeated it) — usually all the same.
+      const counts = curps.reduce<Record<string, number>>((acc, c) => {
+        acc[c] = (acc[c] ?? 0) + 1;
+        return acc;
+      }, {});
+      const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
+      if (best) {
+        // Only set if the LLM didn't already extract a valid-looking CURP.
+        const llmCurp = String(structured.curp ?? '').toUpperCase().replace(/[\s\-_]/g, '');
+        if (!curpRegex.test(llmCurp)) {
+          curpRegex.lastIndex = 0;
+          structured.curp = best;
+        } else {
+          curpRegex.lastIndex = 0;
+        }
+      }
+    }
+
+    // RFC (persona física) — only attempt extraction; do NOT run this on INE-only flows
+    // because INE never has RFC. Other docs (escritura, comprobantes fiscales) often do.
+    if (structured.rfc !== undefined || structured.rfcComprador !== undefined) {
+      const rfcRegex = /\b[A-ZÑ&]{4}\d{6}[A-Z0-9]{3}\b/g;
+      const rfcs = [...rawText.toUpperCase().matchAll(rfcRegex)].map((m) => m[0]);
+      // Filter out matches that look like CURPs (CURP is 18 chars; RFC is 13).
+      const valid = rfcs.filter((r) => r.length === 13);
+      if (valid.length > 0) {
+        const counts = valid.reduce<Record<string, number>>((acc, c) => {
+          acc[c] = (acc[c] ?? 0) + 1;
+          return acc;
+        }, {});
+        const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
+        if (best) {
+          const targetKey = structured.rfcComprador !== undefined ? 'rfcComprador' : 'rfc';
+          const currentRfc = String(structured[targetKey] ?? '').toUpperCase().replace(/[\s\-_]/g, '');
+          if (!/^[A-ZÑ&]{4}\d{6}[A-Z0-9]{3}$/.test(currentRfc)) {
+            structured[targetKey] = best;
+          }
+        }
+      }
+    }
+  }
+
   /* ---- Cross-check: Escritura de Propiedad against supporting docs ---- */
   crossCheckEscritura(payload: EscrituraCrossCheckInput): EscrituraCrossCheckResult {
     const checks: EscrituraCheck[] = [];
@@ -449,9 +507,10 @@ export class OcrService {
           : skip('La escritura no especifica si hay copropietarios.'),
     );
 
-    /* 4. CURP/RFC consistente entre docs */
-    push(checks, 'curp_rfc_consistente', 'CURP / RFC del propietario consistente entre documentos',
-      checkCurpRfc(e, ine),
+    /* 4. CURP del propietario consistente entre escritura e INE
+       (RFC no se valida aquí porque la INE no incluye RFC.) */
+    push(checks, 'curp_consistente', 'CURP del propietario coincide entre escritura e INE',
+      checkCurp(e, ine),
     );
 
     /* 5. Estado civil declarado en la escritura */
@@ -599,7 +658,6 @@ interface EscrituraData {
 interface IneData {
   nombreCompleto?: string | null;
   curp?: string | null;
-  rfc?: string | null;
   vigencia?: string | null;
 }
 
@@ -769,28 +827,17 @@ function addressesMatch(a?: unknown, b?: unknown): boolean {
   return intersection / Math.max(wa.size, wb.size) >= 0.4;
 }
 
-function checkCurpRfc(e: EscrituraData, ine: IneData | null): CheckOutcome {
+function checkCurp(e: EscrituraData, ine: IneData | null): CheckOutcome {
   if (!ine) return skip('Falta identificación oficial.');
-  const curpE = normalizeStr(e.curpComprador);
-  const curpI = normalizeStr(ine.curp);
-  const rfcE = normalizeStr(e.rfcComprador);
-  const rfcI = normalizeStr(ine.rfc);
+  const curpE = normalizeStr(e.curpComprador).toUpperCase();
+  const curpI = normalizeStr(ine.curp).toUpperCase();
 
-  const curpAvailable = curpE && curpI;
-  const rfcAvailable = rfcE && rfcI;
+  if (!curpE && !curpI) return skip('No se encontró CURP en escritura ni en INE.');
+  if (!curpE) return skip('La escritura no incluye CURP.');
+  if (!curpI) return skip('La INE no incluye CURP legible.');
 
-  if (!curpAvailable && !rfcAvailable) return skip('No se encontró CURP ni RFC en ambos documentos.');
-
-  const curpMatch = curpAvailable ? curpE === curpI : null;
-  const rfcMatch = rfcAvailable ? rfcE === rfcI : null;
-
-  if ((curpMatch === false) || (rfcMatch === false)) {
-    const issues: string[] = [];
-    if (curpMatch === false) issues.push(`CURP escritura "${e.curpComprador}" ≠ INE "${ine.curp}"`);
-    if (rfcMatch === false) issues.push(`RFC escritura "${e.rfcComprador}" ≠ INE "${ine.rfc}"`);
-    return fail(issues.join(' | '));
-  }
-  return pass(`Coinciden: ${curpAvailable ? 'CURP' : ''}${curpAvailable && rfcAvailable ? ' y ' : ''}${rfcAvailable ? 'RFC' : ''}.`);
+  if (curpE === curpI) return pass(`CURP coincide: ${e.curpComprador}.`);
+  return fail(`CURP escritura "${e.curpComprador}" ≠ INE "${ine.curp}".`);
 }
 
 function checkFolioReal(

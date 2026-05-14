@@ -45,6 +45,8 @@ interface BrcDocument {
   status: string;
   rejection_reason: string | null;
   reviewed_at: string | null;
+  ocr_valid: boolean | null;
+  ocr_confidence: string | null;
   brc_document_types: {
     name: string;
   } | null;
@@ -212,6 +214,8 @@ export default function ExpedientesPage() {
             status,
             rejection_reason,
             reviewed_at,
+            ocr_valid,
+            ocr_confidence,
             brc_document_types ( name )
           )
         `
@@ -404,6 +408,7 @@ export default function ExpedientesPage() {
                   <th className="px-4 py-3">Estado</th>
                   <th className="px-4 py-3">Docs Recibidos</th>
                   <th className="px-4 py-3">Docs Validados</th>
+                  <th className="px-4 py-3 text-center">OCR</th>
                   <th className="px-4 py-3">Docs Rechazados</th>
                   <th className="px-4 py-3 text-center">Progreso</th>
                   <th className="px-4 py-3 text-center">Acción</th>
@@ -424,6 +429,10 @@ export default function ExpedientesPage() {
                   ).length;
                   const rechazados = exp.brc_documents.filter(
                     (d) => d.status === "RECHAZADO"
+                  ).length;
+                  const ocrValidos = exp.brc_documents.filter((d) => d.ocr_valid === true).length;
+                  const ocrAltaConfianza = exp.brc_documents.filter(
+                    (d) => d.ocr_valid === true && d.ocr_confidence === "high"
                   ).length;
 
                   return (
@@ -466,6 +475,24 @@ export default function ExpedientesPage() {
                         }`}>
                           {validados}
                         </span>
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        {totalDocs > 0 ? (
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-bold border ${
+                              ocrAltaConfianza === totalDocs
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : ocrValidos > 0
+                                ? "bg-amber-50 text-amber-700 border-amber-200"
+                                : "bg-gray-50 text-gray-400 border-gray-200"
+                            }`}
+                            title={`${ocrAltaConfianza} alta · ${ocrValidos - ocrAltaConfianza} media/baja · ${totalDocs - ocrValidos} sin validar`}
+                          >
+                            {ocrValidos}/{totalDocs}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-4 text-center">
                         <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-bold border ${

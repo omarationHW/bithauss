@@ -299,6 +299,7 @@ export default function SolicitarBrcPage() {
           data: { publicUrl },
         } = supabase.storage.from("brc-documents").getPublicUrl(filePath);
 
+        const ocr = ocrResults[docTypeId];
         await supabase.from("brc_documents").insert({
           expediente_id: expediente.id,
           document_type_id: docTypeId,
@@ -308,6 +309,11 @@ export default function SolicitarBrcPage() {
           mime_type: file.type,
           status: "PENDIENTE",
           uploaded_by: user.id,
+          ocr_detected_type: ocr?.detectedType ?? null,
+          ocr_confidence: ocr?.confidence ?? null,
+          ocr_valid: ocr?.valid ?? null,
+          ocr_extracted_data: ocr?.extractedData ?? null,
+          ocr_validated_at: ocr ? new Date().toISOString() : null,
         });
       }
 

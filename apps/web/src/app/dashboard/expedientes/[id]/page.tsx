@@ -86,6 +86,11 @@ interface BrcDocument {
   reviewed_by: string | null;
   created_at: string;
   brc_document_types: BrcDocumentTypeNested | null;
+  ocr_detected_type: string | null;
+  ocr_confidence: string | null;
+  ocr_valid: boolean | null;
+  ocr_extracted_data: Record<string, unknown> | null;
+  ocr_validated_at: string | null;
 }
 
 interface ExpedienteLog {
@@ -291,7 +296,7 @@ export default function ExpedienteDetailPage() {
     // 4. Documents
     const { data: docsData } = await supabase
       .from("brc_documents")
-      .select("id, document_type_id, file_name, file_url, file_size, status, rejection_reason, owner_instruction, reviewed_at, reviewed_by, created_at, brc_document_types ( name, is_required )")
+      .select("id, document_type_id, file_name, file_url, file_size, status, rejection_reason, owner_instruction, reviewed_at, reviewed_by, created_at, ocr_detected_type, ocr_confidence, ocr_valid, ocr_extracted_data, ocr_validated_at, brc_document_types ( name, is_required )")
       .eq("expediente_id", expedienteId)
       .order("created_at", { ascending: true });
 
@@ -1126,6 +1131,46 @@ export default function ExpedienteDetailPage() {
                               <Download className="h-3 w-3" />
                               {doc.file_name}
                             </a>
+                          )}
+                          {hasFile && doc.ocr_confidence && (
+                            <span
+                              className={`mt-1 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
+                                doc.ocr_confidence === "high"
+                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                  : doc.ocr_confidence === "medium"
+                                  ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                  : "bg-red-50 text-red-700 border border-red-200"
+                              }`}
+                            >
+                              OCR {doc.ocr_confidence === "high" ? "Alta" : doc.ocr_confidence === "medium" ? "Media" : "Baja"}
+                            </span>
+                          )}
+                          {hasFile && doc.ocr_extracted_data && Object.keys(doc.ocr_extracted_data).length > 0 && (
+                            <details className="mt-1 group">
+                              <summary className="cursor-pointer text-[10px] font-semibold text-gray-500 hover:text-gray-700">
+                                Ver datos extraídos
+                              </summary>
+                              <div className="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-1.5 rounded-md bg-gray-50 p-2">
+                                {Object.entries(doc.ocr_extracted_data)
+                                  .filter(([k]) => k !== "textoExtraido")
+                                  .map(([k, v]) => (
+                                    <div key={k} className="min-w-0">
+                                      <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400">
+                                        {k.replace(/([A-Z])/g, " $1").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()).trim()}
+                                      </p>
+                                      <p className="text-[10px] font-medium text-gray-900 break-words">
+                                        {v == null || v === ""
+                                          ? "—"
+                                          : Array.isArray(v)
+                                          ? v.map((x) => (typeof x === "object" && x !== null ? Object.values(x as Record<string, unknown>).join(" — ") : String(x))).join(", ")
+                                          : typeof v === "object"
+                                          ? Object.values(v as Record<string, unknown>).filter(Boolean).join(" ")
+                                          : String(v)}
+                                      </p>
+                                    </div>
+                                  ))}
+                              </div>
+                            </details>
                           )}
                         </div>
                       </td>
