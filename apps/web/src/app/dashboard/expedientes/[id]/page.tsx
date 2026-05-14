@@ -343,71 +343,69 @@ export default function ExpedienteDetailPage() {
 
   async function handleApproveDoc(docId: string) {
     setActionLoading(docId);
-    const now = new Date().toISOString();
-    await supabase
-      .from("brc_documents")
-      .update({ status: "VALIDADO", reviewed_by: user!.id, reviewed_at: now })
-      .eq("id", docId);
-
-    await supabase.from("brc_expediente_logs").insert({
-      expediente_id: expedienteId,
-      action: "DOCUMENTO_VALIDADO",
-      performed_by: user!.id,
-      metadata: { doc_id: docId },
+    const { data: { session } } = await supabase.auth.getSession();
+    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "";
+    const res = await fetch(`${apiBase}/api/v1/brc/documents/${docId}/approve`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
     });
 
-    setDocuments((prev) =>
-      prev.map((d) => (d.id === docId ? { ...d, status: "VALIDADO", rejection_reason: null, owner_instruction: null, reviewed_by: user!.id, reviewed_at: now } : d))
-    );
+    if (res.ok) {
+      const now = new Date().toISOString();
+      setDocuments((prev) =>
+        prev.map((d) => (d.id === docId ? { ...d, status: "VALIDADO", rejection_reason: null, owner_instruction: null, reviewed_by: user!.id, reviewed_at: now } : d))
+      );
+      const { data: logsData } = await supabase
+        .from("brc_expediente_logs")
+        .select("id, action, created_at, performed_by, metadata")
+        .eq("expediente_id", expedienteId)
+        .order("created_at", { ascending: false });
+      if (logsData) setLogs(logsData as ExpedienteLog[]);
+    }
     setActionLoading(null);
-    // Refresh logs
-    const { data: logsData } = await supabase
-      .from("brc_expediente_logs")
-      .select("id, action, created_at, performed_by, metadata")
-      .eq("expediente_id", expedienteId)
-      .order("created_at", { ascending: false });
-    if (logsData) setLogs(logsData as ExpedienteLog[]);
   }
 
   async function handleRejectDoc(docId: string) {
     if (!rejectReason.trim()) return;
     setActionLoading(docId);
-    const now = new Date().toISOString();
-
-    await supabase
-      .from("brc_documents")
-      .update({
-        status: "RECHAZADO",
-        rejection_reason: rejectReason.trim(),
-        owner_instruction: rejectInstruction.trim() || null,
-        reviewed_by: user!.id,
-        reviewed_at: now,
-      })
-      .eq("id", docId);
-
-    await supabase.from("brc_expediente_logs").insert({
-      expediente_id: expedienteId,
-      action: "DOCUMENTO_RECHAZADO",
-      performed_by: user!.id,
-      metadata: { doc_id: docId, reason: rejectReason.trim(), instruction: rejectInstruction.trim() || null },
+    const { data: { session } } = await supabase.auth.getSession();
+    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "";
+    const res = await fetch(`${apiBase}/api/v1/brc/documents/${docId}/reject`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
+      body: JSON.stringify({
+        reason: rejectReason.trim(),
+        owner_instruction: rejectInstruction.trim() || undefined,
+      }),
     });
 
-    setDocuments((prev) =>
-      prev.map((d) =>
-        d.id === docId ? { ...d, status: "RECHAZADO", rejection_reason: rejectReason.trim(), owner_instruction: rejectInstruction.trim() || null, reviewed_by: user!.id, reviewed_at: now } : d
-      )
-    );
+    if (res.ok) {
+      const now = new Date().toISOString();
+      setDocuments((prev) =>
+        prev.map((d) =>
+          d.id === docId
+            ? { ...d, status: "RECHAZADO", rejection_reason: rejectReason.trim(), owner_instruction: rejectInstruction.trim() || null, reviewed_by: user!.id, reviewed_at: now }
+            : d
+        )
+      );
+      const { data: logsData } = await supabase
+        .from("brc_expediente_logs")
+        .select("id, action, created_at, performed_by, metadata")
+        .eq("expediente_id", expedienteId)
+        .order("created_at", { ascending: false });
+      if (logsData) setLogs(logsData as ExpedienteLog[]);
+    }
+
     setRejectingDocId(null);
     setRejectReason("");
     setRejectInstruction("");
     setActionLoading(null);
-    // Refresh logs
-    const { data: logsData } = await supabase
-      .from("brc_expediente_logs")
-      .select("id, action, created_at, performed_by, metadata")
-      .eq("expediente_id", expedienteId)
-      .order("created_at", { ascending: false });
-    if (logsData) setLogs(logsData as ExpedienteLog[]);
   }
 
   /* ---------------------------------------------------------------- */
@@ -453,22 +451,19 @@ export default function ExpedienteDetailPage() {
 
   async function handleRejectExpediente() {
     setActionLoading("reject-exp");
-
-    await supabase
-      .from("brc_expedientes")
-      .update({ status: "RECHAZADO" })
-      .eq("id", expedienteId);
-
-    await supabase.from("brc_expediente_logs").insert({
-      expediente_id: expedienteId,
-      action: "EXPEDIENTE_RECHAZADO",
-      performed_by: user!.id,
-      new_status: "RECHAZADO",
-      metadata: { reason: "Expediente rechazado por notario" },
+    const { data: { session } } = await supabase.auth.getSession();
+    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "";
+    const res = await fetch(`${apiBase}/api/v1/brc/expedientes/${expedienteId}/reject`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
+      body: JSON.stringify({ reason: "Expediente rechazado por notario" }),
     });
 
     setActionLoading(null);
-    router.push("/dashboard/expedientes");
+    if (res.ok) router.push("/dashboard/expedientes");
   }
 
   /* ---------------------------------------------------------------- */
@@ -481,7 +476,7 @@ export default function ExpedienteDetailPage() {
 
     let pdfUrl: string | null = null;
 
-    // Upload PDF if provided
+    // Upload PDF if provided (storage write remains client-side; signed by storage RLS)
     if (certPdfFile) {
       const fileName = `certificates/${expedienteId}/${certPdfFile.name}`;
       const { data: uploadData } = await supabase.storage
@@ -496,58 +491,25 @@ export default function ExpedienteDetailPage() {
       }
     }
 
-    // 1. Insert certificate
-    const { data: certData } = await supabase
-      .from("brc_certificates")
-      .insert({
+    // Certify through the API (single atomic-ish call: insert cert + update
+    // expediente + update property + log + notify requester).
+    const { data: { session } } = await supabase.auth.getSession();
+    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "";
+    const res = await fetch(`${apiBase}/api/v1/brc/expedientes/${expedienteId}/certify`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
+      body: JSON.stringify({
         certificate_number: certNumber,
-        expediente_id: expedienteId,
-        property_id: property.id,
-        issued_by: user!.id,
-        pdf_url: pdfUrl,
-        observations: certObservations.trim() || null,
-      })
-      .select("id")
-      .single();
-
-    const certId = certData?.id ?? null;
-
-    // 2. Update expediente status
-    await supabase
-      .from("brc_expedientes")
-      .update({ status: "CERTIFICADO" })
-      .eq("id", expedienteId);
-
-    // 3. Update property brc_status
-    await supabase
-      .from("properties")
-      .update({
-        brc_status: "CERTIFICADO",
-        ...(certId ? { brc_certificate_id: certId } : {}),
-      })
-      .eq("id", property.id);
-
-    // 4. Insert validation record
-    await supabase.from("brc_validations").insert({
-      expediente_id: expedienteId,
-      property_id: property.id,
-      validated_by: user!.id,
-      validation_type: "CERTIFICACION",
-      result: "APROBADO",
-      notes: certObservations.trim() || null,
-    });
-
-    // 5. Log
-    await supabase.from("brc_expediente_logs").insert({
-      expediente_id: expedienteId,
-      action: "CERTIFICADO_EMITIDO",
-      performed_by: user!.id,
-      new_status: "CERTIFICADO",
-      metadata: { certificate_number: certNumber },
+        observations: certObservations.trim() || undefined,
+        pdf_url: pdfUrl ?? undefined,
+      }),
     });
 
     setCertSubmitting(false);
-    router.push("/dashboard/expedientes");
+    if (res.ok) router.push("/dashboard/expedientes");
   }
 
   /* ---------------------------------------------------------------- */

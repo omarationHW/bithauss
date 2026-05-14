@@ -541,8 +541,8 @@ export class OcrService {
     /* 8. Cuenta predial en escritura = boleta predial */
     push(checks, 'cuenta_predial_consistente', 'La cuenta predial coincide entre escritura y boleta predial',
       e.cuentaPredial && predial?.cuentaPredial
-        ? normalizeStr(e.cuentaPredial) === normalizeStr(predial.cuentaPredial)
-          ? pass(`Cuenta ${e.cuentaPredial}.`)
+        ? cuentasPredialMatch(e.cuentaPredial, predial.cuentaPredial)
+          ? pass(`Cuenta ${e.cuentaPredial} ≈ ${predial.cuentaPredial}.`)
           : fail(`Escritura: "${e.cuentaPredial}" ≠ Boleta: "${predial.cuentaPredial}".`)
         : skip('Falta cuenta predial en escritura o boleta.'),
     );
@@ -564,8 +564,8 @@ export class OcrService {
     /* 11. Cuenta agua en escritura = boleta agua */
     push(checks, 'cuenta_agua_consistente', 'El número de cuenta de agua coincide entre escritura y boleta',
       e.cuentaAgua && agua?.numeroCuenta
-        ? normalizeStr(e.cuentaAgua) === normalizeStr(agua.numeroCuenta)
-          ? pass(`Cuenta ${e.cuentaAgua}.`)
+        ? cuentaAguaMatch(e.cuentaAgua, agua.numeroCuenta)
+          ? pass(`Cuenta ${e.cuentaAgua} ≈ ${agua.numeroCuenta}.`)
           : fail(`Escritura: "${e.cuentaAgua}" ≠ Boleta: "${agua.numeroCuenta}".`)
         : skip('Falta cuenta de agua en escritura o boleta.'),
     );
@@ -825,6 +825,39 @@ function addressesMatch(a?: unknown, b?: unknown): boolean {
   let intersection = 0;
   for (const w of wa) if (wb.has(w)) intersection++;
   return intersection / Math.max(wa.size, wb.size) >= 0.4;
+}
+
+/**
+ * Compares two cuenta predial strings. CDMX/MX format is typically AAA-AAA-AA-AAA-Y
+ * where the last digit is a check digit. We strip non-digits and:
+ *   - exact-match the full digit string, OR
+ *   - match the first 11 digits (excluding the check digit), OR
+ *   - match the first 9 digits (account body without verifier/sub-account)
+ * Tolerant to extra zeros, different segment counts, and missing check digits.
+ */
+function cuentasPredialMatch(a?: unknown, b?: unknown): boolean {
+  const da = String(a ?? '').replace(/\D/g, '');
+  const db = String(b ?? '').replace(/\D/g, '');
+  if (!da || !db) return false;
+  if (da === db) return true;
+  // Compare leading digits (drop trailing check digit if one side has it)
+  const minLen = Math.min(da.length, db.length);
+  if (minLen >= 9) {
+    if (da.slice(0, minLen) === db.slice(0, minLen)) return true;
+    if (minLen >= 11 && da.slice(0, 11) === db.slice(0, 11)) return true;
+    if (da.slice(0, 9) === db.slice(0, 9)) return true;
+  }
+  return false;
+}
+
+/** Cuenta agua: tolerant numeric match, ignores separators like ':' '-' '/' '.' */
+function cuentaAguaMatch(a?: unknown, b?: unknown): boolean {
+  const da = String(a ?? '').replace(/\D/g, '');
+  const db = String(b ?? '').replace(/\D/g, '');
+  if (!da || !db) return false;
+  if (da === db) return true;
+  const minLen = Math.min(da.length, db.length);
+  return minLen >= 10 && da.slice(0, minLen) === db.slice(0, minLen);
 }
 
 function checkCurp(e: EscrituraData, ine: IneData | null): CheckOutcome {
