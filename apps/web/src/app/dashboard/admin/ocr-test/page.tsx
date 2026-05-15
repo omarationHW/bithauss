@@ -56,6 +56,13 @@ const KEY_FIELDS: Record<string, string[]> = {
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
+interface StandaloneCheck {
+  rule: string;
+  label: string;
+  status: "pass" | "fail" | "warn" | "skip";
+  message: string;
+}
+
 interface OcrResult {
   valid: boolean;
   confidence: string;
@@ -63,6 +70,7 @@ interface OcrResult {
   expectedType: string;
   message: string;
   extractedData: Record<string, unknown>;
+  standaloneChecks?: StandaloneCheck[];
 }
 
 /* ------------------------------------------------------------------ */
@@ -613,6 +621,40 @@ export default function OcrTestPage() {
                   <p className="text-sm font-bold text-gray-900 truncate">{result.expectedType}</p>
                 </div>
               </div>
+
+              {result.standaloneChecks && result.standaloneChecks.length > 0 && (
+                <div>
+                  <h4
+                    className="text-sm font-bold text-gray-900 mb-3 uppercase tracking-wider"
+                    style={{ fontFamily: "Barlow, Inter, sans-serif" }}
+                  >
+                    Validaciones del documento
+                  </h4>
+                  <div className="space-y-2">
+                    {result.standaloneChecks.map((c) => {
+                      const cfg = {
+                        pass: { bg: "bg-emerald-50", color: "text-emerald-600", icon: CheckCircle2, label: "OK" },
+                        fail: { bg: "bg-red-50", color: "text-red-600", icon: AlertCircle, label: "Falla" },
+                        warn: { bg: "bg-amber-50", color: "text-amber-600", icon: AlertCircle, label: "Atención" },
+                        skip: { bg: "bg-gray-50", color: "text-gray-400", icon: AlertCircle, label: "Sin datos" },
+                      }[c.status];
+                      const Icon = cfg.icon;
+                      return (
+                        <div key={c.rule} className={`flex items-start gap-3 rounded-xl ${cfg.bg} p-3`}>
+                          <Icon className={`h-4 w-4 shrink-0 mt-0.5 ${cfg.color}`} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-gray-900">{c.label}</p>
+                            <p className="text-[11px] text-gray-700 mt-0.5 break-words">{c.message}</p>
+                          </div>
+                          <span className={`shrink-0 text-[9px] font-bold uppercase tracking-wider ${cfg.color}`}>
+                            {cfg.label}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {Object.keys(result.extractedData).length > 0 && (
                 <div>

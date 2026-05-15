@@ -139,6 +139,13 @@ export interface OcrValidationResult {
   expectedType: string;
   extractedData: Record<string, unknown>;
   message: string;
+  /** Per-document standalone checks (CURP format, age of boleta, etc.). */
+  standaloneChecks?: Array<{
+    rule: string;
+    label: string;
+    status: 'pass' | 'fail' | 'warn' | 'skip';
+    message: string;
+  }>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -274,6 +281,9 @@ export class OcrService {
       const displayData = { ...structured };
       delete displayData.tipoDocumento;
 
+      // Run per-type standalone checks (CURP format, boleta age, INE vigencia, etc.)
+      const standaloneChecks = this.runStandaloneChecks(documentSlug, structured);
+
       return {
         valid,
         confidence,
@@ -281,6 +291,7 @@ export class OcrService {
         expectedType: config.expectedType,
         extractedData: displayData,
         message,
+        standaloneChecks,
       };
     } catch (error) {
       this.logger.error(`OCR validation failed for ${documentSlug}:`, error);
@@ -463,6 +474,99 @@ export class OcrService {
         }
       }
     }
+  }
+
+  /* ---- Per-doc standalone checks ---- */
+  // Each doc type may have a few rules that can be evaluated in isolation
+  // (no other documents required). E.g. INE vigencia, boleta age, CURP format.
+  private runStandaloneChecks(
+    slug: string,
+    structured: Record<string, unknown>,
+  ): NonNullable<OcrValidationResult['standaloneChecks']> {
+    const out: NonNullable<OcrValidationResult['standaloneChecks']> = [];
+    const today = Date.now();
+    const threeMonthsMs = 1000 * 60 * 60 * 24 * 92;
+
+    const ageCheck = (
+      rawDate: unknown,
+      label: string,
+      rule: string,
+    ): NonNullable<OcrValidationResult['standaloneChecks']>[0] => {
+      const value = typeof rawDate === 'string' ? rawDate : null;
+      if (!value) return { rule, label, status: 'skip', message: 'No se encontró fecha en el documento.' };
+      const d = parseFlexibleDate(value);
+      if (!d) return { rule, label, status: 'skip', message: `No fue posible interpretar la fecha "${value}".` };
+      const ageMs = today - d.getTime();
+      const ageDays = Math.round(ageMs / (1000 * 60 * 60 * 24));
+      if (ageMs < 0) return { rule, label, status: 'warn', message: `Fecha futura (${d.toISOString().slice(0, 10)}).` };
+      if (ageMs <= threeMonthsMs) return { rule, label, status: 'pass', message: `${ageDays} día(s) de antigüedad (límite 92).` };
+      return { rule, label, status: 'fail', message: `Fecha ${d.toISOString().slice(0, 10)} (${ageDays} días). Excede 3 meses.` };
+    };
+
+    if (slug === 'identificacion_propietario') {
+      // CURP format
+      const curpRaw = String(structured.curp ?? '').toUpperCase().replace(/[\s-]/g, '');
+      if (curpRaw) {
+        const valid = /^[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z0-9]\d$/.test(curpRaw);
+        out.push({
+          rule: 'curp_formato',
+          label: 'CURP tiene formato válido (18 caracteres)',
+          status: valid ? 'pass' : 'fail',
+          message: valid ? `CURP: ${curpRaw}` : `CURP "${curpRaw}" no cumple el formato oficial.`,
+        });
+      } else {
+        out.push({
+          rule: 'curp_formato',
+          label: 'CURP tiene formato válido (18 caracteres)',
+          status: 'skip',
+          message: 'No se encontró CURP en la identificación.',
+        });
+      }
+      // Vigencia
+      const vig = structured.vigencia;
+      if (typeof vig === 'string' && vig) {
+        const d = parseFlexibleDate(vig);
+        if (!d) {
+          out.push({ rule: 'ine_vigencia', label: 'INE vigente', status: 'skip', message: `Vigencia "${vig}" no interpretable.` });
+        } else if (d.getTime() < today) {
+          out.push({ rule: 'ine_vigencia', label: 'INE vigente', status: 'fail', message: `Vencida desde ${d.toISOString().slice(0, 10)}.` });
+        } else {
+          const daysLeft = Math.round((d.getTime() - today) / (1000 * 60 * 60 * 24));
+          if (daysLeft < 60) {
+            out.push({ rule: 'ine_vigencia', label: 'INE vigente', status: 'warn', message: `Vence en ${daysLeft} día(s).` });
+          } else {
+            out.push({ rule: 'ine_vigencia', label: 'INE vigente', status: 'pass', message: `Vigente hasta ${d.toISOString().slice(0, 10)} (${daysLeft} días).` });
+          }
+        }
+      } else {
+        out.push({ rule: 'ine_vigencia', label: 'INE vigente', status: 'skip', message: 'No se encontró vigencia.' });
+      }
+    }
+
+    if (slug === 'ultima_boleta_predial') {
+      out.push(
+        ageCheck(
+          (structured as { fechaEmision?: string }).fechaEmision ??
+            (structured as { fechaPago?: string }).fechaPago ??
+            (structured as { periodo?: string }).periodo,
+          'Boleta predial no mayor a 3 meses',
+          'antiguedad_boleta_predial',
+        ),
+      );
+    }
+
+    if (slug === 'ultima_boleta_agua') {
+      out.push(
+        ageCheck(
+          (structured as { fechaPago?: string }).fechaPago ??
+            (structured as { periodo?: string }).periodo,
+          'Boleta de agua no mayor a 3 meses',
+          'antiguedad_boleta_agua',
+        ),
+      );
+    }
+
+    return out;
   }
 
   /* ---- Cross-check: Escritura de Propiedad against supporting docs ---- */
