@@ -1,3 +1,7 @@
+// IMPORTANT: must be imported first so Sentry can patch Node before
+// any other module is initialized.
+import './instrument';
+
 import { NestFactory } from '@nestjs/core';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
