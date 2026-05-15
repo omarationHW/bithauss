@@ -422,58 +422,9 @@ export class OcrService {
   }
 
   /* ---- Regex fallback for strict-format fields (CURP, RFC) ---- */
-  // CURP: 18 chars: AAAA######H/MAAAAA[A-Z0-9]\d  (homoclave = 2 chars: 1 alphanumeric + 1 digit)
-  // Persona física RFC: 13 chars: AAAA######AAA  (homoclave = 3 alphanumeric)
-  // Both extracted from the raw DocIntelligence text — strip whitespace and dashes first.
+  // Delegates to the top-level applyRegexFallback so it can be unit-tested.
   private regexFallback(rawText: string, structured: Record<string, unknown>) {
-    const flat = rawText
-      .toUpperCase()
-      .replace(/[\s\-_]+/g, '')
-      .replace(/[^A-Z0-9ÑÁÉÍÓÚÜ\n]/g, ' ');
-
-    const curpRegex = /[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z0-9]\d/g;
-    const curps = [...flat.matchAll(curpRegex)].map((m) => m[0]);
-    if (curps.length > 0) {
-      // Pick the most common (in case OCR repeated it) — usually all the same.
-      const counts = curps.reduce<Record<string, number>>((acc, c) => {
-        acc[c] = (acc[c] ?? 0) + 1;
-        return acc;
-      }, {});
-      const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
-      if (best) {
-        // Only set if the LLM didn't already extract a valid-looking CURP.
-        const llmCurp = String(structured.curp ?? '').toUpperCase().replace(/[\s\-_]/g, '');
-        if (!curpRegex.test(llmCurp)) {
-          curpRegex.lastIndex = 0;
-          structured.curp = best;
-        } else {
-          curpRegex.lastIndex = 0;
-        }
-      }
-    }
-
-    // RFC (persona física) — only attempt extraction; do NOT run this on INE-only flows
-    // because INE never has RFC. Other docs (escritura, comprobantes fiscales) often do.
-    if (structured.rfc !== undefined || structured.rfcComprador !== undefined) {
-      const rfcRegex = /\b[A-ZÑ&]{4}\d{6}[A-Z0-9]{3}\b/g;
-      const rfcs = [...rawText.toUpperCase().matchAll(rfcRegex)].map((m) => m[0]);
-      // Filter out matches that look like CURPs (CURP is 18 chars; RFC is 13).
-      const valid = rfcs.filter((r) => r.length === 13);
-      if (valid.length > 0) {
-        const counts = valid.reduce<Record<string, number>>((acc, c) => {
-          acc[c] = (acc[c] ?? 0) + 1;
-          return acc;
-        }, {});
-        const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
-        if (best) {
-          const targetKey = structured.rfcComprador !== undefined ? 'rfcComprador' : 'rfc';
-          const currentRfc = String(structured[targetKey] ?? '').toUpperCase().replace(/[\s\-_]/g, '');
-          if (!/^[A-ZÑ&]{4}\d{6}[A-Z0-9]{3}$/.test(currentRfc)) {
-            structured[targetKey] = best;
-          }
-        }
-      }
-    }
+    applyRegexFallback(rawText, structured);
   }
 
   /* ---- Per-doc standalone checks ---- */
@@ -1163,4 +1114,58 @@ function checkIneVigente(ine: IneData | null, todayMs: number): CheckOutcome {
   const daysRemaining = Math.round((d.getTime() - todayMs) / (1000 * 60 * 60 * 24));
   if (daysRemaining < 60) return warn(`Vence en ${daysRemaining} día(s) (${d.toISOString().slice(0, 10)}).`);
   return pass(`Vigente hasta ${d.toISOString().slice(0, 10)} (${daysRemaining} días).`);
+}
+
+/**
+ * Mutates `structured` in place, filling curp / rfc / rfcComprador
+ * from the raw OCR text when the LLM omitted or mis-extracted them.
+ *
+ * CURP: 18 chars matching AAAA######H/M AAAA[A-Z0-9]\d
+ * RFC persona física: 13 chars matching AAAA######AAA
+ *
+ * Exported so unit tests can exercise it without instantiating the
+ * NestJS service.
+ */
+export function applyRegexFallback(rawText: string, structured: Record<string, unknown>): void {
+  const flat = rawText
+    .toUpperCase()
+    .replace(/[\s\-_]+/g, '')
+    .replace(/[^A-Z0-9ÑÁÉÍÓÚÜ\n]/g, ' ');
+
+  const CURP_RE = /[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z0-9]\d/g;
+  const curps = [...flat.matchAll(CURP_RE)].map((m) => m[0]);
+  if (curps.length > 0) {
+    const counts = curps.reduce<Record<string, number>>((acc, c) => {
+      acc[c] = (acc[c] ?? 0) + 1;
+      return acc;
+    }, {});
+    const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
+    if (best) {
+      const llmCurp = String(structured.curp ?? '').toUpperCase().replace(/[\s\-_]/g, '');
+      if (!/^[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z0-9]\d$/.test(llmCurp)) {
+        structured.curp = best;
+      }
+    }
+  }
+
+  // RFC only attempted when the schema includes it (e.g. escritura prompts);
+  // INE never has RFC.
+  if (structured.rfc !== undefined || structured.rfcComprador !== undefined) {
+    const RFC_RE = /\b[A-ZÑ&]{4}\d{6}[A-Z0-9]{3}\b/g;
+    const rfcs = [...rawText.toUpperCase().matchAll(RFC_RE)].map((m) => m[0]).filter((r) => r.length === 13);
+    if (rfcs.length > 0) {
+      const counts = rfcs.reduce<Record<string, number>>((acc, c) => {
+        acc[c] = (acc[c] ?? 0) + 1;
+        return acc;
+      }, {});
+      const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
+      if (best) {
+        const targetKey = structured.rfcComprador !== undefined ? 'rfcComprador' : 'rfc';
+        const currentRfc = String(structured[targetKey] ?? '').toUpperCase().replace(/[\s\-_]/g, '');
+        if (!/^[A-ZÑ&]{4}\d{6}[A-Z0-9]{3}$/.test(currentRfc)) {
+          structured[targetKey] = best;
+        }
+      }
+    }
+  }
 }
