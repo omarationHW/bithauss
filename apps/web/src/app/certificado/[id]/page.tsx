@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import {
   ArrowLeft,
   Download,
@@ -274,8 +275,8 @@ function Watermarks() {
             className="whitespace-nowrap font-bold tracking-[0.4em]"
             style={{
               color: COLORS.forest,
-              opacity: 0.06,
-              fontSize: "38px",
+              opacity: 0.1,
+              fontSize: "44px",
               fontFamily: "var(--font-cinzel), serif",
             }}
           >
@@ -438,7 +439,6 @@ export default function CertificadoPage() {
   const [certificate, setCertificate] = useState<CertificateData | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [scale, setScale] = useState(1);
-  const [qrDataUrl, setQrDataUrl] = useState<string>("");
 
   const certRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -532,30 +532,6 @@ export default function CertificadoPage() {
     return () => window.removeEventListener("resize", updateScale);
   }, [loading]);
 
-  /* ------------------ QR code (local generation, no CORS) ------------------ */
-  useEffect(() => {
-    if (!certificate) return;
-    const url =
-      typeof window !== "undefined"
-        ? `${window.location.origin}/certificado/${certificate.id}`
-        : `/certificado/${certificate.id}`;
-
-    (async () => {
-      try {
-        const QRCode = (await import("qrcode")).default;
-        const dataUrl = await QRCode.toDataURL(url, {
-          errorCorrectionLevel: "H",
-          margin: 0,
-          width: 240,
-          color: { dark: COLORS.navy, light: "#ffffff" },
-        });
-        setQrDataUrl(dataUrl);
-      } catch (err) {
-        logError("QR generation error:", err);
-      }
-    })();
-  }, [certificate]);
-
   /* ------------------ Download PDF ------------------ */
   const handleDownload = useCallback(async () => {
     if (!certRef.current || downloading) return;
@@ -574,15 +550,13 @@ export default function CertificadoPage() {
       const canvas = await html2canvas(certRef.current, {
         scale: 2,
         useCORS: true,
-        allowTaint: false,
         backgroundColor: COLORS.paper,
         logging: false,
-        imageTimeout: 15000,
-        windowWidth: 816,
-        windowHeight: 1344,
+        windowWidth: certRef.current.scrollWidth,
+        windowHeight: certRef.current.scrollHeight,
       });
 
-      const imgData = canvas.toDataURL("image/jpeg", 0.92);
+      const imgData = canvas.toDataURL("image/jpeg", 0.95);
       const pdf = new jsPDF({
         orientation: "portrait",
         unit: "mm",
@@ -594,11 +568,6 @@ export default function CertificadoPage() {
       pdf.save(filename);
     } catch (err) {
       logError("Download error:", err);
-      if (typeof window !== "undefined") {
-        window.alert(
-          "No se pudo generar el PDF. Intenta recargar la página o usar otro navegador."
-        );
-      }
     } finally {
       setDownloading(false);
     }
@@ -671,6 +640,8 @@ export default function CertificadoPage() {
       ? `${window.location.origin}/certificado/${certificate.id}`
       : `/certificado/${certificate.id}`;
 
+  const scaledHeight = 1287 * scale; // Native height (8.5" * 14/8.5 ratio... actually 14in = 1344px @96dpi but we'll use computed)
+
   return (
     <div className="min-h-screen bg-neutral-300 pt-[110px] pb-12">
       <div className="mx-auto max-w-[840px] px-4">
@@ -741,10 +712,14 @@ export default function CertificadoPage() {
                 issuedMonth={issuedMonth}
                 issuedYear={issuedYear}
                 verifyUrl={verifyUrl}
-                qrDataUrl={qrDataUrl}
               />
             </div>
           </div>
+        </div>
+
+        {/* Hidden second-line keeps wrapper aligned (fallback for very narrow vp) */}
+        <div style={{ height: 0 }} aria-hidden>
+          {scaledHeight}
         </div>
       </div>
     </div>
@@ -768,7 +743,6 @@ interface CertificateDocumentProps {
   issuedMonth: string;
   issuedYear: string;
   verifyUrl: string;
-  qrDataUrl: string;
 }
 
 const CertificateDocument = ({
@@ -783,8 +757,10 @@ const CertificateDocument = ({
   issuedDay,
   issuedMonth,
   issuedYear,
-  qrDataUrl,
+  verifyUrl,
 }: CertificateDocumentProps & { ref?: React.Ref<HTMLDivElement> }) => {
+  const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=0&data=${encodeURIComponent(verifyUrl)}`;
+
   return (
     <div
       ref={ref}
@@ -1047,32 +1023,18 @@ const CertificateDocument = ({
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              {qrDataUrl ? (
-                // Using <img> instead of next/image: data URL avoids CORS/taint
-                // issues when html2canvas rasterizes the document.
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={qrDataUrl}
-                  alt="QR de verificación"
-                  width={86}
-                  height={86}
-                  style={{
-                    border: `1px solid ${COLORS.navy}`,
-                    background: "#fff",
-                    padding: "3px",
-                    display: "block",
-                  }}
-                />
-              ) : (
-                <div
-                  style={{
-                    width: 86,
-                    height: 86,
-                    border: `1px solid ${COLORS.navy}`,
-                    background: "#fff",
-                  }}
-                />
-              )}
+              <Image
+                src={qrSrc}
+                alt="QR de verificación"
+                width={86}
+                height={86}
+                unoptimized
+                style={{
+                  border: `1px solid ${COLORS.navy}`,
+                  background: "#fff",
+                  padding: "3px",
+                }}
+              />
               <BitHaussMark />
             </div>
             <p
