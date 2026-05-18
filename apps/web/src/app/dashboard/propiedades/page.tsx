@@ -46,6 +46,7 @@ interface Property {
   lead_count: number;
   view_count: number;
   featured_image_url: string | null;
+  brc_certificate_id: string | null;
 }
 
 const tabs: { label: string; value: TabValue }[] = [
@@ -153,7 +154,7 @@ export default function PropiedadesPage() {
     const { data, error } = await supabase
       .from("properties")
       .select(
-        "id, title, address_line, city, state, price, currency, status, brc_status, operation, lead_count, view_count, featured_image_url",
+        "id, title, address_line, city, state, price, currency, status, brc_status, operation, lead_count, view_count, featured_image_url, brc_certificate_id",
       )
       .eq("owner_id", user.id)
       .neq("status", "ELIMINADO")
@@ -498,6 +499,18 @@ export default function PropiedadesPage() {
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </div>
+
+                {/* Certificate-oficio link, only for certified properties */}
+                {prop.brc_status === "CERTIFICADO" && prop.brc_certificate_id && (
+                  <Link
+                    href={`/certificado/${prop.brc_certificate_id}/oficio`}
+                    target="_blank"
+                    className="mt-3 flex items-center justify-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50/50 px-3 py-2 text-xs font-bold text-emerald-700 transition-all duration-300 hover:bg-emerald-50 hover:shadow-sm"
+                  >
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                    Ver certificado oficial
+                  </Link>
+                )}
               </div>
             </div>
           ))}
