@@ -16,9 +16,9 @@ import {
 import { createClient } from "@/lib/supabase/client";
 
 const navLinks = [
-  { label: "Compra", href: "/propiedades" },
-  { label: "Venta", href: "/propiedades" },
-  { label: "Renta", href: "/propiedades" },
+  { label: "Compra", href: "/propiedades?op=comprar" },
+  { label: "Venta", href: "/#vender" },
+  { label: "Renta", href: "/propiedades?op=rentar" },
   { label: "Certificado BRC", href: "/como-funciona" },
   { label: "Nosotros", href: "/nosotros" },
 ];
@@ -48,41 +48,48 @@ export function Navbar() {
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getUser().then(async ({ data: { user: authUser } }) => {
-      if (authUser) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("first_name, last_name, avatar_url")
-          .eq("id", authUser.id)
-          .maybeSingle();
+    let cancelled = false;
 
-        const first = profile?.first_name ?? authUser.user_metadata?.first_name ?? "";
-        const last = profile?.last_name ?? authUser.user_metadata?.last_name ?? "";
-        const name = `${first} ${last}`.trim() || authUser.email || "Usuario";
-        const initials = first && last
-          ? `${first[0]}${last[0]}`.toUpperCase()
-          : name.slice(0, 2).toUpperCase();
-        setUser({ name, initials, avatarUrl: profile?.avatar_url ?? null });
-      } else {
-        setUser(null);
+    async function loadUser(authUser: { id: string; email?: string; user_metadata?: Record<string, unknown> } | null) {
+      if (!authUser) {
+        if (!cancelled) setUser(null);
+        return;
+      }
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("first_name, last_name, avatar_url")
+        .eq("id", authUser.id)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      const meta = authUser.user_metadata ?? {};
+      const first = profile?.first_name ?? (meta.first_name as string | undefined) ?? "";
+      const last = profile?.last_name ?? (meta.last_name as string | undefined) ?? "";
+      const name = `${first} ${last}`.trim() || authUser.email || "Usuario";
+      const initials = first && last
+        ? `${first[0]}${last[0]}`.toUpperCase()
+        : name.slice(0, 2).toUpperCase();
+      setUser({ name, initials, avatarUrl: profile?.avatar_url ?? null });
+    }
+
+    supabase.auth.getUser().then(({ data: { user: authUser } }) => {
+      loadUser(authUser);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // Ignore TOKEN_REFRESHED / USER_UPDATED to avoid clobbering the avatar
+      // with a session payload that doesn't include the profile data.
+      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "INITIAL_SESSION") {
+        loadUser(session?.user ?? null);
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        const first = session.user.user_metadata?.first_name ?? "";
-        const last = session.user.user_metadata?.last_name ?? "";
-        const name = `${first} ${last}`.trim() || session.user.email || "Usuario";
-        const initials = first && last
-          ? `${first[0]}${last[0]}`.toUpperCase()
-          : name.slice(0, 2).toUpperCase();
-        setUser({ name, initials, avatarUrl: null });
-      } else {
-        setUser(null);
-      }
-    });
-
-    return () => subscription.unsubscribe();
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, []);
 
   // Close dropdown when clicking outside
@@ -143,6 +150,7 @@ export function Navbar() {
             alt="BitHauss"
             width={140}
             height={36}
+            priority
             className="h-8 w-auto transition-all duration-300"
           />
         </Link>

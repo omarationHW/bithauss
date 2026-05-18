@@ -7,32 +7,32 @@ const cities = [
   {
     name: "Ciudad de México",
     short: "CDMX",
-    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/CDMX.webp",
+    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/CDMX.jpg",
   },
   {
     name: "Guadalajara",
     short: "Guadalajara",
-    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Guadalajara.webp",
+    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Guadalajara.jpg",
   },
   {
     name: "Nuevo León",
     short: "Nuevo León",
-    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/NuevoLeon.webp",
+    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/NuevoLeon.jpg",
   },
   {
     name: "Puebla",
     short: "Puebla",
-    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/PUEBLA.webp",
+    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/PUEBLA.jpg",
   },
   {
     name: "Veracruz",
     short: "Veracruz",
-    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Veracruz.webp",
+    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Veracruz.jpg",
   },
   {
     name: "Querétaro",
     short: "Querétaro",
-    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Queretaro.webp",
+    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Queretaro.jpg",
   },
 ];
 

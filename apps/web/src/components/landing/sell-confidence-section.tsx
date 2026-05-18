@@ -45,7 +45,7 @@ export function SellConfidenceSection() {
             {/* Right image */}
             <div className="relative aspect-[4/3] overflow-hidden rounded-xl">
               <Image
-                src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/vende-tu-casa-con-confianza.jpg"
+                src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Vende-tu-casa-con-confianza.jpg"
                 alt="Vende tu casa con confianza"
                 fill
                 placeholder="blur"

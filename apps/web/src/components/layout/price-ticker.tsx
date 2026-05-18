@@ -4,14 +4,25 @@ import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { DollarSign, Euro, Bitcoin } from "lucide-react";
+import { logError } from "@/lib/log";
 
-const tickerItems = [
-  { label: "USD/MXN", value: "17.15", change: "+0.12%", positive: true, icon: DollarSign },
-  { label: "EUR/MXN", value: "18.62", change: "+0.08%", positive: true, icon: Euro },
-  { label: "BTC/USD", value: "68,432.50", change: "+2.34%", positive: true, icon: Bitcoin },
-  { label: "ETH/USD", value: "3,842.18", change: "-0.45%", positive: false, icon: null },
-  { label: "BTC/MXN", value: "1,173,717", change: "+2.46%", positive: true, icon: Bitcoin },
-  { label: "USDC/MXN", value: "17.14", change: "+0.10%", positive: true, icon: DollarSign },
+type IconComp = typeof DollarSign | null;
+
+interface DisplayItem {
+  label: string;
+  value: string;
+  change: string;
+  positive: boolean;
+  icon: IconComp;
+}
+
+interface ApiItem {
+  label: string;
+  value: number;
+  change: number;
+}
+
+const fallbackItems: DisplayItem[] = [
   { label: "USD/MXN", value: "17.15", change: "+0.12%", positive: true, icon: DollarSign },
   { label: "EUR/MXN", value: "18.62", change: "+0.08%", positive: true, icon: Euro },
   { label: "BTC/USD", value: "68,432.50", change: "+2.34%", positive: true, icon: Bitcoin },
@@ -19,6 +30,28 @@ const tickerItems = [
   { label: "BTC/MXN", value: "1,173,717", change: "+2.46%", positive: true, icon: Bitcoin },
   { label: "USDC/MXN", value: "17.14", change: "+0.10%", positive: true, icon: DollarSign },
 ];
+
+function iconFor(label: string): IconComp {
+  if (label.startsWith("BTC")) return Bitcoin;
+  if (label.startsWith("ETH")) return null;
+  if (label.includes("EUR")) return Euro;
+  return DollarSign;
+}
+
+function formatValue(value: number, label: string): string {
+  if (label === "BTC/MXN") {
+    return value.toLocaleString("en-US", { maximumFractionDigits: 0 });
+  }
+  if (label.startsWith("BTC") || label.startsWith("ETH")) {
+    return value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  return value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function formatChange(change: number): string {
+  const sign = change >= 0 ? "+" : "";
+  return `${sign}${change.toFixed(2)}%`;
+}
 
 function EthIcon({ className }: { className?: string }) {
   return (
@@ -30,6 +63,7 @@ function EthIcon({ className }: { className?: string }) {
 
 export function PriceTicker() {
   const [scrolled, setScrolled] = useState(false);
+  const [items, setItems] = useState<DisplayItem[]>(fallbackItems);
   const pathname = usePathname();
   const isHome = pathname === "/";
 
@@ -40,6 +74,35 @@ export function PriceTicker() {
     handleScroll();
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const res = await fetch("/api/ticker", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = (await res.json()) as { items: ApiItem[] };
+        if (cancelled || !Array.isArray(data.items) || data.items.length === 0) return;
+        setItems(
+          data.items.map((it) => ({
+            label: it.label,
+            value: formatValue(it.value, it.label),
+            change: formatChange(it.change),
+            positive: it.change >= 0,
+            icon: iconFor(it.label),
+          })),
+        );
+      } catch (err) {
+        logError("price ticker fetch failed", err);
+      }
+    }
+    load();
+    const interval = setInterval(load, 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, []);
 
   const solid = !isHome || scrolled;
@@ -74,7 +137,7 @@ export function PriceTicker() {
 
         {/* Scrolling content */}
         <div className="animate-ticker flex whitespace-nowrap">
-          {[...tickerItems, ...tickerItems].map((item, i) => {
+          {[...items, ...items].map((item, i) => {
             const IconComponent = item.icon;
             return (
               <div key={i} className="inline-flex items-center gap-1.5 px-5">

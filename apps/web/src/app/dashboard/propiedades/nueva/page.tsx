@@ -334,6 +334,35 @@ export default function NuevaPropiedadPage() {
       const supabase = createClient();
       const slug = slugify(form.titulo) + "-" + Date.now().toString(36);
 
+      // Geocode the address (best-effort; if it fails, lat/lng stay null
+      // and the detail page falls back to live geocoding).
+      let latitude: number | null = null;
+      let longitude: number | null = null;
+      const addressQuery = [
+        form.direccion,
+        form.colonia,
+        form.ciudad,
+        form.estado,
+        form.codigo_postal ? `C.P. ${form.codigo_postal}` : "",
+        "México",
+      ]
+        .filter(Boolean)
+        .join(", ");
+      if (addressQuery) {
+        try {
+          const geoRes = await fetch(`/api/geocode?q=${encodeURIComponent(addressQuery)}`);
+          if (geoRes.ok) {
+            const geo = await geoRes.json();
+            if (geo?.result?.lat && geo?.result?.lng) {
+              latitude = geo.result.lat;
+              longitude = geo.result.lng;
+            }
+          }
+        } catch {
+          // Silent: geocoding is non-blocking
+        }
+      }
+
       // Insert property first to get ID
       const { data: property, error: insertError } = await supabase
         .from("properties")
@@ -358,6 +387,8 @@ export default function NuevaPropiedadPage() {
           city: form.ciudad,
           state: form.estado,
           zip_code: form.codigo_postal || null,
+          latitude,
+          longitude,
           amenities: form.amenidades,
           status: status === "publicado" ? "PUBLICADO" : "BORRADOR",
           published_at: status === "publicado" ? new Date().toISOString() : null,

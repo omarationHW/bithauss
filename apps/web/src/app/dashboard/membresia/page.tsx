@@ -8,6 +8,7 @@ import {
   Download,
   ArrowUpRight,
 } from "lucide-react";
+import { BrcExclusionNotice } from "@/components/ui/brc-exclusion-notice";
 
 /* ------------------------------------------------------------------ */
 /*  Mock Data                                                          */
@@ -156,6 +157,8 @@ export default function MembresiaPage() {
           Administra tu plan, uso y facturación.
         </p>
       </div>
+
+      <BrcExclusionNotice />
 
       {/* ============================================================ */}
       {/*  Current Plan Card                                            */}

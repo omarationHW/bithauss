@@ -16,6 +16,7 @@ import { createClient } from "@/lib/supabase/client";
 import { logError } from "@/lib/log";
 import { useUser } from "@/app/dashboard/_context/user-context";
 import { ShieldBrc } from '@/components/ui/shield-brc'
+import { BrcExclusionNotice } from '@/components/ui/brc-exclusion-notice'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -401,6 +402,8 @@ export default function SolicitarBrcPage() {
           Completa el formulario para iniciar el proceso de certificacion de tu propiedad.
         </p>
       </div>
+
+      <BrcExclusionNotice />
 
       {/* ============================================================ */}
       {/*  Property Info Card                                           */}

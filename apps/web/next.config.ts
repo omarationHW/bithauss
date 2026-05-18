@@ -28,7 +28,7 @@ const csp = [
   "img-src 'self' data: blob: https://*.azurewebsites.net https://*.azurefd.net https://*.supabase.co",
   "font-src 'self' data:",
   `connect-src ${connectSrc}`,
-  "frame-src 'self' blob:",
+  "frame-src 'self' blob: https://www.openstreetmap.org https://www.google.com",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",

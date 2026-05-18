@@ -1,5 +1,6 @@
 import Image from 'next/image'
 import { cn } from '@/lib/utils'
+import { BrcExclusionNotice } from '@/components/ui/brc-exclusion-notice'
 
 type Step = {
   title: string
@@ -39,7 +40,7 @@ const steps: Step[] = [
     keepOriginalColor: true,
   },
   {
-    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Certificado-BRC-3D.png',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Certificado-BRC.png',
     title: 'Certificado BRC',
     description:
       'BitHauss emite un Certificado Digital en la Blockchain que garantiza inmutabilidad del BRC - Bien Raíz Cerificado - Certificado Notarial, que puede ser consultado de manera pública.',
@@ -95,6 +96,8 @@ export function BrcSection() {
             valida la autenticidad de cada propiedad, protegiendo a compradores y vendedores.
           </p>
 
+          <BrcExclusionNotice className="mt-6 max-w-3xl" />
+
           {/* Steps */}
           <div className="mt-10">
             {/* Icons + Arrows row (desktop) */}
@@ -104,11 +107,11 @@ export function BrcSection() {
                   <div className="flex flex-1 justify-center">
                     <div
                       className={cn(
-                        'flex h-16 w-16 items-center justify-center rounded-full',
+                        'flex h-24 w-24 items-center justify-center rounded-full',
                         step.bgColor,
                       )}
                     >
-                      <StepIcon step={step} size={34} />
+                      <StepIcon step={step} size={64} />
                     </div>
                   </div>
                   {index < steps.length - 1 && (
@@ -158,11 +161,11 @@ export function BrcSection() {
                 <div key={step.title} className="flex items-start gap-4">
                   <div
                     className={cn(
-                      'flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-full',
+                      'flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-full',
                       step.bgColor,
                     )}
                   >
-                    <StepIcon step={step} size={34} />
+                    <StepIcon step={step} size={52} />
                   </div>
                   <div>
                     <h3 className={cn('text-sm font-semibold', step.color)}>{step.title}</h3>

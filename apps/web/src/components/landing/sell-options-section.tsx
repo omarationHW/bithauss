@@ -6,21 +6,21 @@ import { Eye } from 'lucide-react'
 const options = [
   {
     title: 'Vende tu casa tú mismo\nCon certificación BRC',
-    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Opcionventa1.webp',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Opcionventa1.jpg',
   },
   {
     title: 'Busca tu propio agente\nespecializado',
-    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Opcionventa2.webp',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Opcionventa2.jpg',
   },
   {
     title: 'Recibe leads directos\nde compradores interesados',
-    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Opcionventa3.webp',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Opcionventa3.jpg',
   },
 ]
 
 export function SellOptionsSection() {
   return (
-    <section className="px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
+    <section id="vender" className="px-4 py-16 sm:px-6 sm:py-20 lg:px-8 scroll-mt-20">
       <div className="mx-auto max-w-5xl">
         {/* Header */}
         <div className="mb-10 text-center">

@@ -507,7 +507,7 @@ export default function PropiedadesPage() {
                     target="_blank"
                     className="mt-3 flex items-center justify-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50/50 px-3 py-2 text-xs font-bold text-emerald-700 transition-all duration-300 hover:bg-emerald-50 hover:shadow-sm"
                   >
-                    <ShieldCheck className="h-3.5 w-3.5" />
+                    <ShieldBrc className="h-3.5 w-3.5" />
                     Ver certificado oficial
                   </Link>
                 )}

@@ -82,7 +82,8 @@ const solutions = [
     description:
       "Creadores del concepto BRC para reducir fraudes inmobiliarios mediante validación notarial digital.",
     iconColor: "text-emerald-500",
-    iconBg: "bg-emerald-100",
+    iconBg: "bg-gradient-to-br from-blue-50 to-emerald-50 ring-1 ring-blue-100",
+    iconGradient: true,
   },
   {
     icon: Building2,
@@ -157,7 +158,7 @@ const values = [
   {
     title: "Seguridad",
     description: "La protección de tu patrimonio es nuestra prioridad",
-    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Seguridad.png",
+    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Seguridad-Seccion2.png",
     bg: "bg-blue-50",
   },
   {
@@ -347,12 +348,13 @@ export default function NosotrosPage() {
                   resolviendo
                 </p>
               </div>
-              <div className="absolute right-16 bottom-0">
+              <div className="absolute right-8 -bottom-24">
                 <Image
-                  src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Crisis-inmobiliaria4.png"
-                  alt="Crisis inmobiliaria"
-                  width={400}
-                  height={280}
+                  src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/El-fraude-inmobiliario-es-una-crisis-real.png"
+                  alt="El fraude inmobiliario es una crisis real"
+                  width={560}
+                  height={400}
+                  className="-scale-x-100"
                 />
               </div>
             </div>
@@ -401,6 +403,7 @@ export default function NosotrosPage() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {solutions.map((solution) => {
               const Icon = solution.icon;
+              const useGradient = "iconGradient" in solution && solution.iconGradient && Icon === ShieldBrc;
               return (
                 <div
                   key={solution.title}
@@ -408,7 +411,11 @@ export default function NosotrosPage() {
                 >
                   <div className="mb-4 flex justify-center">
                     <div className={`w-12 h-12 rounded-full flex items-center justify-center ${solution.iconBg}`}>
-                      <Icon className={`h-5 w-5 ${solution.iconColor}`} />
+                      {useGradient ? (
+                        <ShieldBrc gradient className="h-6 w-6" strokeWidth={1.6} />
+                      ) : (
+                        <Icon className={`h-5 w-5 ${solution.iconColor}`} />
+                      )}
                     </div>
                   </div>
                   <h3 className="text-center font-semibold mb-2">
@@ -528,36 +535,38 @@ export default function NosotrosPage() {
       </section>
 
       {/* ============================================================ */}
-      {/*  8. Números que nos respaldan                                */}
+      {/*  8. Números que nos respaldan — COMENTADO temporalmente      */}
       {/* ============================================================ */}
-      <section className="py-16 sm:py-20 px-4 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-5xl">
-          <h2 className="text-2xl sm:text-3xl font-bold text-center mb-12">
-            Números que nos respaldan
-          </h2>
+      {false && (
+        <section className="py-16 sm:py-20 px-4 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-5xl">
+            <h2 className="text-2xl sm:text-3xl font-bold text-center mb-12">
+              Números que nos respaldan
+            </h2>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            {platformStats.map((stat) => (
-              <div key={stat.label} className="text-center transition-all duration-300 hover:scale-110">
-                <p
-                  className="text-4xl sm:text-5xl font-bold"
-                  style={{
-                    background:
-                      "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
-                    WebkitBackgroundClip: "text",
-                    WebkitTextFillColor: "transparent",
-                  }}
-                >
-                  {stat.value}
-                </p>
-                <p className="text-sm text-muted-foreground mt-2">
-                  {stat.label}
-                </p>
-              </div>
-            ))}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+              {platformStats.map((stat) => (
+                <div key={stat.label} className="text-center transition-all duration-300 hover:scale-110">
+                  <p
+                    className="text-4xl sm:text-5xl font-bold"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
+                      WebkitBackgroundClip: "text",
+                      WebkitTextFillColor: "transparent",
+                    }}
+                  >
+                    {stat.value}
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    {stat.label}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* ============================================================ */}
       {/*  9. CTA                                                      */}

@@ -4,6 +4,7 @@ import Image from 'next/image'
 import { ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ShieldBrc } from '@/components/ui/shield-brc'
+import { BrcExclusionNotice } from '@/components/ui/brc-exclusion-notice'
 
 export const metadata: Metadata = {
   title: 'Como Funciona - BitHauss',
@@ -95,7 +96,7 @@ const brcSteps = [
     step: 5,
     title: 'Certificado Digital',
     description: 'Se emite el Certificado BRC con sello digital verificable',
-    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Certificado Digital.png',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/ICONO-DE-VERIFICACION.png',
     cta: 'Certifica tu propiedad',
     badgeColor: 'bg-emerald-500',
     smallImage: true,
@@ -125,7 +126,7 @@ const benefits = [
   },
   {
     title: 'Notarios Públicos en México',
-    description: 'Notarios certificados en todo México',
+    description: 'Notarios certificados en México',
   },
 ]
 
@@ -225,8 +226,8 @@ export default function ComoFuncionaPage() {
                 </p>
               </div>
               <div>
-                <div className="mb-2 h-11 w-11 rounded-full bg-white/10 flex items-center justify-center">
-                  <ShieldBrc className="h-6 w-6 text-white" />
+                <div className="mb-2 h-16 w-16 rounded-full bg-white/10 flex items-center justify-center">
+                  <ShieldBrc className="h-10 w-10 text-white" />
                 </div>
                 <p className="text-[10px] text-white/70 leading-snug text-justify">
                   Emitimos el Certificado BRC con sello digital verificable ante notario
@@ -268,12 +269,12 @@ export default function ComoFuncionaPage() {
                 key={step.title}
                 className={`rounded-2xl overflow-hidden ${step.bg} ${step.textWhite ? 'text-white' : ''} transition-all duration-300 hover:shadow-lg hover:-translate-y-1`}
               >
-                <div className={`relative overflow-hidden ${step.fullImage ? 'h-60' : 'h-52'}`}>
+                <div className={`relative overflow-hidden ${step.fullImage ? 'h-60' : 'h-64'}`}>
                   <Image
                     src={step.image}
                     alt={step.title}
                     fill
-                    className={step.fullImage ? "object-cover scale-110" : "object-contain p-2"}
+                    className={step.fullImage ? "object-cover scale-110" : "object-contain p-0 scale-110"}
                   />
                 </div>
                 <div className="p-5">
@@ -354,6 +355,8 @@ export default function ComoFuncionaPage() {
             </p>
           </div>
 
+          <BrcExclusionNotice className="mb-8 max-w-3xl mx-auto" />
+
           <div className="space-y-6">
             {brcSteps.map((step, index) => {
               const isOdd = index % 2 !== 0
@@ -418,7 +421,7 @@ export default function ComoFuncionaPage() {
               ?
             </h2>
             <p className="text-muted-foreground mt-3">
-              Las razones por las que miles de profesionales confían en nosotros
+              Las razones por las que los profesionales confían en nosotros
             </p>
           </div>
 

@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
-import Link from 'next/link'
 import { Lock, Link2, FileCheck } from 'lucide-react'
 import { ShieldBrc } from '@/components/ui/shield-brc'
+import { BrcExclusionNotice } from '@/components/ui/brc-exclusion-notice'
 
 const features = [
   {
@@ -44,13 +44,6 @@ const features = [
   },
 ]
 
-const steps = [
-  { step: '01', label: 'Solicitud', desc: 'El propietario registra la propiedad en la plataforma' },
-  { step: '02', label: 'Verificación Documental', desc: 'Revisión legal apoyada con Inteligencia Artificial' },
-  { step: '03', label: 'Validación Notarial', desc: 'Notarios certificados validan el estatus jurídico' },
-  { step: '04', label: 'Certificado BRC', desc: 'Certificado digital inmutable emitido en Blockchain' },
-]
-
 function useInView(threshold = 0.15) {
   const ref = useRef<HTMLDivElement>(null)
   const [inView, setInView] = useState(false)
@@ -71,7 +64,6 @@ export function SecurityBrcSection() {
   const header = useInView(0.2)
   const image = useInView(0.1)
   const cards = useInView(0.1)
-  const stepsBlock = useInView(0.1)
 
   return (
     <section className="relative overflow-hidden bg-white py-16 sm:py-24 px-4 sm:px-6 lg:px-8">
@@ -117,6 +109,7 @@ export function SecurityBrcSection() {
             Combinamos cifrado bancario, tecnología Blockchain y validación
             notarial para que cada transacción sea segura, transparente e inviolable.
           </p>
+          <BrcExclusionNotice className="mt-6 max-w-2xl mx-auto" />
         </div>
 
         {/* Two-column */}
@@ -139,11 +132,11 @@ export function SecurityBrcSection() {
                 style={{ background: 'radial-gradient(circle at 60% 40%, hsl(221 83% 53% / 0.4), transparent 60%)' }}
               />
               <Image
-                src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/seguridad-brc-familia.png"
+                src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Seguridad.png"
                 alt="Familia protegida por BitHauss BRC"
-                width={480}
-                height={480}
-                className="relative z-10 object-contain w-full h-full p-8 animate-float"
+                fill
+                sizes="(max-width: 1024px) 100vw, 50vw"
+                className="relative z-10 object-cover animate-float"
               />
             </div>
           </div>
@@ -172,55 +165,6 @@ export function SecurityBrcSection() {
                 </div>
               )
             })}
-          </div>
-        </div>
-
-        {/* Pasos BRC — scale-in escalonado */}
-        <div
-          ref={stepsBlock.ref}
-          className={`rounded-2xl px-8 py-8 border transition-all duration-700 ${
-            stepsBlock.inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
-          }`}
-          style={{
-            background: 'linear-gradient(135deg, hsl(221 83% 53% / 0.05), hsl(160 84% 39% / 0.05))',
-            borderColor: 'hsl(221 83% 53% / 0.15)',
-          }}
-        >
-          <p className="text-center text-sm font-semibold text-foreground mb-6">
-            ¿Cómo funciona el Certificado BRC?
-          </p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
-            {steps.map((s, i) => (
-              <div
-                key={s.step}
-                className={`relative transition-all duration-500 ${
-                  stepsBlock.inView ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
-                }`}
-                style={{ transitionDelay: stepsBlock.inView ? `${i * 120}ms` : '0ms' }}
-              >
-                {/* Línea conectora */}
-                {i < steps.length - 1 && (
-                  <div className="absolute top-5 left-[calc(50%+20px)] right-[calc(-50%+20px)] hidden h-px bg-border/50 sm:block" />
-                )}
-                <div
-                  className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white shadow-md"
-                  style={{ background: 'linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))' }}
-                >
-                  {s.step}
-                </div>
-                <p className="text-xs font-semibold text-foreground">{s.label}</p>
-                <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{s.desc}</p>
-              </div>
-            ))}
-          </div>
-          <div className="mt-6 text-center">
-            <Link
-              href="/como-funciona"
-              className="inline-flex items-center gap-2 rounded-lg px-6 py-2.5 text-sm font-semibold text-white shadow-md transition-all duration-200 hover:opacity-90 hover:shadow-lg"
-              style={{ background: 'linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))' }}
-            >
-              Ver cómo funciona →
-            </Link>
           </div>
         </div>
 

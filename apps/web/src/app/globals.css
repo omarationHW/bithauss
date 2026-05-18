@@ -141,6 +141,16 @@
   opacity: 0;
 }
 
+@keyframes fade-soft {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@utility animate-fade-soft {
+  animation: fade-soft 0.9s ease-in-out forwards;
+  opacity: 0;
+}
+
 @utility animate-float {
   animation: float 6s ease-in-out infinite;
 }
@@ -369,7 +379,7 @@
 }
 
 @utility animate-ticker {
-  animation: ticker 30s linear infinite;
+  animation: ticker 75s linear infinite;
 }
 
 /* --- Infinite marquee scroll --- */

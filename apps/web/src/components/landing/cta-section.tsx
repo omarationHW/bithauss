@@ -45,7 +45,7 @@ export function CtaSection() {
           {/* Background image with scroll zoom */}
           <Image
             ref={imageRef}
-            src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Footer.webp"
+            src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Footer.jpg"
             alt="Ciudad"
             fill
             placeholder="blur"
@@ -82,7 +82,7 @@ export function CtaSection() {
             </h2>
 
             <p className="mt-6 text-lg text-white/70 max-w-2xl mx-auto leading-relaxed">
-              Únete a miles de profesionales que ya protegen sus transacciones
+              Únete a los profesionales que ya protegen sus transacciones
               con BitHauss. Comienza tu prueba gratuita de 14 días hoy.
             </p>
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import {
   SlidersHorizontal,
@@ -53,6 +54,7 @@ interface PropertyFromDB {
   slug: string | null;
   created_at: string | null;
   status: string | null;
+  accepts_crypto: boolean | null;
 }
 
 interface MappedProperty {
@@ -70,6 +72,7 @@ interface MappedProperty {
   notary: string;
   timeAgo: string;
   favorite: boolean;
+  acceptsCrypto: boolean;
 }
 
 function formatPrice(price: number | null, currency: string | null, operation: string | null): string {
@@ -140,12 +143,13 @@ function mapProperty(p: PropertyFromDB): MappedProperty {
     bathrooms: p.bathrooms || 0,
     area: p.area_total || 0,
     brc: p.brc_status === "CERTIFICADO",
-    image: p.featured_image_url || "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Casa1.webp",
+    image: p.featured_image_url || "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Casa1.jpg",
     tag: p.operation === "RENTA" ? "Renta" : "Compra",
     isNew: isNewProperty(p.created_at),
     notary: "",
     timeAgo: timeAgo(p.created_at),
     favorite: false,
+    acceptsCrypto: !!p.accepts_crypto,
   };
 }
 
@@ -197,7 +201,15 @@ const citiesByState: Record<string, string[]> = {
 };
 
 function FiltersPanel() {
-  const [operationType, setOperationType] = useState<"comprar" | "rentar">("comprar");
+  const searchParams = useSearchParams();
+  const initialOp = searchParams.get("op") === "rentar" ? "rentar" : "comprar";
+  const [operationType, setOperationType] = useState<"comprar" | "rentar">(initialOp);
+
+  useEffect(() => {
+    const op = searchParams.get("op") === "rentar" ? "rentar" : "comprar";
+    setOperationType(op);
+  }, [searchParams]);
+
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [selectedBedrooms, setSelectedBedrooms] = useState<string | null>(null);
   const [brcOnly, setBrcOnly] = useState(false);
@@ -373,18 +385,18 @@ function FiltersPanel() {
 }
 
 const demoProperties: MappedProperty[] = [
-  { id: "demo-1", title: "Casa Moderna en Bosques de las Lomas", address: "Bosques de las Lomas\nCDMX, C.P. 11700", price: "$8,500,000 MXN", bedrooms: 4, bathrooms: 3, area: 320, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Casa1.webp", tag: "Compra", isNew: true, notary: "Alejandro Ramírez Torres", timeAgo: "Hace 10 Horas", favorite: false },
-  { id: "demo-2", title: "Departamento de Lujo en Polanco", address: "Polanco\nCDMX, C.P. 11560", price: "$45,000/mes MXN", bedrooms: 2, bathrooms: 2, area: 150, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa2.webp", tag: "Renta", isNew: true, notary: "Valeria Montes García", timeAgo: "Hace 1 Día", favorite: true },
-  { id: "demo-3", title: "Penthouse con Vista al Mar", address: "Zona Hotelera, Cancún\nQuintana Roo, C.P. 77500", price: "$12,300,000 MXN", bedrooms: 3, bathrooms: 3, area: 280, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa3.webp", tag: "Compra", isNew: false, notary: "Julián Herrera", timeAgo: "Hace 2 semanas", favorite: false },
-  { id: "demo-4", title: "Residencia en San Pedro Garza García", address: "San Pedro Garza García\nNuevo León, C.P. 66220", price: "$15,800,000 MXN", bedrooms: 5, bathrooms: 4, area: 450, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa4.webp", tag: "Compra", isNew: true, notary: "Camila Torres", timeAgo: "Hace 6 Horas", favorite: false },
-  { id: "demo-5", title: "Terreno en Riviera Maya", address: "Playa del Carmen\nQuintana Roo, C.P. 77710", price: "$3,200,000 MXN", bedrooms: 0, bathrooms: 0, area: 500, brc: false, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa5.webp", tag: "Compra", isNew: false, notary: "", timeAgo: "Hace 3 Días", favorite: false },
-  { id: "demo-6", title: "Oficina en Santa Fe", address: "Santa Fe\nCDMX, C.P. 05300", price: "$28,000/mes MXN", bedrooms: 0, bathrooms: 2, area: 120, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa6.webp", tag: "Renta", isNew: true, notary: "Roberto Juárez", timeAgo: "Hace 4 Horas", favorite: false },
-  { id: "demo-7", title: "Casa Colonial en Centro Histórico", address: "Centro Histórico\nCDMX, C.P. 06000", price: "$16,700,000 MXN", bedrooms: 5, bathrooms: 4, area: 320, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa7.webp", tag: "Compra", isNew: false, notary: "María Fernández", timeAgo: "Hace 1 Semana", favorite: false },
-  { id: "demo-8", title: "Departamento Nuevo en Condesa", address: "Condesa\nCDMX, C.P. 06140", price: "$5,900,000 MXN", bedrooms: 2, bathrooms: 2, area: 95, brc: false, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa8.webp", tag: "Compra", isNew: true, notary: "", timeAgo: "Hace 2 Horas", favorite: false },
-  { id: "demo-9", title: "Casa con Jardín en Coyoacán", address: "Coyoacán\nCDMX, C.P. 04000", price: "$9,450,000 MXN", bedrooms: 3, bathrooms: 3, area: 280, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa9.webp", tag: "Compra", isNew: false, notary: "Carlos Mendoza", timeAgo: "Hace 5 Días", favorite: false },
-  { id: "demo-10", title: "Loft Industrial en Roma Norte", address: "Roma Norte\nCDMX, C.P. 06700", price: "$35,000/mes MXN", bedrooms: 1, bathrooms: 1, area: 85, brc: false, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa10.webp", tag: "Renta", isNew: true, notary: "", timeAgo: "Hace 3 Horas", favorite: false },
-  { id: "demo-11", title: "Villa Frente al Lago en Valle de Bravo", address: "Valle de Bravo\nEstado de México, C.P. 51200", price: "$22,500,000 MXN", bedrooms: 6, bathrooms: 5, area: 580, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Casa1.webp", tag: "Compra", isNew: false, notary: "Ana Martínez", timeAgo: "Hace 1 Semana", favorite: false },
-  { id: "demo-12", title: "Penthouse en Interlomas", address: "Interlomas, Huixquilucan\nEstado de México, C.P. 52787", price: "$7,200,000 MXN", bedrooms: 3, bathrooms: 2, area: 180, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa2.webp", tag: "Compra", isNew: true, notary: "Andrés Castillo", timeAgo: "Hace 2 Horas", favorite: false },
+  { id: "demo-1", title: "Casa Moderna en Bosques de las Lomas", address: "Bosques de las Lomas\nCDMX, C.P. 11700", price: "$8,500,000 MXN", bedrooms: 4, bathrooms: 3, area: 320, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Casa1.jpg", tag: "Compra", isNew: true, notary: "Alejandro Ramírez Torres", timeAgo: "Hace 10 Horas", favorite: false, acceptsCrypto: true },
+  { id: "demo-2", title: "Departamento de Lujo en Polanco", address: "Polanco\nCDMX, C.P. 11560", price: "$45,000/mes MXN", bedrooms: 2, bathrooms: 2, area: 150, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa2.jpg", tag: "Renta", isNew: true, notary: "Valeria Montes García", timeAgo: "Hace 1 Día", favorite: true, acceptsCrypto: false },
+  { id: "demo-3", title: "Penthouse con Vista al Mar", address: "Zona Hotelera, Cancún\nQuintana Roo, C.P. 77500", price: "$12,300,000 MXN", bedrooms: 3, bathrooms: 3, area: 280, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa3.jpg", tag: "Compra", isNew: false, notary: "Julián Herrera", timeAgo: "Hace 2 semanas", favorite: false, acceptsCrypto: true },
+  { id: "demo-4", title: "Residencia en San Pedro Garza García", address: "San Pedro Garza García\nNuevo León, C.P. 66220", price: "$15,800,000 MXN", bedrooms: 5, bathrooms: 4, area: 450, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa4.jpg", tag: "Compra", isNew: true, notary: "Camila Torres", timeAgo: "Hace 6 Horas", favorite: false, acceptsCrypto: false },
+  { id: "demo-5", title: "Terreno en Riviera Maya", address: "Playa del Carmen\nQuintana Roo, C.P. 77710", price: "$3,200,000 MXN", bedrooms: 0, bathrooms: 0, area: 500, brc: false, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa5.jpg", tag: "Compra", isNew: false, notary: "", timeAgo: "Hace 3 Días", favorite: false, acceptsCrypto: false },
+  { id: "demo-6", title: "Oficina en Santa Fe", address: "Santa Fe\nCDMX, C.P. 05300", price: "$28,000/mes MXN", bedrooms: 0, bathrooms: 2, area: 120, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa6.jpg", tag: "Renta", isNew: true, notary: "Roberto Juárez", timeAgo: "Hace 4 Horas", favorite: false, acceptsCrypto: false },
+  { id: "demo-7", title: "Casa Colonial en Centro Histórico", address: "Centro Histórico\nCDMX, C.P. 06000", price: "$16,700,000 MXN", bedrooms: 5, bathrooms: 4, area: 320, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa7.jpg", tag: "Compra", isNew: false, notary: "María Fernández", timeAgo: "Hace 1 Semana", favorite: false, acceptsCrypto: true },
+  { id: "demo-8", title: "Departamento Nuevo en Condesa", address: "Condesa\nCDMX, C.P. 06140", price: "$5,900,000 MXN", bedrooms: 2, bathrooms: 2, area: 95, brc: false, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa8.jpg", tag: "Compra", isNew: true, notary: "", timeAgo: "Hace 2 Horas", favorite: false, acceptsCrypto: false },
+  { id: "demo-9", title: "Casa con Jardín en Coyoacán", address: "Coyoacán\nCDMX, C.P. 04000", price: "$9,450,000 MXN", bedrooms: 3, bathrooms: 3, area: 280, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa9.jpg", tag: "Compra", isNew: false, notary: "Carlos Mendoza", timeAgo: "Hace 5 Días", favorite: false, acceptsCrypto: false },
+  { id: "demo-10", title: "Loft Industrial en Roma Norte", address: "Roma Norte\nCDMX, C.P. 06700", price: "$35,000/mes MXN", bedrooms: 1, bathrooms: 1, area: 85, brc: false, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa10.jpg", tag: "Renta", isNew: true, notary: "", timeAgo: "Hace 3 Horas", favorite: false, acceptsCrypto: false },
+  { id: "demo-11", title: "Villa Frente al Lago en Valle de Bravo", address: "Valle de Bravo\nEstado de México, C.P. 51200", price: "$22,500,000 MXN", bedrooms: 6, bathrooms: 5, area: 580, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Casa1.jpg", tag: "Compra", isNew: false, notary: "Ana Martínez", timeAgo: "Hace 1 Semana", favorite: false, acceptsCrypto: true },
+  { id: "demo-12", title: "Penthouse en Interlomas", address: "Interlomas, Huixquilucan\nEstado de México, C.P. 52787", price: "$7,200,000 MXN", bedrooms: 3, bathrooms: 2, area: 180, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa2.jpg", tag: "Compra", isNew: true, notary: "Andrés Castillo", timeAgo: "Hace 2 Horas", favorite: false, acceptsCrypto: false },
 ];
 
 export default function PropiedadesPage() {
@@ -400,7 +412,7 @@ export default function PropiedadesPage() {
       const supabase = createClient();
       const { data, error } = await supabase
         .from("properties")
-        .select("id, title, address_line, neighborhood, city, state, price, currency, operation, bedrooms, bathrooms, area_total, featured_image_url, brc_status, slug, created_at, status")
+        .select("id, title, address_line, neighborhood, city, state, price, currency, operation, bedrooms, bathrooms, area_total, featured_image_url, brc_status, slug, created_at, status, accepts_crypto")
         .eq("status", "PUBLICADO")
         .order("created_at", { ascending: false });
 
@@ -612,8 +624,26 @@ export default function PropiedadesPage() {
 
                       {/* BRC Shield */}
                       {property.brc && (
-                        <div className="absolute top-2 right-2 h-6 w-6 rounded-full bg-accent/90 flex items-center justify-center">
-                          <ShieldBrc className="h-3 w-3 text-white" />
+                        <div className="absolute top-2 right-2 h-8 w-8 flex items-center justify-center">
+                          <Image
+                            src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/ICONO-DE-VERIFICACION.png"
+                            alt="Verificado BRC"
+                            width={32}
+                            height={32}
+                            className="object-contain"
+                          />
+                        </div>
+                      )}
+
+                      {/* Crypto badge overlay */}
+                      {property.acceptsCrypto && (
+                        <div className={cn(
+                          "absolute right-2 z-10 flex items-center gap-1 rounded-full bg-white/95 backdrop-blur-sm px-1.5 py-0.5 shadow-md",
+                          property.brc ? "top-12" : "top-2"
+                        )}>
+                          <Image src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Bitcoin-icono.png" alt="Bitcoin" width={12} height={12} className="object-contain" />
+                          <Image src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/ethereum-icon.png" alt="Ethereum" width={12} height={12} className="object-contain" />
+                          <span className="text-[8px] font-bold text-amber-700 uppercase tracking-wide">Cripto</span>
                         </div>
                       )}
 
@@ -684,7 +714,11 @@ export default function PropiedadesPage() {
             {viewMode === "mapa" && !loading && (
               <div className="w-full h-[calc(100vh-200px)] rounded-xl overflow-hidden border border-border/40 relative">
                 <iframe
-                  src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d60216.953710835554!2d-99.19155229814455!3d19.390519038498072!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x85ce0026db097507%3A0x54061076265ee841!2sCiudad%20de%20M%C3%A9xico%2C%20CDMX!5e0!3m2!1ses-419!2smx!4v1700000000000!5m2!1ses-419!2smx"
+                  src={
+                    process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+                      ? `https://www.google.com/maps/embed/v1/view?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&center=19.3905,-99.1915&zoom=11&maptype=roadmap`
+                      : "https://www.openstreetmap.org/export/embed.html?bbox=-99.3,19.2,-99.0,19.55&layer=mapnik"
+                  }
                   width="100%"
                   height="100%"
                   style={{ border: 0 }}

@@ -20,18 +20,14 @@ export function Footer() {
         <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
           {/* Company info */}
           <div className="space-y-4">
-            <Link href="/" className="inline-flex items-center gap-2">
+            <Link href="/" className="inline-flex items-center">
               <Image
-                src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/bithauss-logo-blanco-1.png"
-                alt="BitHauss icon"
-                width={48}
-                height={48}
+                src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Logo-BitHauss-Texto-Negro.png"
+                alt="BitHauss"
+                width={200}
+                height={52}
                 className="h-12 w-auto"
-                style={{
-                  filter: 'brightness(0) saturate(100%) invert(37%) sepia(65%) saturate(5000%) hue-rotate(217deg) brightness(100%) contrast(95%)',
-                }}
               />
-              <span className="text-3xl font-bold tracking-tight text-white">BitHauss</span>
             </Link>
             <p className="text-sm leading-relaxed text-background">
               La primera plataforma en digitalizar todo el procedimiento de
@@ -81,9 +77,12 @@ export function Footer() {
               </li>
               <li className="flex items-start gap-2.5">
                 <Phone className="mt-0.5 h-4 w-4 shrink-0 text-background" />
-                <span className="text-sm text-background">
-                  +52 (55) 1234-5678
-                </span>
+                <a
+                  href="tel:+525544420222"
+                  className="text-sm text-background transition-colors hover:text-white"
+                >
+                  +52 55 4442 0222
+                </a>
               </li>
               <li className="flex items-start gap-2.5">
                 <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-background" />
@@ -100,7 +99,7 @@ export function Footer() {
         {/* Bottom bar */}
         <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
           <p className="text-xs text-background">
-            &copy; 2026 BitHauss. Todos los derechos reservados.
+            &copy; 2026 BitHauss by Protocolo Digital Real State. Todos los derechos reservados.
           </p>
           <div className="flex items-center gap-4">
             <Link

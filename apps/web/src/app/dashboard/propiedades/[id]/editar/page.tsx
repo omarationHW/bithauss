@@ -460,35 +460,71 @@ export default function EditarPropiedadPage() {
       // Keep original slug unless title changed substantially
       const slug = originalSlug || slugify(form.titulo) + "-" + Date.now().toString(36);
 
+      // Re-geocode in case the address changed (best-effort).
+      let latitude: number | null = null;
+      let longitude: number | null = null;
+      const addressQuery = [
+        form.direccion,
+        form.colonia,
+        form.ciudad,
+        form.estado,
+        form.codigo_postal ? `C.P. ${form.codigo_postal}` : "",
+        "México",
+      ]
+        .filter(Boolean)
+        .join(", ");
+      if (addressQuery) {
+        try {
+          const geoRes = await fetch(`/api/geocode?q=${encodeURIComponent(addressQuery)}`);
+          if (geoRes.ok) {
+            const geo = await geoRes.json();
+            if (geo?.result?.lat && geo?.result?.lng) {
+              latitude = geo.result.lat;
+              longitude = geo.result.lng;
+            }
+          }
+        } catch {
+          // Silent
+        }
+      }
+
+      const updatePayload: Record<string, unknown> = {
+        title: form.titulo,
+        slug,
+        description: form.descripcion,
+        type: form.tipo_propiedad.toUpperCase(),
+        operation: form.tipo_operacion.toUpperCase(),
+        price: Number(form.precio),
+        currency: form.moneda,
+        accepts_crypto: form.acepta_crypto,
+        area_total: form.area_total ? Number(form.area_total) : null,
+        area_built: form.area_construida ? Number(form.area_construida) : null,
+        bedrooms: form.recamaras ? Number(form.recamaras) : null,
+        bathrooms: form.banos ? Number(form.banos) : null,
+        parking_spaces: form.estacionamientos
+          ? Number(form.estacionamientos)
+          : null,
+        floors: form.pisos ? Number(form.pisos) : null,
+        address_line: form.direccion || null,
+        neighborhood: form.colonia || null,
+        city: form.ciudad,
+        state: form.estado,
+        zip_code: form.codigo_postal || null,
+        amenities: form.amenidades,
+        status: status === "publicado" ? "PUBLICADO" : "BORRADOR",
+        published_at:
+          status === "publicado" ? new Date().toISOString() : null,
+      };
+      // Only overwrite lat/lng when the geocoder actually returned a hit;
+      // otherwise leave the previous value untouched.
+      if (latitude !== null && longitude !== null) {
+        updatePayload.latitude = latitude;
+        updatePayload.longitude = longitude;
+      }
+
       const { error: updateError } = await supabase
         .from("properties")
-        .update({
-          title: form.titulo,
-          slug,
-          description: form.descripcion,
-          type: form.tipo_propiedad.toUpperCase(),
-          operation: form.tipo_operacion.toUpperCase(),
-          price: Number(form.precio),
-          currency: form.moneda,
-          accepts_crypto: form.acepta_crypto,
-          area_total: form.area_total ? Number(form.area_total) : null,
-          area_built: form.area_construida ? Number(form.area_construida) : null,
-          bedrooms: form.recamaras ? Number(form.recamaras) : null,
-          bathrooms: form.banos ? Number(form.banos) : null,
-          parking_spaces: form.estacionamientos
-            ? Number(form.estacionamientos)
-            : null,
-          floors: form.pisos ? Number(form.pisos) : null,
-          address_line: form.direccion || null,
-          neighborhood: form.colonia || null,
-          city: form.ciudad,
-          state: form.estado,
-          zip_code: form.codigo_postal || null,
-          amenities: form.amenidades,
-          status: status === "publicado" ? "PUBLICADO" : "BORRADOR",
-          published_at:
-            status === "publicado" ? new Date().toISOString() : null,
-        })
+        .update(updatePayload)
         .eq("id", propertyId);
 
       if (updateError) throw new Error(updateError.message);

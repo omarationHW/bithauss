@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 
 const filterTabs = [
-  'Propiedades Verificadas',
+  'Propiedades Certificadas',
   'Lo más nuevo',
   'Más vistos',
   'Precios más bajos',
@@ -25,7 +25,7 @@ const allProperties = [
     area: 320,
     address: 'Hidalgo 56, Centro Histórico, Mérida\nYucatán, C.P. 97000',
     notary: 'Alejandro Ramírez Torres',
-    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Casa1.webp',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Casa1.jpg',
     timeAgo: 'Hace 10 Horas',
     timeLabel: 'Agregado',
     isNew: true,
@@ -42,7 +42,7 @@ const allProperties = [
     area: 320,
     address: 'Av. Bonampak 250, Centro, Benito Juárez\nQuintana Roo, C.P. 77500',
     notary: 'Valeria Montes García',
-    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa2.webp',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa2.jpg',
     timeAgo: 'Hace 1 Día',
     timeLabel: 'Agregado',
     isNew: true,
@@ -59,7 +59,7 @@ const allProperties = [
     area: 320,
     address: 'Av. Bonampak 250, Centro, Benito Juárez\nQuintana Roo, C.P. 77500',
     notary: 'Julián Herrera Domínguez',
-    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa3.webp',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa3.jpg',
     timeAgo: 'Hace 2 semanas',
     timeLabel: 'Actualizado',
     isNew: false,
@@ -74,7 +74,7 @@ const allProperties = [
     area: 320,
     address: 'Insurgentes 890, Del Valle, Benito Juárez\nCDMX, C.P. 03100',
     notary: 'Camila Torres Aguilar',
-    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa4.webp',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa4.jpg',
     timeAgo: 'Hace 6 Horas',
     timeLabel: 'Agregado',
     isNew: true,
@@ -90,7 +90,7 @@ const allProperties = [
     area: 280,
     address: 'Av. Vasco de Quiroga 3800, Santa Fe\nCDMX, C.P. 05348',
     notary: 'Roberto Guzmán Pérez',
-    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa5.webp',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa5.jpg',
     timeAgo: 'Hace 3 Días',
     timeLabel: 'Agregado',
     isNew: false,
@@ -105,7 +105,7 @@ const allProperties = [
     area: 410,
     address: 'Calle Jardines 120, Pedregal\nCDMX, C.P. 04500',
     notary: 'María Fernanda López',
-    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa6.webp',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa6.jpg',
     timeAgo: 'Hace 5 Horas',
     timeLabel: 'Agregado',
     isNew: true,
@@ -120,7 +120,7 @@ const allProperties = [
     area: 150,
     address: 'Av. Ámsterdam 45, Hipódromo Condesa\nCDMX, C.P. 06100',
     notary: 'Carlos Hernández Ruiz',
-    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa7.webp',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa7.jpg',
     timeAgo: 'Hace 1 Semana',
     timeLabel: 'Actualizado',
     isNew: false,
@@ -135,7 +135,7 @@ const allProperties = [
     area: 350,
     address: 'Calle Francisco Sosa 230, Coyoacán\nCDMX, C.P. 04000',
     notary: 'Ana Patricia Morales',
-    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa8.webp',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa8.jpg',
     timeAgo: 'Hace 2 Días',
     timeLabel: 'Agregado',
     isNew: true,
@@ -151,7 +151,7 @@ const allProperties = [
     area: 480,
     address: 'Sierra Madre 890, San Pedro Garza García\nNuevo León, C.P. 66220',
     notary: 'Fernando Treviño Garza',
-    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa9.webp',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa9.jpg',
     timeAgo: 'Hace 4 Horas',
     timeLabel: 'Agregado',
     isNew: true,
@@ -166,7 +166,7 @@ const allProperties = [
     area: 290,
     address: 'Av. Providencia 1540, Providencia\nGuadalajara, Jalisco, C.P. 44630',
     notary: 'Laura Sánchez Medina',
-    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa10.webp',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa10.jpg',
     timeAgo: 'Hace 12 Horas',
     timeLabel: 'Agregado',
     isNew: false,
@@ -181,7 +181,7 @@ const allProperties = [
     area: 110,
     address: 'Calle Orizaba 78, Roma Norte\nCDMX, C.P. 06700',
     notary: 'Diego Ramírez Solís',
-    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Casa1.webp',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Casa1.jpg',
     timeAgo: 'Hace 3 Semanas',
     timeLabel: 'Actualizado',
     isNew: false,
@@ -196,7 +196,7 @@ const allProperties = [
     area: 620,
     address: 'Paseo del Lago 15, Valle de Bravo\nEstado de México, C.P. 51200',
     notary: 'Gabriela Ortiz Campos',
-    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa2.webp',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa2.jpg',
     timeAgo: 'Hace 1 Día',
     timeLabel: 'Agregado',
     isNew: true,
@@ -212,7 +212,7 @@ const allProperties = [
     area: 175,
     address: 'Av. Presidente Masaryk 320, Polanco\nCDMX, C.P. 11560',
     notary: 'Jorge Villanueva Torres',
-    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa3.webp',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa3.jpg',
     timeAgo: 'Hace 8 Horas',
     timeLabel: 'Agregado',
     isNew: true,
@@ -227,7 +227,7 @@ const allProperties = [
     area: 310,
     address: 'Blvd. Juriquilla 540, Juriquilla\nQuerétaro, C.P. 76226',
     notary: 'Patricia Delgado Reyes',
-    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa4.webp',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa4.jpg',
     timeAgo: 'Hace 5 Días',
     timeLabel: 'Actualizado',
     isNew: false,
@@ -242,7 +242,7 @@ const allProperties = [
     area: 380,
     address: 'Blvd. Kukulcán km 12, Zona Hotelera\nCancún, Q. Roo, C.P. 77500',
     notary: 'Andrés Castillo Nava',
-    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa5.webp',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa5.jpg',
     timeAgo: 'Hace 2 Horas',
     timeLabel: 'Agregado',
     isNew: true,
@@ -257,7 +257,7 @@ const allProperties = [
     area: 550,
     address: 'Sierra Leona 430, Lomas de Chapultepec\nCDMX, C.P. 11000',
     notary: 'Elena Fuentes Ríos',
-    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa6.webp',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa6.jpg',
     timeAgo: 'Hace 1 Semana',
     timeLabel: 'Agregado',
     isNew: false,
@@ -270,7 +270,7 @@ const ITEMS_PER_PAGE = 4
 const totalPages = Math.ceil(allProperties.length / ITEMS_PER_PAGE)
 
 export function FeaturedProperties() {
-  const [activeTab, setActiveTab] = useState('Propiedades Verificadas')
+  const [activeTab, setActiveTab] = useState('Propiedades Certificadas')
   const [currentPage, setCurrentPage] = useState(0)
   const [isAutoPlaying, setIsAutoPlaying] = useState(true)
 
@@ -280,7 +280,7 @@ export function FeaturedProperties() {
 
   useEffect(() => {
     if (!isAutoPlaying) return
-    const interval = setInterval(nextPage, 5000)
+    const interval = setInterval(nextPage, 8000)
     return () => clearInterval(interval)
   }, [isAutoPlaying, nextPage])
 
@@ -302,7 +302,7 @@ export function FeaturedProperties() {
         {/* Header */}
         <div className="mb-10 text-center">
           <h2 className="text-foreground text-3xl font-bold tracking-tight sm:text-4xl">
-            Propiedades Verificadas
+            Propiedades Certificadas
           </h2>
           <p className="text-muted-foreground mt-3">
             Explora las mejores propiedades verificadas en las principales ciudades de México
@@ -328,12 +328,14 @@ export function FeaturedProperties() {
         </div>
 
         {/* Property cards */}
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <div
+          key={currentPage}
+          className="animate-fade-soft grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4"
+        >
           {visibleProperties.map((property, i) => (
             <div
               key={`${currentPage}-${i}`}
-              className="bg-card border-border/40 animate-fade-in-up overflow-hidden rounded-xl border transition-all duration-500 hover:shadow-lg"
-              style={{ animationDelay: `${i * 100}ms` }}
+              className="bg-card border-border/40 overflow-hidden rounded-xl border transition-all duration-500 hover:shadow-lg"
             >
               {/* Time label */}
               <div className="text-muted-foreground flex items-center gap-1.5 px-4 py-2.5 text-xs">
@@ -376,6 +378,34 @@ export function FeaturedProperties() {
                       height={32}
                       className="object-contain"
                     />
+                  </div>
+                )}
+
+                {/* Crypto badge overlay on image */}
+                {(property.acceptsBitcoin || property.acceptsEthereum) && (
+                  <div className={cn(
+                    "absolute right-3 z-10 flex items-center gap-1 rounded-full bg-white/95 backdrop-blur-sm px-2 py-1 shadow-md",
+                    property.certified ? "top-14" : "top-3"
+                  )}>
+                    {property.acceptsBitcoin && (
+                      <Image
+                        src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Bitcoin-icono.png"
+                        alt="Bitcoin"
+                        width={14}
+                        height={14}
+                        className="object-contain"
+                      />
+                    )}
+                    {property.acceptsEthereum && (
+                      <Image
+                        src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/ethereum-icon.png"
+                        alt="Ethereum"
+                        width={14}
+                        height={14}
+                        className="object-contain"
+                      />
+                    )}
+                    <span className="text-[9px] font-bold text-amber-700 uppercase tracking-wide">Cripto</span>
                   </div>
                 )}
 

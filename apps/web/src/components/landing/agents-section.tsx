@@ -10,7 +10,7 @@ const agents = [
     certId: '#J523215',
     experience: '5 años',
     sales: '36 ventas',
-    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Broker1.webp',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Broker1.png',
   },
   {
     name: 'Eduardo Ramírez',
@@ -18,7 +18,7 @@ const agents = [
     certId: '#J52G961',
     experience: '3 años',
     sales: '15 ventas',
-    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Broker2.webp',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Broker2.png',
   },
   {
     name: 'María López',
@@ -26,7 +26,7 @@ const agents = [
     certId: '#J52H442',
     experience: '4 años',
     sales: '22 ventas',
-    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Broker3.webp',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Broker3.png',
     blurred: true,
   },
 ]
@@ -34,11 +34,11 @@ const agents = [
 const brokerCards = [
   {
     title: 'Conviértete en Broker principal de BitHauss',
-    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Brokerprincipal1.webp',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Brokerprincipal1.jpg',
   },
   {
     title: 'Conviértete en Broker profesional en BitHauss',
-    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Brokerprincipal2.webp',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Brokerprincipal2.jpg',
   },
 ]
 

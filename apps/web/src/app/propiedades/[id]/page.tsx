@@ -151,11 +151,22 @@ function operationLabel(operation: string): string {
 }
 
 function buildMapEmbedUrl(lat: number | null, lng: number | null, neighborhood: string, city: string, state: string): string {
-  if (lat && lng) {
-    return `https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d3000!2d${lng}!3d${lat}!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e0!3m2!1ses-419!2smx`;
+  const googleKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  if (googleKey) {
+    if (lat && lng) {
+      return `https://www.google.com/maps/embed/v1/view?key=${googleKey}&center=${lat},${lng}&zoom=16&maptype=roadmap`;
+    }
+    const q = encodeURIComponent(`${neighborhood}, ${city}, ${state}, México`);
+    return `https://www.google.com/maps/embed/v1/place?key=${googleKey}&q=${q}`;
   }
-  const query = encodeURIComponent(`${neighborhood}, ${city}, ${state}, México`);
-  return `https://www.google.com/maps/embed/v1/place?key=&q=${query}`;
+  // OSM fallback (no API key required)
+  if (lat && lng) {
+    const d = 0.005;
+    const bbox = `${lng - d},${lat - d},${lng + d},${lat + d}`;
+    return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lng}`;
+  }
+  const q = encodeURIComponent(`${neighborhood}, ${city}, ${state}, México`);
+  return `https://www.openstreetmap.org/export/embed.html?bbox=-99.3,19.2,-99.0,19.55&layer=mapnik&query=${q}`;
 }
 
 function LoadingSkeleton() {
@@ -259,7 +270,7 @@ const demoPropertyData: Property = {
     "Área de BBQ",
     "Cuarto de lavado",
   ],
-  featured_image_url: `${CDN_BASE}/Casa1.webp`,
+  featured_image_url: `${CDN_BASE}/Casa1.jpg`,
   brc_status: "CERTIFICADO",
   brc_certificate_id: "BRC-DEMO-001",
   view_count: 245,
@@ -269,12 +280,12 @@ const demoPropertyData: Property = {
 };
 
 const demoMediaList: PropertyMedia[] = [
-  { id: "dm-1", property_id: "demo-1", url: `${CDN_BASE}/Casa1.webp`, media_type: "IMAGE", alt_text: "Fachada principal", sort_order: 0 },
-  { id: "dm-2", property_id: "demo-1", url: `${CDN_BASE}/casa2.webp`, media_type: "IMAGE", alt_text: "Sala de estar", sort_order: 1 },
-  { id: "dm-3", property_id: "demo-1", url: `${CDN_BASE}/casa3.webp`, media_type: "IMAGE", alt_text: "Cocina integral", sort_order: 2 },
-  { id: "dm-4", property_id: "demo-1", url: `${CDN_BASE}/casa4.webp`, media_type: "IMAGE", alt_text: "Recámara principal", sort_order: 3 },
-  { id: "dm-5", property_id: "demo-1", url: `${CDN_BASE}/casa5.webp`, media_type: "IMAGE", alt_text: "Jardín y alberca", sort_order: 4 },
-  { id: "dm-6", property_id: "demo-1", url: `${CDN_BASE}/casa6.webp`, media_type: "IMAGE", alt_text: "Terraza", sort_order: 5 },
+  { id: "dm-1", property_id: "demo-1", url: `${CDN_BASE}/Casa1.jpg`, media_type: "IMAGE", alt_text: "Fachada principal", sort_order: 0 },
+  { id: "dm-2", property_id: "demo-1", url: `${CDN_BASE}/casa2.jpg`, media_type: "IMAGE", alt_text: "Sala de estar", sort_order: 1 },
+  { id: "dm-3", property_id: "demo-1", url: `${CDN_BASE}/casa3.jpg`, media_type: "IMAGE", alt_text: "Cocina integral", sort_order: 2 },
+  { id: "dm-4", property_id: "demo-1", url: `${CDN_BASE}/casa4.jpg`, media_type: "IMAGE", alt_text: "Recámara principal", sort_order: 3 },
+  { id: "dm-5", property_id: "demo-1", url: `${CDN_BASE}/casa5.jpg`, media_type: "IMAGE", alt_text: "Jardín y alberca", sort_order: 4 },
+  { id: "dm-6", property_id: "demo-1", url: `${CDN_BASE}/casa6.jpg`, media_type: "IMAGE", alt_text: "Terraza", sort_order: 5 },
 ];
 
 const demoOwner: Profile = {
@@ -490,8 +501,32 @@ export default function PropertyDetailPage() {
 
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [currentImage, setCurrentImage] = useState(0);
+  const [geocoded, setGeocoded] = useState<{ lat: number; lng: number } | null>(null);
 
   const supabase = useMemo(() => createClient(), []);
+
+  // Geocode the property address when no lat/lng is stored
+  useEffect(() => {
+    if (!property) return;
+    if (property.latitude && property.longitude) return;
+    const parts = [property.address_line, property.neighborhood, property.city, property.state, "México"]
+      .filter(Boolean)
+      .join(", ");
+    if (!parts) return;
+    let cancelled = false;
+    fetch(`/api/geocode?q=${encodeURIComponent(parts)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled) return;
+        if (data?.result?.lat && data.result.lng) {
+          setGeocoded({ lat: data.result.lat, lng: data.result.lng });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [property]);
 
   useEffect(() => {
     if (!id) return;
@@ -606,7 +641,7 @@ export default function PropertyDetailPage() {
   const isBrcCertified = property.brc_status === "CERTIFICADO";
   const priceLabel = `${formatPrice(property.price, property.currency)} ${property.currency}`;
   const operationSuffix = property.operation === "RENTA" ? "/mes" : "";
-  const locationText = [property.neighborhood, property.city, property.zip_code ? `C.P. ${property.zip_code}` : ""].filter(Boolean).join(", ");
+  const locationText = [property.address_line, property.neighborhood, property.city, property.zip_code ? `C.P. ${property.zip_code}` : ""].filter(Boolean).join(", ");
   const ownerName = owner ? `${owner.first_name ?? ""} ${owner.last_name ?? ""}`.trim() : "Asesor";
 
   return (
@@ -801,8 +836,9 @@ export default function PropertyDetailPage() {
                   </div>
                 )}
                 {property.accepts_crypto && (
-                  <div className="flex items-center gap-1.5 rounded-lg bg-amber-50 border border-amber-200 px-3 py-1.5 text-xs font-semibold text-amber-700">
-                    <span>₿</span>
+                  <div className="flex items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-1.5 text-xs font-semibold text-amber-700">
+                    <Image src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Bitcoin-icono.png" alt="Bitcoin" width={16} height={16} className="object-contain" />
+                    <Image src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/ethereum-icon.png" alt="Ethereum" width={16} height={16} className="object-contain" />
                     Acepta criptomonedas
                   </div>
                 )}
@@ -962,7 +998,13 @@ export default function PropertyDetailPage() {
               <TabsContent value="ubicacion" className="mt-6">
                 <div className="overflow-hidden rounded-2xl border">
                   <iframe
-                    src={buildMapEmbedUrl(property.latitude, property.longitude, property.neighborhood, property.city, property.state)}
+                    src={buildMapEmbedUrl(
+                      property.latitude || geocoded?.lat || null,
+                      property.longitude || geocoded?.lng || null,
+                      property.neighborhood,
+                      property.city,
+                      property.state,
+                    )}
                     width="100%"
                     height="350"
                     style={{ border: 0 }}

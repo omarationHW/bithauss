@@ -70,8 +70,8 @@ export function HeroSection() {
     <section className="relative min-h-[85vh] flex items-center justify-center overflow-hidden">
       {/* Background image */}
       <Image
-        src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/el-fraude-inmobiliario-es-una-crisis-real.png"
-        alt="El fraude inmobiliario es una crisis real"
+        src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/header.jpg"
+        alt="BitHauss - Compra, vende y renta bienes raíces certificados"
         fill
         className="object-cover"
         sizes="100vw"
