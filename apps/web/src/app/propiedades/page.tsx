@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
@@ -399,7 +399,7 @@ const demoProperties: MappedProperty[] = [
   { id: "demo-12", title: "Penthouse en Interlomas", address: "Interlomas, Huixquilucan\nEstado de México, C.P. 52787", price: "$7,200,000 MXN", bedrooms: 3, bathrooms: 2, area: 180, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa2.jpg", tag: "Compra", isNew: true, notary: "Andrés Castillo", timeAgo: "Hace 2 Horas", favorite: false, acceptsCrypto: false },
 ];
 
-export default function PropiedadesPage() {
+function PropiedadesPageInner() {
   const [viewMode, setViewMode] = useState<"lista" | "mapa">("lista");
   const [activeMarker, setActiveMarker] = useState<string | null>(null);
   const [properties, setProperties] = useState<MappedProperty[]>([]);
@@ -819,5 +819,13 @@ export default function PropiedadesPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function PropiedadesPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen" />}>
+      <PropiedadesPageInner />
+    </Suspense>
   );
 }
