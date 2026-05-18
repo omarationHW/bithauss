@@ -1,5 +1,4 @@
 import Image from 'next/image'
-import { UserCheck } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 type Step = {
@@ -8,36 +7,39 @@ type Step = {
   color: string
   bgColor: string
   keepOriginalColor?: boolean
-} & ({ image: string; icon?: never } | { icon: typeof UserCheck; image?: never })
+  image: string
+}
 
 const steps: Step[] = [
   {
-    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Solicitud.webp',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Solicitud.png',
     title: 'Solicitud',
     description:
       'El propietario o broker inicia el proceso de certificación registrando la propiedad en la plataforma.',
     color: 'text-blue-600',
     bgColor: 'bg-blue-100',
+    keepOriginalColor: true,
   },
   {
-    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Verificacion.webp',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/verificacion-documental.png',
     title: 'Verificación Documental',
     description:
       'Nuestro equipo legal apoyado con Inteligencia Artificial efectúa la primera revisión documental del Inmueble',
     color: 'text-teal-600',
     bgColor: 'bg-teal-100',
+    keepOriginalColor: true,
   },
   {
-    icon: UserCheck,
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Validacion-notarial.png',
     title: 'Validación Notarial',
     description:
       'La revisión profunda del expediente es llevada a cabo por Notarios, quienes revisan todos los aspectos legales y documentales para validar el status jurídico del Inmueble.',
     color: 'text-violet-600',
     bgColor: 'bg-violet-100',
+    keepOriginalColor: true,
   },
   {
-    image:
-      'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Certificado Digital.webp',
+    image: 'https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Certificado-BRC-3D.png',
     title: 'Certificado BRC',
     description:
       'BitHauss emite un Certificado Digital en la Blockchain que garantiza inmutabilidad del BRC - Bien Raíz Cerificado - Certificado Notarial, que puede ser consultado de manera pública.',
@@ -48,19 +50,15 @@ const steps: Step[] = [
 ]
 
 function StepIcon({ step, size = 32 }: { step: Step; size?: number }) {
-  if (step.image) {
-    return (
-      <Image
-        src={step.image}
-        alt={step.title}
-        width={size}
-        height={size}
-        className={cn('object-contain', !step.keepOriginalColor && 'brightness-0')}
-      />
-    )
-  }
-  const Icon = step.icon!
-  return <Icon className={cn('h-7 w-7', step.color)} />
+  return (
+    <Image
+      src={step.image}
+      alt={step.title}
+      width={size}
+      height={size}
+      className="object-contain"
+    />
+  )
 }
 
 export function BrcSection() {

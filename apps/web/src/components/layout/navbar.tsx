@@ -135,14 +135,15 @@ export function Navbar() {
         {/* Center logo */}
         <Link href="/" className="group flex items-center gap-2">
           <Image
-            src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Logo-BitHauss-blanco.png"
+            src={
+              solid
+                ? "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Logo-BitHauss-Texto-Negro.png"
+                : "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Logo-BitHauss-Texto-Blanco.png"
+            }
             alt="BitHauss"
             width={140}
             height={36}
-            className={cn(
-              "h-8 w-auto transition-all duration-300",
-              solid && "brightness-0 dark:brightness-100"
-            )}
+            className="h-8 w-auto transition-all duration-300"
           />
         </Link>
 
@@ -265,12 +266,13 @@ export function Navbar() {
                 className="flex items-center gap-2.5"
                 onClick={() => setOpen(false)}
               >
-                <span className="text-lg font-bold tracking-tight">
-                  <span className="text-foreground">Bit</span>
-                  <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                    Hauss
-                  </span>
-                </span>
+                <Image
+                  src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Logo-BitHauss-Texto-Negro.png"
+                  alt="BitHauss"
+                  width={120}
+                  height={32}
+                  className="h-7 w-auto"
+                />
               </Link>
 
               <div className="flex flex-col gap-1">

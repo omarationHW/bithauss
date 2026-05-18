@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Mail, Phone, MapPin } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
+import { FooterLegal } from "./footer-legal";
 
 const plataformaLinks = [
   { label: "Propiedades", href: "/propiedades" },
@@ -11,12 +12,6 @@ const plataformaLinks = [
   { label: "Nosotros", href: "/nosotros" },
 ];
 
-const legalLinks = [
-  { label: "Términos de Servicio", href: "#" },
-  { label: "Política de Privacidad", href: "#" },
-  { label: "Aviso Legal", href: "#" },
-  { label: "Cookies", href: "#" },
-];
 
 export function Footer() {
   return (
@@ -69,18 +64,7 @@ export function Footer() {
             <h3 className="text-sm font-semibold uppercase tracking-wider">
               Legal
             </h3>
-            <ul className="space-y-2.5">
-              {legalLinks.map((link) => (
-                <li key={link.label}>
-                  <Link
-                    href={link.href}
-                    className="text-sm text-background transition-colors hover:text-background"
-                  >
-                    {link.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
+            <FooterLegal />
           </div>
 
           {/* Contacto */}

@@ -70,8 +70,8 @@ export function HeroSection() {
     <section className="relative min-h-[85vh] flex items-center justify-center overflow-hidden">
       {/* Background image */}
       <Image
-        src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/header.webp"
-        alt="Bienes raíces"
+        src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/el-fraude-inmobiliario-es-una-crisis-real.png"
+        alt="El fraude inmobiliario es una crisis real"
         fill
         className="object-cover"
         sizes="100vw"

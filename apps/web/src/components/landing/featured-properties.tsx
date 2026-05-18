@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { Heart, ChevronLeft, ChevronRight, ArrowRight, ShieldCheck, Home } from 'lucide-react'
+import { Heart, ChevronLeft, ChevronRight, ArrowRight, Home } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 
@@ -31,6 +31,8 @@ const allProperties = [
     isNew: true,
     certified: true,
     favorite: false,
+    acceptsBitcoin: true,
+    acceptsEthereum: false,
   },
   {
     title: 'Loft tropical',
@@ -46,6 +48,8 @@ const allProperties = [
     isNew: true,
     certified: true,
     favorite: true,
+    acceptsBitcoin: false,
+    acceptsEthereum: true,
   },
   {
     title: 'Residencia moderna',
@@ -364,8 +368,14 @@ export function FeaturedProperties() {
 
                 {/* BRC Shield */}
                 {property.certified && (
-                  <div className="bg-accent/90 absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded-full">
-                    <ShieldCheck className="h-4 w-4 text-white" />
+                  <div className="absolute top-3 right-3 flex h-8 w-8 items-center justify-center">
+                    <Image
+                      src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/ICONO-DE-VERIFICACION.png"
+                      alt="Verificado BRC"
+                      width={32}
+                      height={32}
+                      className="object-contain"
+                    />
                   </div>
                 )}
 
@@ -421,6 +431,32 @@ export function FeaturedProperties() {
                 <p className="text-muted-foreground mt-2 text-xs">
                   Notario: <span className="text-foreground font-semibold">{property.notary}</span>
                 </p>
+
+                {/* Crypto payment icons */}
+                {(property.acceptsBitcoin || property.acceptsEthereum) && (
+                  <div className="mt-2 flex items-center gap-1.5">
+                    {property.acceptsBitcoin && (
+                      <Image
+                        src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Bitcoin-icono.png"
+                        alt="Acepta Bitcoin"
+                        width={18}
+                        height={18}
+                        className="object-contain"
+                        title="Acepta Bitcoin"
+                      />
+                    )}
+                    {property.acceptsEthereum && (
+                      <Image
+                        src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/ethereum-icon.png"
+                        alt="Acepta Ethereum"
+                        width={18}
+                        height={18}
+                        className="object-contain"
+                        title="Acepta Ethereum"
+                      />
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           ))}
