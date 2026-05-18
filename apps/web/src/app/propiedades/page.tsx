@@ -1,10 +1,9 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
-  ShieldCheck,
   SlidersHorizontal,
   ChevronRight,
   ChevronLeft,
@@ -34,6 +33,7 @@ import {
 } from "@/components/ui/sheet";
 import { createClient } from "@/lib/supabase/client";
 import { logError } from "@/lib/log";
+import { ShieldBrc } from '@/components/ui/shield-brc'
 
 interface PropertyFromDB {
   id: string;
@@ -326,7 +326,7 @@ function FiltersPanel() {
 
       {/* Certificado BRC */}
       <div className="flex items-center gap-3 py-2">
-        <ShieldCheck className="h-5 w-5 text-accent" />
+        <ShieldBrc className="h-5 w-5 text-accent" />
         <Label className="text-sm font-semibold">Certificado BRC</Label>
         <button
           onClick={() => setBrcOnly(!brcOnly)}
@@ -613,7 +613,7 @@ export default function PropiedadesPage() {
                       {/* BRC Shield */}
                       {property.brc && (
                         <div className="absolute top-2 right-2 h-6 w-6 rounded-full bg-accent/90 flex items-center justify-center">
-                          <ShieldCheck className="h-3 w-3 text-white" />
+                          <ShieldBrc className="h-3 w-3 text-white" />
                         </div>
                       )}
 

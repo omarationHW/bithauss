@@ -8,7 +8,6 @@ import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { AuthPanel } from "../_components/auth-panel";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
@@ -79,10 +78,7 @@ export default function LoginPage() {
   };
 
   return (
-    <>
-      <AuthPanel image="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Iniciar-sesion.jpg" />
-      <div className="flex w-full flex-1 items-center justify-center overflow-y-auto lg:w-[40%]">
-        <main className="flex w-full max-w-md flex-col px-8 py-10">
+    <main className="flex w-full max-w-md flex-col px-8 py-10">
       {/* Logo */}
       <div className="mb-8 flex justify-center">
         <Image
@@ -285,8 +281,6 @@ export default function LoginPage() {
       <p className="mt-4 text-center text-xs text-muted-foreground">
         © 2026 BitHauss
       </p>
-        </main>
-      </div>
-    </>
+    </main>
   );
 }

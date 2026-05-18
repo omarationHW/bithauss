@@ -1,11 +1,11 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "../../_context/user-context";
 import Image from "next/image";
+import { ShieldBrc } from '@/components/ui/shield-brc'
 import {
-  ShieldCheck,
   Search,
   Loader2,
   Clock,
@@ -317,7 +317,7 @@ export default function NotariosVerificacionPage() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-gray-100 bg-white py-20 shadow-sm">
-          <ShieldCheck className="h-12 w-12 text-gray-200" />
+          <ShieldBrc className="h-12 w-12 text-gray-200" />
           <p className="mt-4 text-sm font-medium text-gray-500">
             {searchQuery
               ? "No se encontraron notarios con esa busqueda."

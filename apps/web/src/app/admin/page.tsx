@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -7,7 +7,6 @@ import { Separator } from "@/components/ui/separator";
 import {
   Users,
   Building2,
-  ShieldCheck,
   DollarSign,
   Briefcase,
   Scale,
@@ -21,6 +20,7 @@ import {
   TrendingUp,
   FileText,
 } from "lucide-react";
+import { ShieldBrc } from '@/components/ui/shield-brc'
 
 const kpiCards = [
   {
@@ -45,8 +45,7 @@ const kpiCards = [
     title: "BRC Expedientes",
     value: "456",
     change: "87 pendientes",
-    icon: ShieldCheck,
-    trend: "neutral" as const,
+    icon: ShieldBrc, trend: "neutral" as const,
     color: "text-violet-500",
     bg: "bg-violet-500/10",
   },
@@ -142,8 +141,7 @@ const quickActions = [
   {
     label: "Revisar BRC Pendientes",
     href: "/admin/brc",
-    icon: ShieldCheck,
-    badge: "87",
+    icon: ShieldBrc, badge: "87",
     badgeColor: "bg-amber-500 text-white",
   },
   {

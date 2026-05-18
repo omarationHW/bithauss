@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -13,7 +13,6 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import {
-  ShieldCheck,
   LayoutDashboard,
   Building2,
   Users,
@@ -24,6 +23,7 @@ import {
   LogOut,
   Menu,
 } from "lucide-react";
+import { ShieldBrc } from '@/components/ui/shield-brc'
 
 const navItems = [
   { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
@@ -31,11 +31,7 @@ const navItems = [
   { label: "Leads", icon: Users, href: "/dashboard/leads" },
   { label: "Mensajes", icon: MessageSquare, href: "/dashboard/mensajes" },
   { label: "Membresia", icon: CreditCard, href: "/dashboard/membresia" },
-  {
-    label: "BRC Expedientes",
-    icon: ShieldCheck,
-    href: "/dashboard/expedientes",
-  },
+  { label: "BRC Expedientes", icon: ShieldBrc, href: "/dashboard/expedientes" },
   { label: "Perfil", icon: User, href: "/dashboard/perfil" },
   { label: "Configuracion", icon: Settings, href: "/dashboard/configuracion" },
 ];
@@ -50,7 +46,7 @@ function SidebarContent({ activeItem }: SidebarProps) {
       {/* Logo */}
       <div className="flex items-center gap-2 px-6 py-5">
         <Link href="/" className="flex items-center gap-2">
-          <ShieldCheck className="h-7 w-7 text-sidebar-primary" />
+          <ShieldBrc className="h-7 w-7 text-sidebar-primary" />
           <span className="text-xl font-bold text-sidebar-foreground">
             BitHauss
           </span>

@@ -10,7 +10,6 @@ import {
   Bath,
   Ruler,
   Car,
-  ShieldCheck,
   Phone,
   Mail,
   ChevronRight,
@@ -38,6 +37,7 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { createClient } from "@/lib/supabase/client";
+import { ShieldBrc } from '@/components/ui/shield-brc'
 
 interface Property {
   id: string;
@@ -738,7 +738,7 @@ export default function PropertyDetailPage() {
                     className="text-white text-xs font-semibold px-2.5 py-1 rounded-lg flex items-center gap-1"
                     style={{ background: 'linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))' }}
                   >
-                    <ShieldCheck className="h-3 w-3" />
+                    <ShieldBrc className="h-3 w-3" />
                     Certificada BRC
                   </span>
                 )}
@@ -847,7 +847,7 @@ export default function PropertyDetailPage() {
                   className="h-12 w-12 rounded-full flex items-center justify-center shrink-0"
                   style={{ background: 'linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))' }}
                 >
-                  <ShieldCheck className="h-6 w-6 text-white" />
+                  <ShieldBrc className="h-6 w-6 text-white" />
                 </div>
                 <div>
                   <h3 className="font-semibold text-sm">Propiedad Certificada BRC</h3>
@@ -872,7 +872,7 @@ export default function PropertyDetailPage() {
             {property.brc_status === "NO_SOLICITADO" && (
               <div className="rounded-2xl p-5 flex items-center gap-4 border border-border/50">
                 <div className="h-12 w-12 rounded-full flex items-center justify-center shrink-0 bg-muted">
-                  <ShieldCheck className="h-6 w-6 text-muted-foreground" />
+                  <ShieldBrc className="h-6 w-6 text-muted-foreground" />
                 </div>
                 <div>
                   <h3 className="font-semibold text-sm">
@@ -904,7 +904,7 @@ export default function PropertyDetailPage() {
                 style={{ background: 'hsl(221 83% 53% / 0.06)' }}
               >
                 <div className="h-12 w-12 rounded-full flex items-center justify-center shrink-0 bg-blue-100">
-                  <ShieldCheck className="h-6 w-6 text-blue-600" />
+                  <ShieldBrc className="h-6 w-6 text-blue-600" />
                 </div>
                 <div>
                   <h3 className="font-semibold text-sm">Certificación BRC en revisión</h3>
@@ -913,7 +913,7 @@ export default function PropertyDetailPage() {
                   </p>
                 </div>
                 <span className="ml-auto shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-600">
-                  <ShieldCheck className="h-3.5 w-3.5" />
+                  <ShieldBrc className="h-3.5 w-3.5" />
                   En revisión
                 </span>
               </div>
@@ -980,7 +980,7 @@ export default function PropertyDetailPage() {
                 <h3 className="font-semibold text-sm mb-3">Información Notarial</h3>
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                    <ShieldCheck className="h-5 w-5 text-primary" />
+                    <ShieldBrc className="h-5 w-5 text-primary" />
                   </div>
                   <div>
                     <p className="text-sm font-medium">Certificado BRC verificado</p>
@@ -994,7 +994,7 @@ export default function PropertyDetailPage() {
                 <h3 className="font-semibold text-sm mb-3">Información Notarial</h3>
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center">
-                    <ShieldCheck className="h-5 w-5 text-blue-600" />
+                    <ShieldBrc className="h-5 w-5 text-blue-600" />
                   </div>
                   <div>
                     <p className="text-sm font-medium">Revisión en proceso</p>
@@ -1108,7 +1108,7 @@ export default function PropertyDetailPage() {
                             className="text-white text-[10px] font-semibold px-2 py-1 rounded-lg flex items-center gap-1"
                             style={{ background: 'linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))' }}
                           >
-                            <ShieldCheck className="h-3 w-3" />
+                            <ShieldBrc className="h-3 w-3" />
                             BRC
                           </span>
                         </div>

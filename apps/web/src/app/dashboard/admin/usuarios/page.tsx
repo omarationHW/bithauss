@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -7,7 +7,6 @@ import Image from "next/image";
 import {
   Users,
   Building2,
-  ShieldCheck,
   Search,
   Loader2,
   TrendingUp,
@@ -17,6 +16,7 @@ import {
   UserCheck,
   UserX,
 } from "lucide-react";
+import { ShieldBrc } from '@/components/ui/shield-brc'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -184,7 +184,7 @@ export default function UsuariosPage() {
           { label: "Total Usuarios", value: stats.total, icon: Users, change: "registrados" },
           { label: "Brokers", value: stats.brokers, icon: Building2, change: "activos" },
           { label: "Compradores", value: stats.compradores, icon: UserCheck, change: "registrados" },
-          { label: "Notarios", value: stats.notarios, icon: ShieldCheck, change: "registrados" },
+          { label: "Notarios", value: stats.notarios, icon: ShieldBrc, change: "registrados" },
         ].map((kpi) => (
           <div
             key={kpi.label}

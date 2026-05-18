@@ -1,8 +1,7 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import {
-  ShieldCheck,
   Building2,
   ArrowLeftRight,
   Bitcoin,
@@ -10,6 +9,7 @@ import {
   Blocks,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ShieldBrc } from '@/components/ui/shield-brc'
 import { SecurityBrcSection } from "@/components/nosotros/security-brc-section";
 
 export const metadata: Metadata = {
@@ -78,8 +78,7 @@ const problemStats = [
 
 const solutions = [
   {
-    icon: ShieldCheck,
-    title: "Bienes Raices Certificados",
+    icon: ShieldBrc, title: "Bienes Raices Certificados",
     description:
       "Creadores del concepto BRC para reducir fraudes inmobiliarios mediante validación notarial digital.",
     iconColor: "text-emerald-500",

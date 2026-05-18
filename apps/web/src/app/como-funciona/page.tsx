@@ -1,11 +1,9 @@
-import type { Metadata } from 'next'
+﻿import type { Metadata } from 'next'
 import Link from 'next/link'
 import Image from 'next/image'
-import {
-  ShieldCheck,
-  ArrowRight,
-} from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ShieldBrc } from '@/components/ui/shield-brc'
 
 export const metadata: Metadata = {
   title: 'Como Funciona - BitHauss',
@@ -204,7 +202,7 @@ export default function ComoFuncionaPage() {
                       className="absolute top-0.5 right-0.5 h-4 w-4 rounded-full flex items-center justify-center"
                       style={{ background: 'linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))' }}
                     >
-                      <ShieldCheck className="h-2.5 w-2.5 text-white" />
+                      <ShieldBrc className="h-3 w-3 text-white" />
                     </div>
                   </div>
                   {/* Circle 2 */}
@@ -214,7 +212,7 @@ export default function ComoFuncionaPage() {
                       className="absolute top-0.5 right-0.5 h-4 w-4 rounded-full flex items-center justify-center"
                       style={{ background: 'linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))' }}
                     >
-                      <ShieldCheck className="h-2.5 w-2.5 text-white" />
+                      <ShieldBrc className="h-3 w-3 text-white" />
                     </div>
                   </div>
                   {/* Plus square */}
@@ -228,7 +226,7 @@ export default function ComoFuncionaPage() {
               </div>
               <div>
                 <div className="mb-2 h-11 w-11 rounded-full bg-white/10 flex items-center justify-center">
-                  <ShieldCheck className="h-6 w-6 text-white" />
+                  <ShieldBrc className="h-6 w-6 text-white" />
                 </div>
                 <p className="text-[10px] text-white/70 leading-snug text-justify">
                   Emitimos el Certificado BRC con sello digital verificable ante notario
@@ -345,7 +343,7 @@ export default function ComoFuncionaPage() {
               className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium text-white"
               style={{ background: 'linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))' }}
             >
-              <ShieldCheck className="h-4 w-4" />
+              <ShieldBrc className="h-4 w-4" />
               Certificación BRC
             </span>
             <h2 className="mt-4 text-2xl font-bold tracking-tight sm:text-3xl">
@@ -431,7 +429,7 @@ export default function ComoFuncionaPage() {
                 className="rounded-2xl border border-border/50 bg-card p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
               >
                 <div className="mb-3 h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                  <ShieldCheck className="h-5 w-5 text-primary" />
+                  <ShieldBrc className="h-5 w-5 text-primary" />
                 </div>
                 <h3 className="font-semibold text-foreground">{benefit.title}</h3>
                 <p className="text-sm text-muted-foreground mt-1">{benefit.description}</p>

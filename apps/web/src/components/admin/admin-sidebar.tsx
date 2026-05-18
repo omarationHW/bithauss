@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -13,7 +13,6 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import {
-  ShieldCheck,
   LayoutDashboard,
   Users,
   Building2,
@@ -24,16 +23,13 @@ import {
   LogOut,
   Menu,
 } from "lucide-react";
+import { ShieldBrc } from '@/components/ui/shield-brc'
 
 const navItems = [
   { label: "Dashboard", icon: LayoutDashboard, href: "/admin" },
   { label: "Usuarios", icon: Users, href: "/admin/usuarios" },
   { label: "Propiedades", icon: Building2, href: "/admin/propiedades" },
-  {
-    label: "BRC Expedientes",
-    icon: ShieldCheck,
-    href: "/admin/brc",
-  },
+  { label: "BRC Expedientes", icon: ShieldBrc, href: "/admin/brc" },
   { label: "Membresías", icon: CreditCard, href: "/admin/membresias" },
   { label: "Notarios", icon: Scale, href: "/admin/notarios" },
   { label: "Reportes", icon: BarChart3, href: "/admin/reportes" },
@@ -50,7 +46,7 @@ function SidebarContent({ activeItem }: AdminSidebarProps) {
       {/* Logo + Admin Badge */}
       <div className="flex items-center gap-2 px-6 py-5">
         <Link href="/admin" className="flex items-center gap-2">
-          <ShieldCheck className="h-7 w-7 text-sidebar-primary" />
+          <ShieldBrc className="h-7 w-7 text-sidebar-primary" />
           <span className="text-xl font-bold text-sidebar-foreground">
             BitHauss
           </span>

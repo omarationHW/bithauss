@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -10,11 +10,11 @@ import {
   AlertCircle,
   Loader2,
   X,
-  ShieldCheck,
   AlertTriangle,
   MinusCircle,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { ShieldBrc } from '@/components/ui/shield-brc'
 
 /* ------------------------------------------------------------------ */
 /*  Document slots                                                     */
@@ -204,7 +204,7 @@ function SlotCard({
               onClick={onProcess}
               className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gray-900 px-4 py-2 text-xs font-bold text-white hover:bg-gray-700 transition-colors"
             >
-              <ShieldCheck className="h-3.5 w-3.5" /> Procesar con OCR
+              <ShieldBrc className="h-3.5 w-3.5" /> Procesar con OCR
             </button>
           )}
 
@@ -428,7 +428,7 @@ export default function OcrEscrituraPage() {
               </>
             ) : (
               <>
-                <ShieldCheck className="h-4 w-4" /> Validar coherencia
+                <ShieldBrc className="h-4 w-4" /> Validar coherencia
               </>
             )}
           </button>

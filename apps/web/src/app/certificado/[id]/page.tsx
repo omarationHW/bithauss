@@ -5,7 +5,6 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import {
-  ShieldCheck,
   ArrowLeft,
   Download,
   Calendar,
@@ -19,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { logError } from "@/lib/log";
+import { ShieldBrc } from '@/components/ui/shield-brc'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -525,7 +525,7 @@ export default function CertificadoPage() {
                   "linear-gradient(135deg, hsl(221 83% 53% / 0.05), hsl(160 84% 39% / 0.05))",
               }}
             >
-              <ShieldCheck
+              <ShieldBrc
                 className="h-5 w-5 shrink-0"
                 style={{ color: "hsl(160 84% 39%)" }}
               />

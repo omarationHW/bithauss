@@ -1,10 +1,9 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  ShieldCheck,
   FileText,
   Clock,
   CheckCircle2,
@@ -23,6 +22,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "@/app/dashboard/_context/user-context";
+import { ShieldBrc } from '@/components/ui/shield-brc'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -445,7 +445,7 @@ export default function ExpedientesPage() {
                               background: "linear-gradient(135deg, hsl(221 83% 53% / 0.1), hsl(160 84% 39% / 0.1))",
                             }}
                           >
-                            <ShieldCheck className="h-4 w-4" style={{ color: "hsl(221 83% 53%)" }} />
+                            <ShieldBrc className="h-4 w-4" style={{ color: "hsl(221 83% 53%)" }} />
                           </div>
                           <p className="font-bold text-gray-900 truncate max-w-[200px]" style={{ fontFamily: "Barlow, Inter, sans-serif" }}>
                             {propertyTitle}
@@ -557,7 +557,7 @@ export default function ExpedientesPage() {
                             "linear-gradient(135deg, hsl(221 83% 53% / 0.1), hsl(160 84% 39% / 0.1))",
                         }}
                       >
-                        <ShieldCheck
+                        <ShieldBrc
                           className="h-5 w-5"
                           style={{ color: "hsl(221 83% 53%)" }}
                         />
@@ -701,7 +701,7 @@ export default function ExpedientesPage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center">
-                    <ShieldCheck className="h-5 w-5 text-white" />
+                    <ShieldBrc className="h-5 w-5 text-white" />
                   </div>
                   <div>
                     <h3
@@ -831,7 +831,7 @@ export default function ExpedientesPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center">
-                      <ShieldCheck className="h-5 w-5 text-white" />
+                      <ShieldBrc className="h-5 w-5 text-white" />
                     </div>
                     <div>
                       <h3 className="text-lg font-bold">{propertyTitle}</h3>

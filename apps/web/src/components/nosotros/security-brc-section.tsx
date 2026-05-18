@@ -1,9 +1,10 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { Lock, Link2, FileCheck, ShieldCheck } from 'lucide-react'
+import { Lock, Link2, FileCheck } from 'lucide-react'
+import { ShieldBrc } from '@/components/ui/shield-brc'
 
 const features = [
   {
@@ -34,8 +35,7 @@ const features = [
     iconBg: 'bg-violet-100',
   },
   {
-    icon: ShieldCheck,
-    title: 'Protección comprador y vendedor',
+    icon: ShieldBrc, title: 'Protección comprador y vendedor',
     description:
       'Verificamos identidad, documentos y estatus jurídico del inmueble antes de que firmes cualquier acuerdo.',
     bg: 'bg-amber-50',
@@ -58,7 +58,7 @@ function useInView(threshold = 0.15) {
     const el = ref.current
     if (!el) return
     const observer = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) { setInView(true); observer.disconnect() } },
+      ([entry]) => { if (entry?.isIntersecting) { setInView(true); observer.disconnect() } },
       { threshold }
     )
     observer.observe(el)

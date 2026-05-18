@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
@@ -11,7 +11,6 @@ import {
   TrendingUp,
   ArrowUpRight,
   Plus,
-  ShieldCheck,
   CalendarDays,
   Loader2,
   Crown,
@@ -20,6 +19,7 @@ import {
   FileText,
   RefreshCw,
 } from "lucide-react";
+import { ShieldBrc } from '@/components/ui/shield-brc'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -29,7 +29,7 @@ interface KpiItem {
   label: string;
   value: string;
   change: string;
-  icon: typeof Building2;
+  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
 }
 
 interface RecentLead {
@@ -53,7 +53,7 @@ const brokerActions = [
   { label: "Publicar Propiedad", icon: Plus, href: "/dashboard/propiedades", primary: true },
   { label: "Ver Leads", icon: Users, href: "/dashboard/leads", primary: false },
   { label: "Mensajes", icon: MessageSquare, href: "/dashboard/mensajes", primary: false },
-  { label: "Solicitar BRC", icon: ShieldCheck, href: "/dashboard/expedientes", primary: false },
+  { label: "Solicitar BRC", icon: ShieldBrc, href: "/dashboard/expedientes", primary: false },
 ];
 
 const compradorActions = [
@@ -65,13 +65,13 @@ const compradorActions = [
 
 const vendedorActions = [
   { label: "Publicar Propiedad", icon: Plus, href: "/dashboard/propiedades", primary: true },
-  { label: "Solicitar BRC", icon: ShieldCheck, href: "/dashboard/expedientes", primary: false },
+  { label: "Solicitar BRC", icon: ShieldBrc, href: "/dashboard/expedientes", primary: false },
   { label: "Mensajes", icon: MessageSquare, href: "/dashboard/mensajes", primary: false },
   { label: "Mis Documentos", icon: FileText, href: "/dashboard/documentos", primary: false },
 ];
 
 const notarioActions = [
-  { label: "Ver Expedientes Asignados", icon: ShieldCheck, href: "/dashboard/expedientes", primary: true },
+  { label: "Ver Expedientes Asignados", icon: ShieldBrc, href: "/dashboard/expedientes", primary: true },
   { label: "Certificados Emitidos", icon: FileText, href: "/dashboard/expedientes", primary: false },
   { label: "Mensajes", icon: MessageSquare, href: "/dashboard/mensajes", primary: false },
 ];
@@ -107,7 +107,7 @@ function getEstadoBadge(estado: string) {
 
 const adminActions = [
   { label: "Gestionar Usuarios", icon: Users, href: "/dashboard/admin/usuarios", primary: true },
-  { label: "Verificar Notarios", icon: ShieldCheck, href: "/dashboard/admin/notarios", primary: false },
+  { label: "Verificar Notarios", icon: ShieldBrc, href: "/dashboard/admin/notarios", primary: false },
   { label: "Asignar Expedientes", icon: FileText, href: "/dashboard/admin/asignaciones", primary: false },
   { label: "Ver Propiedades", icon: Building2, href: "/propiedades", primary: false },
 ];
@@ -283,8 +283,7 @@ function useDashboardData(userId: string | undefined, role: string) {
           label: "BRC Certificados",
           value: String(brcCount ?? 0),
           change: "propiedades",
-          icon: ShieldCheck,
-        },
+          icon: ShieldBrc },
       ]);
       setRecentLeads(fetchedLeads);
       setChartData(chart);
@@ -329,7 +328,7 @@ function useDashboardData(userId: string | undefined, role: string) {
         { label: "Mis Propiedades", value: String(myProps ?? 0), change: "publicadas", icon: Building2 },
         { label: "Visitas Recibidas", value: String(totalViews), change: "acumuladas", icon: Eye },
         { label: "Solicitudes de Compra", value: String(requestCount), change: "recibidas", icon: Users },
-        { label: "BRC Activos", value: String(brcCount ?? 0), change: "certificados", icon: ShieldCheck },
+        { label: "BRC Activos", value: String(brcCount ?? 0), change: "certificados", icon: ShieldBrc },
       ]);
       setChartData([]);
       setRecentLeads([]);
@@ -363,7 +362,7 @@ function useDashboardData(userId: string | undefined, role: string) {
       if (cancelled) return;
 
       setKpis([
-        { label: "Expedientes Asignados", value: String(totalAssigned ?? 0), change: "asignados", icon: ShieldCheck },
+        { label: "Expedientes Asignados", value: String(totalAssigned ?? 0), change: "asignados", icon: ShieldBrc },
         { label: "En Revision", value: String(enRevision ?? 0), change: "pendientes", icon: Eye },
         { label: "Certificados Emitidos", value: String(certificados ?? 0), change: "emitidos", icon: Building2 },
         { label: "Rechazados", value: String(rechazados ?? 0), change: "rechazados", icon: Users },
@@ -451,7 +450,7 @@ function useDashboardData(userId: string | undefined, role: string) {
         setKpis([
           { label: "Total Usuarios", value: String(totalUsers ?? 0), change: "plataforma", icon: Users },
           { label: "Propiedades Publicadas", value: String(totalProps ?? 0), change: "activas", icon: Building2 },
-          { label: "Expedientes Activos", value: String(activeExps ?? 0), change: "en proceso", icon: ShieldCheck },
+          { label: "Expedientes Activos", value: String(activeExps ?? 0), change: "en proceso", icon: ShieldBrc },
           { label: "Notarios Pendientes", value: String(pendingNotaries ?? 0), change: "por verificar", icon: FileText },
         ]);
         setChartData(chart);

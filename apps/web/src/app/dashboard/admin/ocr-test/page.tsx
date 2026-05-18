@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -10,9 +10,9 @@ import {
   AlertCircle,
   Loader2,
   X,
-  ShieldCheck,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { ShieldBrc } from '@/components/ui/shield-brc'
 
 /* ------------------------------------------------------------------ */
 /*  Document types for testing                                         */
@@ -542,7 +542,7 @@ export default function OcrTestPage() {
             </>
           ) : (
             <>
-              <ShieldCheck className="h-4 w-4" />
+              <ShieldBrc className="h-4 w-4" />
               Validar Documento
             </>
           )}

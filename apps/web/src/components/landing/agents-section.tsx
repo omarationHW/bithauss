@@ -1,7 +1,7 @@
-import Image from 'next/image'
+﻿import Image from 'next/image'
 import Link from 'next/link'
-import { ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ShieldBrc } from '@/components/ui/shield-brc'
 
 const agents = [
   {
@@ -91,7 +91,7 @@ export function AgentsSection() {
                         />
                       </div>
                       <div className="bg-primary absolute -right-1 -bottom-1 flex h-6 w-6 items-center justify-center rounded-full">
-                        <ShieldCheck className="h-3.5 w-3.5 text-white" />
+                        <ShieldBrc className="h-3.5 w-3.5 text-white" />
                       </div>
                     </div>
 

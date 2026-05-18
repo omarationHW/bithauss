@@ -6,9 +6,9 @@ import Link from "next/link";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "@/app/dashboard/_context/user-context";
+import { ShieldBrc } from '@/components/ui/shield-brc'
 import {
   ArrowLeft,
-  ShieldCheck,
   CheckCircle2,
   XCircle,
   AlertCircle,
@@ -1328,7 +1328,7 @@ export default function ExpedienteDetailPage() {
                   Numero de Certificado
                 </label>
                 <div className="flex items-center gap-2 rounded-xl bg-gray-50 border border-gray-200 px-4 py-3">
-                  <ShieldCheck className="h-4 w-4 text-gray-400" />
+                  <ShieldBrc className="h-4 w-4 text-gray-400" />
                   <span className="text-sm font-mono font-bold text-gray-900">{certNumber}</span>
                   <span className="ml-auto text-[10px] text-gray-400">Auto-generado</span>
                 </div>

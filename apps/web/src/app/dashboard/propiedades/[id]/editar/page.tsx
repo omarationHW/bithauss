@@ -12,7 +12,6 @@ import {
   ImagePlus,
   CheckCircle2,
   AlertCircle,
-  ShieldCheck,
   ShieldAlert,
   Clock,
 } from "lucide-react";
@@ -23,6 +22,7 @@ import { useUser } from "../../../_context/user-context";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { ShieldBrc } from '@/components/ui/shield-brc'
 import {
   Select,
   SelectContent,
@@ -669,7 +669,7 @@ export default function EditarPropiedadPage() {
                   "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
               }}
             >
-              <ShieldCheck className="h-4 w-4" />
+              <ShieldBrc className="h-4 w-4" />
               Solicitar certificacion BRC
             </Link>
           </div>
@@ -707,7 +707,7 @@ export default function EditarPropiedadPage() {
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
               style={{ background: "hsl(160 84% 39% / 0.15)" }}
             >
-              <ShieldCheck className="h-5 w-5 text-emerald-600" />
+              <ShieldBrc className="h-5 w-5 text-emerald-600" />
             </div>
             <div>
               <h4

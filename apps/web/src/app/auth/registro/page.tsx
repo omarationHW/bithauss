@@ -9,7 +9,6 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { AuthPanel } from "../_components/auth-panel";
 import { createClient } from "@/lib/supabase/client";
 import { logError } from "@/lib/log";
 
@@ -143,10 +142,7 @@ export default function RegistroPage() {
   };
 
   return (
-    <>
-      <AuthPanel image="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Registrarte.jpg" />
-      <div className="flex w-full flex-1 items-center justify-center overflow-y-auto lg:w-[40%]">
-        <main className="flex w-full max-w-md flex-col px-8 py-10">
+    <main className="flex w-full max-w-md flex-col px-8 py-10">
       {/* Logo */}
       <div className="mb-6 flex justify-center">
         <Image
@@ -405,8 +401,6 @@ export default function RegistroPage() {
       <p className="mt-4 text-center text-xs text-muted-foreground">
         © 2026 BitHauss
       </p>
-        </main>
-      </div>
-    </>
+    </main>
   );
 }

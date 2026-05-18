@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -25,7 +25,6 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import {
-  ShieldCheck,
   LayoutDashboard,
   Building2,
   Users,
@@ -43,6 +42,7 @@ import {
   FolderOpen,
   ScanSearch,
 } from "lucide-react";
+import { ShieldBrc } from '@/components/ui/shield-brc'
 
 type UserRole = "ADMIN" | "INMOBILIARIA" | "BROKER" | "VENDEDOR" | "COMPRADOR" | "NOTARIO" | "OPERADOR_BRC";
 
@@ -54,10 +54,10 @@ const allNavItems = [
   { label: "Mis Solicitudes", icon: FileText, href: "/dashboard/solicitudes", roles: ["COMPRADOR"] },
   { label: "Mensajes", icon: MessageSquare, href: "/dashboard/mensajes", roles: ["ALL"] },
   { label: "Membresía", icon: CreditCard, href: "/dashboard/membresia", roles: ["BROKER", "INMOBILIARIA", "ADMIN"] },
-  { label: "BRC Expedientes", icon: ShieldCheck, href: "/dashboard/expedientes", roles: ["BROKER", "INMOBILIARIA", "VENDEDOR", "NOTARIO", "OPERADOR_BRC", "ADMIN"] },
+  { label: "BRC Expedientes", icon: ShieldBrc, href: "/dashboard/expedientes", roles: ["BROKER", "INMOBILIARIA", "VENDEDOR", "NOTARIO", "OPERADOR_BRC", "ADMIN"] },
   { label: "Documentos KYC", icon: FolderOpen, href: "/dashboard/documentos", roles: ["COMPRADOR", "VENDEDOR"] },
   { label: "Usuarios", icon: Users, href: "/dashboard/admin/usuarios", roles: ["ADMIN"] },
-  { label: "Verificar Notarios", icon: ShieldCheck, href: "/dashboard/admin/notarios", roles: ["ADMIN", "OPERADOR_BRC"] },
+  { label: "Verificar Notarios", icon: ShieldBrc, href: "/dashboard/admin/notarios", roles: ["ADMIN", "OPERADOR_BRC"] },
   { label: "Asignar Expedientes", icon: FileText, href: "/dashboard/admin/asignaciones", roles: ["ADMIN", "OPERADOR_BRC"] },
   { label: "Prueba OCR", icon: ScanSearch, href: "/dashboard/admin/ocr-test", roles: ["ADMIN"] },
   { label: "Prueba OCR Escritura", icon: ScanSearch, href: "/dashboard/admin/ocr-escritura", roles: ["ADMIN"] },
@@ -423,7 +423,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
                       <div className="divide-y divide-gray-50">
                         {notifications.map((n) => {
                           const Icon =
-                            n.type === "BRC_ESTADO_CAMBIO" ? ShieldCheck :
+                            n.type === "BRC_ESTADO_CAMBIO" ? ShieldBrc :
                             n.type === "LEAD_RECIBIDO" ? Users :
                             n.type === "COMPRA_SOLICITUD" ? Building2 :
                             Bell;
@@ -505,7 +505,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
                           onClick={() => setNotifOpen(false)}
                         >
                           <div className="h-8 w-8 rounded-lg bg-purple-50 flex items-center justify-center shrink-0">
-                            <ShieldCheck className="h-4 w-4 text-purple-500" />
+                            <ShieldBrc className="h-4 w-4 text-purple-500" />
                           </div>
                           <div className="min-w-0">
                             <p className="text-sm font-medium text-gray-900">Expedientes BRC</p>

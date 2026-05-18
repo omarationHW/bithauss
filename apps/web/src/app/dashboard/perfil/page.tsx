@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
@@ -16,7 +16,6 @@ import {
   Save,
   Loader2,
   ArrowLeft,
-  ShieldCheck,
   CheckCircle2,
   Clock,
 } from "lucide-react";
@@ -25,6 +24,7 @@ import { Label } from "@/components/ui/label";
 import { useUser } from "../_context/user-context";
 import { createClient } from "@/lib/supabase/client";
 import { logError } from "@/lib/log";
+import { ShieldBrc } from '@/components/ui/shield-brc'
 
 /* ------------------------------------------------------------------ */
 /*  Mock profile data (fallback)                                       */
@@ -386,7 +386,7 @@ export default function PerfilPage() {
                     "linear-gradient(135deg, hsl(221 83% 53% / 0.1), hsl(160 84% 39% / 0.1))",
                 }}
               >
-                <ShieldCheck
+                <ShieldBrc
                   className="h-5 w-5"
                   style={{ color: "hsl(221 83% 53%)" }}
                 />
@@ -432,7 +432,7 @@ export default function PerfilPage() {
                 <div className="space-y-2">
                   <Label className="text-gray-500">Numero de Notaria</Label>
                   <div className="relative">
-                    <ShieldCheck className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    <ShieldBrc className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                     <Input
                       value={notaryProfile.notaria_numero}
                       onChange={(e) =>

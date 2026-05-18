@@ -1,14 +1,14 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import Image from "next/image";
 import {
   Heart,
   ChevronLeft,
   ChevronRight,
   ArrowRight,
-  ShieldCheck,
   Home,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ShieldBrc } from '@/components/ui/shield-brc'
 
 const properties = [
   {
@@ -121,7 +121,7 @@ export function NearbyProperties() {
                 {/* BRC Shield */}
                 {property.certified && (
                   <div className="absolute top-3 right-3 h-8 w-8 rounded-full bg-accent/90 flex items-center justify-center">
-                    <ShieldCheck className="h-4 w-4 text-white" />
+                    <ShieldBrc className="h-4 w-4 text-white" />
                   </div>
                 )}
 

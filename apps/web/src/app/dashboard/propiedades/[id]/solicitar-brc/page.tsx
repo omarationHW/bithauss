@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  ShieldCheck,
   Upload,
   FileText,
   ArrowLeft,
@@ -16,6 +15,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { logError } from "@/lib/log";
 import { useUser } from "@/app/dashboard/_context/user-context";
+import { ShieldBrc } from '@/components/ui/shield-brc'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -359,7 +359,7 @@ export default function SolicitarBrcPage() {
   if (property.brc_status !== "NO_SOLICITADO") {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4">
-        <ShieldCheck className="h-12 w-12 text-blue-500" />
+        <ShieldBrc className="h-12 w-12 text-blue-500" />
         <p className="text-lg font-medium text-gray-700">
           Esta propiedad ya tiene una solicitud BRC en estado:{" "}
           <span className="font-bold">{property.brc_status}</span>
@@ -421,7 +421,7 @@ export default function SolicitarBrcPage() {
                 "linear-gradient(135deg, hsl(221 83% 53% / 0.1), hsl(160 84% 39% / 0.1))",
             }}
           >
-            <ShieldCheck className="h-5 w-5" style={{ color: "hsl(221 83% 53%)" }} />
+            <ShieldBrc className="h-5 w-5" style={{ color: "hsl(221 83% 53%)" }} />
           </div>
           <div className="min-w-0">
             <h3
@@ -651,7 +651,7 @@ export default function SolicitarBrcPage() {
       {/* ============================================================ */}
       <div className="rounded-xl border border-blue-200 bg-blue-50 p-5">
         <div className="flex items-start gap-3">
-          <ShieldCheck className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
+          <ShieldBrc className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
           <div>
             <p className="text-xs font-semibold text-blue-800 mb-1">
               Aviso de privacidad
@@ -701,7 +701,7 @@ export default function SolicitarBrcPage() {
             </>
           ) : (
             <>
-              <ShieldCheck className="h-4 w-4" />
+              <ShieldBrc className="h-4 w-4" />
               Solicitar Certificacion
             </>
           )}

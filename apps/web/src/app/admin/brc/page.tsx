@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -23,8 +23,8 @@ import {
   Timer,
   TrendingUp,
   Scale,
-  ShieldCheck,
 } from "lucide-react";
+import { ShieldBrc } from '@/components/ui/shield-brc'
 
 type BRCStatus =
   | "Pendiente"
@@ -284,7 +284,7 @@ export default function BRCExpedientesPage() {
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-500/10">
-              <ShieldCheck className="h-5 w-5 text-violet-500" />
+              <ShieldBrc className="h-5 w-5 text-violet-500" />
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Total Expedientes</p>

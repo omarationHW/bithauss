@@ -1,9 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "../../_context/user-context";
+import { ShieldBrc } from '@/components/ui/shield-brc'
 import {
   FileText,
   Search,
@@ -13,7 +14,6 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock,
-  ShieldCheck,
   UserPlus,
   RefreshCw,
   MapPin,
@@ -574,7 +574,7 @@ export default function AsignacionesPage() {
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50">
-                <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                <ShieldBrc className="h-4 w-4 text-emerald-600" />
               </div>
               <h3
                 className="text-lg font-bold text-gray-900"
@@ -660,7 +660,7 @@ export default function AsignacionesPage() {
                 </div>
               ) : filteredNotaries.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12">
-                  <ShieldCheck className="h-8 w-8 text-gray-200" />
+                  <ShieldBrc className="h-8 w-8 text-gray-200" />
                   <p className="mt-2 text-sm text-gray-400">
                     {notarySearch
                       ? "No se encontraron notarios con esa busqueda."
