@@ -316,6 +316,148 @@ export default function NosotrosPage() {
       </section>
 
       {/* ============================================================ */}
+      {/*  3b. Seguridad & Cómo funciona BRC                          */}
+      {/* ============================================================ */}
+      <section className="bg-white py-16 sm:py-24 px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-6xl">
+
+          {/* Header */}
+          <div className="text-center mb-14">
+            <span
+              className="inline-block rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-white mb-4"
+              style={{ background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))" }}
+            >
+              Seguridad de nivel bancario
+            </span>
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground mt-2">
+              Tus datos y tu propiedad,{" "}
+              <span
+                style={{
+                  background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                }}
+              >
+                100% protegidos
+              </span>
+            </h2>
+            <p className="mt-4 text-muted-foreground max-w-2xl mx-auto leading-relaxed">
+              Combinamos cifrado bancario, tecnología Blockchain y validación
+              notarial para que cada transacción sea segura, transparente e
+              inviolable.
+            </p>
+          </div>
+
+          {/* Two-column: image left, features right */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center mb-16">
+
+            {/* Left — image placeholder */}
+            <div className="flex items-center justify-center rounded-2xl bg-gradient-to-br from-blue-50 to-emerald-50 border border-border/30 aspect-square max-w-md mx-auto w-full">
+              <Image
+                src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/seguridad-brc-familia.png"
+                alt="Familia protegida por BitHauss BRC"
+                width={480}
+                height={480}
+                className="object-contain w-full h-full p-8"
+              />
+            </div>
+
+            {/* Right — 4 feature cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              {[
+                {
+                  icon: "🔒",
+                  title: "Cifrado bancario AES-256",
+                  description:
+                    "Todos tus datos viajan y se almacenan cifrados con el mismo estándar que usan los bancos. Nadie puede interceptarlos.",
+                  bg: "bg-blue-50",
+                },
+                {
+                  icon: "⛓️",
+                  title: "Registro inmutable en Blockchain",
+                  description:
+                    "El Certificado BRC se graba en la Blockchain. Una vez emitido, es técnicamente imposible alterarlo.",
+                  bg: "bg-emerald-50",
+                },
+                {
+                  icon: "📋",
+                  title: "Validación notarial digital",
+                  description:
+                    "Cada propiedad pasa por revisión de Notarios certificados antes de recibir su BRC. Un proceso legal con respaldo humano.",
+                  bg: "bg-violet-50",
+                },
+                {
+                  icon: "🛡️",
+                  title: "Protección comprador y vendedor",
+                  description:
+                    "Verificamos identidad, documentos y estatus jurídico del inmueble antes de que firmes cualquier acuerdo.",
+                  bg: "bg-amber-50",
+                },
+              ].map((feat) => (
+                <div
+                  key={feat.title}
+                  className={`rounded-2xl ${feat.bg} p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-md`}
+                >
+                  <span className="text-2xl">{feat.icon}</span>
+                  <h3 className="mt-3 text-sm font-semibold text-foreground leading-snug">
+                    {feat.title}
+                  </h3>
+                  <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
+                    {feat.description}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Bottom — cómo funciona BRC (4 pasos en línea) */}
+          <div
+            className="rounded-2xl px-8 py-8 border"
+            style={{
+              background: "linear-gradient(135deg, hsl(221 83% 53% / 0.05), hsl(160 84% 39% / 0.05))",
+              borderColor: "hsl(221 83% 53% / 0.15)",
+            }}
+          >
+            <p className="text-center text-sm font-semibold text-foreground mb-6">
+              ¿Cómo funciona el Certificado BRC?
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
+              {[
+                { step: "01", label: "Solicitud", desc: "El propietario registra la propiedad en la plataforma" },
+                { step: "02", label: "Verificación Documental", desc: "Revisión legal apoyada con Inteligencia Artificial" },
+                { step: "03", label: "Validación Notarial", desc: "Notarios certificados validan el estatus jurídico" },
+                { step: "04", label: "Certificado BRC", desc: "Certificado digital inmutable emitido en Blockchain" },
+              ].map((s, i, arr) => (
+                <div key={s.step} className="relative">
+                  <div
+                    className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white"
+                    style={{ background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))" }}
+                  >
+                    {s.step}
+                  </div>
+                  <p className="text-xs font-semibold text-foreground">{s.label}</p>
+                  <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{s.desc}</p>
+                  {i < arr.length - 1 && (
+                    <div className="absolute top-5 left-[calc(50%+20px)] right-[calc(-50%+20px)] hidden h-px bg-border/50 sm:block" />
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="mt-6 text-center">
+              <a
+                href="/como-funciona"
+                className="inline-flex items-center gap-2 rounded-lg px-6 py-2.5 text-sm font-semibold text-white shadow-md transition-all duration-200 hover:opacity-90 hover:shadow-lg"
+                style={{ background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))" }}
+              >
+                Ver cómo funciona →
+              </a>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      {/* ============================================================ */}
       {/*  4. El Problema                                              */}
       {/* ============================================================ */}
       <section

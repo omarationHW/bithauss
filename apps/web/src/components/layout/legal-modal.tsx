@@ -142,37 +142,55 @@ function Modal({ doc, onClose }: { doc: LegalDoc; onClose: () => void }) {
       className="fixed inset-0 z-[100] flex items-center justify-center p-4"
       onClick={onClose}
     >
+      {/* Backdrop */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+
       <div
-        className="relative z-10 max-h-[85vh] w-full max-w-2xl overflow-hidden rounded-2xl bg-background shadow-2xl"
+        className="relative z-10 flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-background shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-border/50 px-6 py-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              BitHauss — Legal
-            </p>
-            <h2 className="text-lg font-bold text-foreground">{content.title}</h2>
+        {/* Header con gradiente igual al de la página */}
+        <div className="from-primary to-accent bg-gradient-to-r px-6 py-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-white/70">
+                BitHauss · Legal
+              </p>
+              <h2 className="mt-1 text-xl font-bold text-white">{content.title}</h2>
+            </div>
+            <button
+              onClick={onClose}
+              className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <X className="h-4 w-4" />
-          </button>
         </div>
 
         {/* Scrollable content */}
-        <div className="overflow-y-auto px-6 py-5" style={{ maxHeight: 'calc(85vh - 80px)' }}>
+        <div className="flex-1 overflow-y-auto px-6 py-6">
           {content.sections.map((section) => (
-            <div key={section.heading} className="mb-5">
-              <h3 className="mb-1.5 text-sm font-semibold text-foreground">{section.heading}</h3>
-              <p className="text-sm leading-relaxed text-muted-foreground">{section.body}</p>
+            <div key={section.heading} className="mb-6">
+              <h3 className="from-primary to-accent mb-2 bg-gradient-to-r bg-clip-text text-sm font-semibold text-transparent">
+                {section.heading}
+              </h3>
+              <p className="text-muted-foreground text-sm leading-relaxed">{section.body}</p>
             </div>
           ))}
-          <div className="mt-6 border-t border-border/30 pt-4 text-center text-xs text-muted-foreground">
-            © 2026 BitHauss. Todos los derechos reservados. — www.bithauss.com
+        </div>
+
+        {/* Footer con botón Aceptar */}
+        <div className="border-t border-border/50 bg-muted/30 px-6 py-4">
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-muted-foreground text-xs">
+              © 2026 BitHauss. Todos los derechos reservados.
+            </p>
+            <button
+              onClick={onClose}
+              className="from-primary to-accent hover:shadow-primary/30 rounded-lg bg-gradient-to-r px-6 py-2.5 text-sm font-semibold text-white shadow-md transition-all duration-200 hover:opacity-90 hover:shadow-lg"
+            >
+              Aceptar
+            </button>
           </div>
         </div>
       </div>
