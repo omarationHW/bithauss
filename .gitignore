@@ -31,6 +31,9 @@ build/
 Thumbs.db
 Desktop.ini
 ._*
+# macOS Finder writes an "Icon\r" file (Icon followed by a carriage return)
+# whenever a folder has a custom icon. Always 0 bytes, never useful to track.
+Icon?
 
 # Debug / Logs
 npm-debug.log*
