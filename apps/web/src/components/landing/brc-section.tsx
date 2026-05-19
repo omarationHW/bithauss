@@ -68,7 +68,7 @@ export function BrcSection() {
       <div className="mx-auto max-w-5xl">
         <div className="p-8 sm:p-12">
           {/* Title */}
-          <h2 className="text-foreground max-w-2xl text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl">
+          <h2 className="text-foreground mx-auto max-w-3xl text-center text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl">
             Introducimos Certificados Digitales BRC : Tu Garantía Contra el{' '}
             <span className="text-destructive relative inline-block">
               Fraude
@@ -90,13 +90,13 @@ export function BrcSection() {
           </h2>
 
           {/* Description */}
-          <p className="text-muted-foreground mt-4 max-w-3xl text-base leading-relaxed">
+          <p className="text-muted-foreground mx-auto mt-4 max-w-3xl text-center text-base leading-relaxed">
             En México existe el riesgo de caer en operaciones inmobiliarias fraudulentas. Bienes
             Raíces Certificados (BRC) es el primer sistema de verificación notarial digital que
             valida la autenticidad de cada propiedad, protegiendo a compradores y vendedores.
           </p>
 
-          <BrcExclusionNotice className="mt-6 max-w-3xl" />
+          <BrcExclusionNotice className="mx-auto mt-6 max-w-3xl" />
 
           {/* Steps */}
           <div className="mt-10">

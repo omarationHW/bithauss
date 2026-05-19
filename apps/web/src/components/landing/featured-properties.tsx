@@ -291,9 +291,8 @@ export function FeaturedProperties() {
     setTimeout(() => setIsAutoPlaying(true), 10000)
   }
 
-  const visibleProperties = allProperties.slice(
-    currentPage * ITEMS_PER_PAGE,
-    (currentPage + 1) * ITEMS_PER_PAGE,
+  const pages = Array.from({ length: totalPages }, (_, idx) =>
+    allProperties.slice(idx * ITEMS_PER_PAGE, (idx + 1) * ITEMS_PER_PAGE),
   )
 
   return (
@@ -327,16 +326,22 @@ export function FeaturedProperties() {
           ))}
         </div>
 
-        {/* Property cards */}
-        <div
-          key={currentPage}
-          className="animate-fade-soft grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4"
-        >
-          {visibleProperties.map((property, i) => (
-            <div
-              key={`${currentPage}-${i}`}
-              className="bg-card border-border/40 overflow-hidden rounded-xl border transition-all duration-500 hover:shadow-lg"
-            >
+        {/* Property cards — horizontal slide between pages */}
+        <div className="overflow-hidden">
+          <div
+            className="flex transition-transform duration-700 ease-in-out"
+            style={{ transform: `translateX(-${currentPage * 100}%)` }}
+          >
+            {pages.map((pageProps, pageIdx) => (
+              <div
+                key={pageIdx}
+                className="grid w-full shrink-0 grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4"
+              >
+                {pageProps.map((property, i) => (
+                  <div
+                    key={`${pageIdx}-${i}`}
+                    className="bg-card border-border/40 overflow-hidden rounded-xl border transition-all duration-500 hover:shadow-lg"
+                  >
               {/* Time label */}
               <div className="text-muted-foreground flex items-center gap-1.5 px-4 py-2.5 text-xs">
                 <Home className="h-3.5 w-3.5" />
@@ -489,7 +494,10 @@ export function FeaturedProperties() {
                 )}
               </div>
             </div>
-          ))}
+                ))}
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Pagination dots */}

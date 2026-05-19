@@ -25,7 +25,7 @@ const csp = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // Next.js dev/prod inline scripts
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https://*.azurewebsites.net https://*.azurefd.net https://*.supabase.co",
+  "img-src 'self' data: blob: https://*.azurewebsites.net https://*.azurefd.net https://*.supabase.co https://*.tile.openstreetmap.org",
   "font-src 'self' data:",
   `connect-src ${connectSrc}`,
   "frame-src 'self' blob: https://www.openstreetmap.org https://www.google.com",
