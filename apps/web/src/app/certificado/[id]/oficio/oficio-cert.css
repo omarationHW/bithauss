@@ -1,0 +1,595 @@
+/* ════════════════════════════════════════════════════════════════════
+   CERTIFICADO BRC · DOCUMENTO FÍSICO
+   Layout absoluto en mm — base 215.9 × 355.6 (Oficio/Legal)
+   Fuente: master HTML del diseñador, adaptado a React.
+   ════════════════════════════════════════════════════════════════════ */
+
+.cert-root {
+  --c-azul:      #1B2A4A;
+  --c-dorado:    #8B6914;
+  --c-verde-osc: #2D4A3E;
+  --c-verde-gui: #3D6B5A;
+  --c-crema:     #E8EDE5;
+  --ff-sackers:  var(--font-cinzel), 'Sackers Gothic Std', 'Cinzel', 'Trajan Pro', serif;
+  --ff-playfair: var(--font-playfair), 'Playfair Display', 'Georgia', serif;
+  --ff-didact:   var(--font-didact), 'Didact Gothic', 'Helvetica Neue', sans-serif;
+  --ff-mono:     var(--font-ibm-plex-mono), 'IBM Plex Mono', 'Menlo', monospace;
+  --ff-cjk:      var(--font-noto-cjk), 'Noto Sans SC', sans-serif;
+
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: geometricPrecision;
+}
+
+.cert-root *,
+.cert-root *::before,
+.cert-root *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+.cert-page {
+  position: relative;
+  width: 215.9mm;
+  height: 355.6mm;
+  background: var(--c-crema);
+  box-shadow: 0 20mm 40mm rgba(0, 0, 0, 0.5), 0 5mm 12mm rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  font-family: var(--ff-didact);
+  color: var(--c-azul);
+  font-feature-settings: "kern" 1, "liga" 1;
+}
+
+.cert-page::before {
+  content: '';
+  position: absolute;
+  top: 5mm; left: 5mm; right: 5mm; bottom: 5mm;
+  border: 0.8mm solid var(--c-verde-osc);
+  pointer-events: none;
+  z-index: 3;
+}
+.cert-page::after {
+  content: '';
+  position: absolute;
+  top: 7.5mm; left: 7.5mm; right: 7.5mm; bottom: 7.5mm;
+  border: 0.5mm solid var(--c-dorado);
+  pointer-events: none;
+  z-index: 3;
+}
+
+.cert-page .abs { position: absolute; }
+
+/* ═══ Guilloché ═══ */
+.cert-page .guilloche {
+  left: 0;
+  top: -4.2mm;
+  width: 215.9mm;
+  height: 358.5mm;
+  background: url('https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/cert-guilloche.jpg?v=1');
+  background-size: cover;
+  background-position: center;
+  opacity: 0.55;
+}
+
+/* ═══ Watermarks ═══ */
+.cert-page .wm {
+  font-family: var(--ff-sackers);
+  font-weight: 300;
+  color: var(--c-verde-osc);
+  white-space: nowrap;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  user-select: none;
+  text-transform: uppercase;
+}
+.cert-page .wm-1 { top: 100mm; left: -5mm;  font-size: 44pt; transform: rotate(-30deg); opacity: 0.10; transform-origin: left center; }
+.cert-page .wm-2 { top: 175mm; left: 18mm;  font-size: 38pt; transform: rotate(-30deg); opacity: 0.10; transform-origin: left center; }
+.cert-page .wm-3 { top: 235mm; left:  8mm;  font-size: 28pt; transform: rotate(-30deg); opacity: 0.10; transform-origin: left center; }
+.cert-page .wm-4 { top:  62mm; left: 95mm;  font-size: 20pt; transform: rotate(-30deg); opacity: 0.10; transform-origin: left center; }
+.cert-page .wm-5 { top: 275mm; left:105mm;  font-size: 20pt; transform: rotate(-30deg); opacity: 0.10; transform-origin: left center; }
+
+/* ═══ Banda lateral izq ═══ */
+.cert-page .side-text {
+  left: 4mm;
+  top: 50mm;
+  height: 250mm;
+  width: 6mm;
+  font-family: var(--ff-mono);
+  font-size: 6pt;
+  letter-spacing: 0.2em;
+  color: var(--c-verde-osc);
+  text-transform: uppercase;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
+/* ═══ Serie / Folio ═══ */
+.cert-page .serie { top: 12.3mm; left: 21.2mm; }
+.cert-page .folio { top: 12.3mm; right: 21.2mm; }
+.cert-page .serie,
+.cert-page .folio {
+  font-family: var(--ff-mono);
+  font-size: 8pt;
+  color: var(--c-azul);
+  letter-spacing: 0.02em;
+}
+
+/* ═══ Cabecera ═══ */
+.cert-page .doc-type {
+  top: 23.8mm;
+  left: 0; right: 0;
+  font-family: var(--ff-sackers);
+  font-size: 9pt;
+  font-weight: 300;
+  letter-spacing: 0.32em;
+  color: var(--c-azul);
+  text-transform: uppercase;
+  text-align: center;
+}
+.cert-page .title-cert {
+  top: 31mm;
+  left: 0; right: 0;
+  font-family: var(--ff-sackers);
+  font-size: 41.2pt;
+  font-weight: 300;
+  letter-spacing: 0.06em;
+  color: var(--c-azul);
+  text-align: center;
+  line-height: 1;
+  text-transform: uppercase;
+}
+.cert-page .title-subtitle {
+  top: 50.4mm;
+  left: 0; right: 0;
+  font-family: var(--ff-sackers);
+  font-size: 18pt;
+  font-weight: 300;
+  letter-spacing: 0.12em;
+  color: var(--c-dorado);
+  text-align: center;
+  text-transform: uppercase;
+}
+.cert-page .tagline-rule-left {
+  top: 61.3mm; left: 22mm; width: 66.1mm;
+  border-top: 0.4pt solid var(--c-dorado);
+}
+.cert-page .tagline-rule-right {
+  top: 61.3mm; right: 22mm; width: 66.1mm;
+  border-top: 0.4pt solid var(--c-dorado);
+}
+.cert-page .tagline {
+  top: 66.1mm; left: 0; right: 0;
+  font-family: var(--ff-sackers);
+  font-size: 10pt; font-weight: 300;
+  letter-spacing: 0.3em;
+  color: var(--c-verde-gui);
+  text-align: center;
+  text-transform: uppercase;
+}
+
+/* ═══ Datos inmueble ═══ */
+.cert-page .intro {
+  top: 79.9mm; left: 0; right: 0;
+  font-family: var(--ff-didact);
+  font-size: 12pt;
+  color: var(--c-azul);
+  text-align: center;
+}
+.cert-page .address {
+  top: 88mm;
+  left: 0; right: 0;
+  font-family: var(--ff-playfair);
+  font-size: 14pt;
+  color: var(--c-azul);
+  text-align: center;
+  border-bottom: 0.4pt solid rgba(27, 42, 74, 0.5);
+  margin: 0 30mm;
+  padding-bottom: 1.5mm;
+  letter-spacing: 0.01em;
+}
+.cert-page .field-row {
+  font-family: var(--ff-didact);
+  font-size: 10pt;
+  color: var(--c-azul);
+  white-space: nowrap;
+}
+.cert-page .field-row-1 { top: 103.5mm; left: 25.9mm; right: 25.9mm; }
+.cert-page .field-row-2 { top: 115.7mm; left: 25.9mm; right: 25.9mm; }
+.cert-page .field-row-3 { top: 127.9mm; left: 25.9mm; right: 25.9mm; }
+.cert-page .field-row-4 { top: 140.1mm; left: 25.9mm; right: 25.9mm; }
+.cert-page .field-row .ln {
+  display: inline-block;
+  border-bottom: 0.4pt solid rgba(27, 42, 74, 0.55);
+  min-height: 1.2em;
+  vertical-align: bottom;
+  padding: 0 1mm 1mm;
+  line-height: 1.1;
+  font-family: var(--ff-playfair);
+}
+.cert-page .field-row .ln-short { min-width: 50mm; }
+.cert-page .field-row .ln-long  { min-width: 70mm; }
+.cert-page .field-row .ln-num   { min-width: 35mm; }
+
+.cert-page .validation-text {
+  top: 148.7mm;
+  left: 25.9mm;
+  right: 25.9mm;
+  font-family: var(--ff-didact);
+  font-size: 10pt;
+  color: var(--c-azul);
+  line-height: 1.5;
+  text-align: justify;
+}
+.cert-page .validation-text b { font-weight: 400; letter-spacing: 0.03em; }
+
+/* ═══ Checks ═══ */
+.cert-page .check {
+  font-family: var(--ff-didact);
+  font-size: 10pt;
+  color: var(--c-azul);
+  white-space: nowrap;
+}
+.cert-page .check::before {
+  content: '✓';
+  font-family: var(--ff-cjk), var(--ff-didact);
+  color: var(--c-verde-gui);
+  margin-right: 2mm;
+  font-weight: 500;
+}
+.cert-page .check-1 { top: 171.6mm; left: 33mm; }
+.cert-page .check-2 { top: 177.6mm; left: 33mm; }
+.cert-page .check-3 { top: 183.6mm; left: 33mm; }
+.cert-page .check-4 { top: 189.6mm; left: 33mm; }
+.cert-page .check-5 { top: 195.6mm; left: 33mm; }
+.cert-page .check-6 { top: 201.6mm; left: 33mm; }
+.cert-page .check-7 { top: 207.6mm; left: 33mm; }
+
+/* ═══ QR + logo + caption ═══ */
+.cert-page .qr-img {
+  top: 171.6mm;
+  left: 131.4mm;
+  width: 36.8mm;
+  height: 36.8mm;
+  padding: 5mm;
+  display: block;
+}
+.cert-page .qr-img img,
+.cert-page .qr-img svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  shape-rendering: crispEdges;
+}
+.cert-page .bithauss-logo {
+  top: 182.6mm;
+  left: 164.8mm;
+  width: 18.5mm;
+  height: 18.3mm;
+  background: url('https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/cert-bithauss-logo.jpg?v=1');
+  background-size: cover;
+  background-position: center;
+  border-radius: 2mm;
+}
+.cert-page .qr-caption {
+  top: 207.6mm;
+  left: 121mm;
+  width: 60mm;
+  font-family: var(--ff-sackers);
+  font-size: 7.5pt;
+  font-weight: 300;
+  color: var(--c-verde-gui);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  text-align: center;
+  line-height: 1.4;
+}
+
+/* ═══ Expedición ═══ */
+.cert-page .expedition-title {
+  top: 225mm;
+  left: 0; right: 0;
+  font-family: var(--ff-sackers);
+  font-size: 9pt;
+  font-weight: 300;
+  color: var(--c-verde-gui);
+  letter-spacing: 0.18em;
+  text-align: center;
+  text-transform: uppercase;
+}
+.cert-page .place-date {
+  top: 233.5mm;
+  left: 25mm; right: 25mm;
+  font-family: var(--ff-didact);
+  font-size: 10pt;
+  color: var(--c-azul);
+  text-align: center;
+  white-space: nowrap;
+}
+.cert-page .place-date .ln {
+  display: inline-block;
+  border-bottom: 0.4pt solid var(--c-azul);
+  min-height: 1.2em;
+  vertical-align: bottom;
+  font-family: var(--ff-playfair);
+  padding: 0 1mm 1mm;
+  line-height: 1.1;
+}
+.cert-page .place-date .ln-place { min-width: 70mm; }
+.cert-page .place-date .ln-day   { min-width: 8mm; }
+.cert-page .place-date .ln-month { min-width: 30mm; }
+.cert-page .place-date .ln-year  { min-width: 8mm; }
+.cert-page .vigencia {
+  top: 245.8mm;
+  left: 17.6mm; right: 17.6mm;
+  font-family: var(--ff-didact);
+  font-size: 10pt;
+  color: var(--c-azul);
+  line-height: 1.5;
+  text-align: justify;
+  text-align-last: center;
+}
+.cert-page .vigencia b { font-weight: 400; }
+
+/* ═══ Firmas ═══ */
+.cert-page .sig-line-left,
+.cert-page .sig-line-right {
+  top: 277mm;
+  width: 70mm;
+  height: 7mm;
+  border-bottom: 0.6pt solid var(--c-azul);
+  font-family: var(--ff-playfair);
+  font-size: 10pt;
+  color: var(--c-azul);
+  text-align: center;
+  padding: 0 2mm 1mm;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.cert-page .sig-line-left  { left: 22mm; }
+.cert-page .sig-line-right { right: 22mm; }
+.cert-page .sig-left-label,
+.cert-page .sig-right-label {
+  top: 285.1mm;
+  width: 70mm;
+  text-align: center;
+  font-family: var(--ff-didact);
+  font-size: 9pt;
+  color: var(--c-azul);
+}
+.cert-page .sig-left-label  { left: 22mm; }
+.cert-page .sig-right-label { right: 22mm; }
+.cert-page .sig-left-sub {
+  top: 290mm;
+  left: 22mm;
+  width: 70mm;
+  text-align: center;
+  font-family: var(--ff-didact);
+  font-size: 8pt;
+  color: var(--c-azul);
+}
+
+/* ═══ Sello holográfico ═══ */
+.cert-page .seal-wrapper {
+  top: 269.5mm;
+  left: 92.1mm;
+  width: 31.8mm;
+  height: 31.8mm;
+  z-index: 5;
+}
+.cert-page .seal-img-bg {
+  position: absolute;
+  inset: 0;
+  background: url('https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/cert-seal.svg?v=1');
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  filter: drop-shadow(0 0.5mm 0.8mm rgba(0, 0, 0, 0.18));
+}
+.cert-page .seal-serial-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.cert-page .seal-serial-text {
+  font-family: var(--ff-mono);
+  font-size: 2.4pt;
+  font-weight: 500;
+  fill: #C8CCD2;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.cert-page .protocolo {
+  top: 301.7mm;
+  left: 0; right: 0;
+  font-family: var(--ff-sackers);
+  font-size: 7.5pt;
+  font-weight: 300;
+  color: var(--c-azul);
+  letter-spacing: 0.22em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+/* ═══ Número certificado BRC ═══ */
+.cert-page .cert-num-label {
+  top: 309.5mm;
+  left: 0; right: 0;
+  font-family: var(--ff-didact);
+  font-size: 9pt;
+  color: var(--c-azul);
+  text-align: center;
+}
+.cert-page .cert-num-fill {
+  top: 316mm;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90mm;
+  height: 5.5mm;
+  border-bottom: 0.5pt solid var(--c-azul);
+  text-align: center;
+  font-family: var(--ff-playfair);
+  font-size: 10pt;
+  color: var(--c-azul);
+  padding: 0 2mm 1mm;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+/* ═══ Líneas doradas + microimpresión ═══ */
+.cert-page .gold-line-1 {
+  top: 326mm;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 136.5mm;
+  border-top: 0.6pt solid var(--c-dorado);
+}
+.cert-page .gold-line-2 {
+  top: 327.7mm;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 152.4mm;
+  border-top: 0.5pt solid var(--c-dorado);
+  opacity: 0.9;
+}
+.cert-page .microprint {
+  top: 331mm;
+  left: 12mm; right: 12mm;
+  font-family: var(--ff-mono);
+  font-size: 5.5pt;
+  font-weight: 400;
+  color: var(--c-dorado);
+  letter-spacing: 0.18em;
+  text-align: center;
+  white-space: nowrap;
+  opacity: 0.85;
+  transform: scaleX(1.03);
+  transform-origin: center center;
+}
+
+/* ═══ Capas de seguridad ═══ */
+.cert-page .void-pattern,
+.cert-page .screen-pattern,
+.cert-page .stego-watermark {
+  position: absolute;
+}
+.cert-page .void-pattern {
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='100' viewBox='0 0 200 100'><text x='10' y='25' fill='%231B2A4A' font-family='Arial' font-size='14' font-weight='900'>VOID</text><text x='80' y='55' fill='%231B2A4A' font-family='Arial' font-size='14' font-weight='900'>COPIA</text><text x='30' y='85' fill='%231B2A4A' font-family='Arial' font-size='14' font-weight='900'>VOID</text><text x='130' y='25' fill='%231B2A4A' font-family='Arial' font-size='14' font-weight='900'>COPIA</text></svg>");
+  background-repeat: repeat;
+  background-size: 30mm auto;
+  opacity: 0.04;
+}
+.cert-page .screen-pattern {
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent 0,
+    transparent 0.6mm,
+    rgba(45, 74, 62, 0.03) 0.6mm,
+    rgba(45, 74, 62, 0.03) 0.75mm
+  );
+}
+.cert-page .rainbow-strip {
+  top: 16mm;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60mm;
+  height: 0.4mm;
+  background: linear-gradient(90deg, #c84a4a 0%, #c89a3a 18%, #5fb968 36%, #4d9de0 54%, #8a5cb4 72%, #c84a4a 100%);
+  z-index: 4;
+  opacity: 0.55;
+  border-radius: 0.5mm;
+  filter: blur(0.15mm);
+}
+.cert-page .rainbow-strip-bottom {
+  bottom: 8mm;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80mm;
+  height: 0.3mm;
+  background: linear-gradient(90deg, #8a5cb4 0%, #4d9de0 25%, #5fb968 50%, #c89a3a 75%, #c84a4a 100%);
+  z-index: 4;
+  opacity: 0.45;
+  filter: blur(0.12mm);
+}
+.cert-page .micro-frame {
+  position: absolute;
+  font-family: var(--ff-mono);
+  font-size: 3pt;
+  font-weight: 400;
+  color: var(--c-dorado);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  opacity: 0.55;
+  z-index: 4;
+  pointer-events: none;
+  user-select: none;
+}
+.cert-page .micro-frame-top    { top: 8mm; left: 9mm; right: 9mm; height: 1.5mm; text-align: center; }
+.cert-page .micro-frame-bottom { bottom: 8mm; left: 9mm; right: 9mm; height: 1.5mm; text-align: center; }
+.cert-page .micro-frame-left {
+  top: 9mm; bottom: 9mm; left: 7.8mm; width: 1.5mm;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  display: flex; align-items: center; justify-content: center;
+}
+.cert-page .micro-frame-right {
+  top: 9mm; bottom: 9mm; right: 7.8mm; width: 1.5mm;
+  writing-mode: vertical-rl;
+  display: flex; align-items: center; justify-content: center;
+}
+.cert-page .security-strip {
+  right: 4mm;
+  top: 50mm; bottom: 50mm;
+  width: 6mm;
+  font-family: var(--ff-mono);
+  font-size: 4.5pt;
+  letter-spacing: 0.12em;
+  color: var(--c-verde-osc);
+  text-transform: uppercase;
+  writing-mode: vertical-rl;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  opacity: 0.7;
+  z-index: 5;
+  pointer-events: none;
+}
+.cert-page .stego-watermark {
+  inset: 0;
+  z-index: 1.5;
+  pointer-events: none;
+  opacity: 0.10;
+}
+.cert-page .cs-tag {
+  font-size: 7pt;
+  opacity: 0.7;
+  margin-left: 0.2em;
+  color: var(--c-verde-gui);
+}
+
+/* Color-accurate print/export */
+.cert-page,
+.cert-page * {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
