@@ -88,13 +88,39 @@ export async function GET(
       throw initErr;
     }
 
-    const { data: cert, error } = await supabase
+    // Note: revoked_at is optional — the column may not exist yet.
+    // Try with it first; fall back to a select without it on schema error.
+    let cert: {
+      id: string;
+      certificate_number: string;
+      issued_at: string;
+      issued_by: string;
+      expires_at: string;
+      property_id: string;
+      revoked_at?: string | null;
+    } | null = null;
+    let error: unknown = null;
+
+    const primary = await supabase
       .from("brc_certificates")
       .select(
         "id, certificate_number, issued_at, issued_by, expires_at, property_id, revoked_at",
       )
       .eq("id", id)
       .maybeSingle();
+
+    if (primary.error?.code === "42703" /* undefined_column */) {
+      const fallback = await supabase
+        .from("brc_certificates")
+        .select("id, certificate_number, issued_at, issued_by, expires_at, property_id")
+        .eq("id", id)
+        .maybeSingle();
+      cert = fallback.data;
+      error = fallback.error;
+    } else {
+      cert = primary.data;
+      error = primary.error;
+    }
 
     if (error) {
       logError("verify: cert fetch failed", { id, error });
