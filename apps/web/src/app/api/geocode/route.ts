@@ -46,7 +46,7 @@ async function geocode(query: string): Promise<GeocodeResult | null> {
   };
 }
 
-function buildQueryVariants(raw: string): string[] {
+export function buildQueryVariants(raw: string): string[] {
   // Build progressively less-specific queries by stripping subdivisions like
   // "Polanco V Sección" that Nominatim doesn't index well.
   const parts = raw.split(",").map((s) => s.trim()).filter(Boolean);
