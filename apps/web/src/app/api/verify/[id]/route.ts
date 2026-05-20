@@ -80,7 +80,13 @@ export async function GET(
   if (!id) return notFound();
 
   try {
-    const supabase = createAdminClient();
+    let supabase;
+    try {
+      supabase = createAdminClient();
+    } catch (initErr) {
+      logError("verify: admin client init failed (check SUPABASE_SERVICE_ROLE_KEY)", initErr);
+      throw initErr;
+    }
 
     const { data: cert, error } = await supabase
       .from("brc_certificates")
@@ -91,9 +97,12 @@ export async function GET(
       .maybeSingle();
 
     if (error) {
-      logError("verify: cert fetch failed", error);
+      logError("verify: cert fetch failed", { id, error });
     }
-    if (!cert) return notFound();
+    if (!cert) {
+      logError("verify: cert not found in DB", { id });
+      return notFound();
+    }
 
     const now = Date.now();
     const expired = new Date(cert.expires_at).getTime() < now;
