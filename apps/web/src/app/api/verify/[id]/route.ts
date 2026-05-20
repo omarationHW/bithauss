@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createHmac, randomUUID } from "node:crypto";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { logError } from "@/lib/log";
 
 export const runtime = "nodejs";
@@ -80,7 +80,7 @@ export async function GET(
   if (!id) return notFound();
 
   try {
-    const supabase = await createClient();
+    const supabase = createAdminClient();
 
     const { data: cert, error } = await supabase
       .from("brc_certificates")

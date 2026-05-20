@@ -575,7 +575,7 @@ export default function PropertyDetailPage() {
           .from("profiles")
           .select("*")
           .eq("id", prop.owner_id)
-          .single(),
+          .maybeSingle(),
         // Related properties: separate parameterized queries instead of .or() with
         // string interpolation, which would let crafted city/state values inject
         // PostgREST filter operators.
