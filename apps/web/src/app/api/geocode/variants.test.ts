@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildQueryVariants } from "./route";
+import { buildQueryVariants } from "./variants";
 
 describe("buildQueryVariants — progressive fallbacks for Nominatim", () => {
   it("includes the original query as the first variant", () => {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { logError } from "@/lib/log";
+import { buildQueryVariants } from "./variants";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -44,42 +45,6 @@ async function geocode(query: string): Promise<GeocodeResult | null> {
     lng: parseFloat(first.lon),
     displayName: first.display_name,
   };
-}
-
-export function buildQueryVariants(raw: string): string[] {
-  // Build progressively less-specific queries by stripping subdivisions like
-  // "Polanco V Sección" that Nominatim doesn't index well.
-  const parts = raw.split(",").map((s) => s.trim()).filter(Boolean);
-  const variants = new Set<string>();
-  variants.add(parts.join(", "));
-
-  // Remove parts that match "<word> [roman/digit] sección/seccion" or "C.P. NNNNN"
-  const cleaned = parts.filter(
-    (p) => !/secci[oó]n/i.test(p) && !/^C\.?\s*P\.?\s*\d+$/i.test(p),
-  );
-  if (cleaned.length && cleaned.join(", ") !== parts.join(", ")) {
-    variants.add(cleaned.join(", "));
-  }
-
-  // Drop the neighborhood (second part) entirely when we have street + city
-  if (cleaned.length >= 3) {
-    variants.add([cleaned[0], ...cleaned.slice(2)].join(", "));
-  }
-
-  // Just street + last 2 parts (city + country)
-  if (cleaned.length >= 3) {
-    variants.add([cleaned[0], cleaned[cleaned.length - 2], cleaned[cleaned.length - 1]].join(", "));
-  }
-
-  // Neighborhood + city + country fallback
-  if (parts.length >= 3 && parts[1]) {
-    const neigh = parts[1].replace(/\s+\b(I|II|III|IV|V|VI|VII|VIII|IX|X|\d+)(ª|ra|da|ta|va)?\s*Secci[oó]n\b/i, "").trim();
-    if (neigh) {
-      variants.add([neigh, parts[parts.length - 2], parts[parts.length - 1]].join(", "));
-    }
-  }
-
-  return Array.from(variants).filter(Boolean);
 }
 
 export async function GET(req: Request) {
