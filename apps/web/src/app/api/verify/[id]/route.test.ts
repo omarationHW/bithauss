@@ -14,6 +14,7 @@ vi.mock("@/lib/log", () => ({
 process.env.BRC_VERIFY_SECRET = "test-secret-do-not-use-in-prod";
 
 import { GET } from "./route";
+import { __resetRateLimitForTests } from "@/lib/rate-limit";
 
 const CERT_ID = "00000000-0000-0000-0000-000000000001";
 const PROP_ID = "00000000-0000-0000-0000-000000000002";
@@ -96,6 +97,7 @@ function setupCert(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   fromMock.mockReset();
+  __resetRateLimitForTests();
 });
 
 describe("GET /api/verify/[id]", () => {
@@ -153,5 +155,25 @@ describe("GET /api/verify/[id]", () => {
     const r2 = (await (await GET(buildRequest(), buildParams(CERT_ID))).json()) as VerifyResponseBody;
     expect(r1.verificationId).not.toBe(r2.verificationId);
     expect(r1.signature).not.toBe(r2.signature);
+  });
+
+  it("returns 429 with Retry-After once the per-IP limit is exceeded", async () => {
+    setupCert();
+    // Distinct IP so this test doesn't share state with the others.
+    const reqFromIp = () =>
+      new Request(`http://localhost/api/verify/${CERT_ID}`, {
+        headers: { "x-forwarded-for": "203.0.113.10" },
+      });
+
+    // Limit is 20 req/min — exhaust it.
+    for (let i = 0; i < 20; i++) {
+      const res = await GET(reqFromIp(), buildParams(CERT_ID));
+      expect(res.status).toBe(200);
+    }
+
+    const limited = await GET(reqFromIp(), buildParams(CERT_ID));
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("Retry-After")).toMatch(/^\d+$/);
+    expect(limited.headers.get("X-RateLimit-Limit")).toBe("20");
   });
 });

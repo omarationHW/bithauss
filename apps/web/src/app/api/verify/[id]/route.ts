@@ -2,9 +2,12 @@ import { NextResponse } from "next/server";
 import { createHmac, randomUUID } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logError } from "@/lib/log";
+import { checkRateLimit, clientIp } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const RATE_LIMIT = { limit: 20, windowMs: 60_000 } as const;
 
 const SIGNING_KEY =
   process.env.BRC_VERIFY_SECRET ??
@@ -73,11 +76,28 @@ function notFound(): NextResponse {
 }
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
   if (!id) return notFound();
+
+  const ip = clientIp(req);
+  const rl = checkRateLimit(`verify:${ip}`, RATE_LIMIT);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests. Please try again shortly." },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(rl.retryAfterSeconds),
+          "X-RateLimit-Limit": String(RATE_LIMIT.limit),
+          "X-RateLimit-Remaining": "0",
+          "X-RateLimit-Reset": String(Math.floor(rl.resetAt / 1000)),
+        },
+      },
+    );
+  }
 
   try {
     let supabase;
