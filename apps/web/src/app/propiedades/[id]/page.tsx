@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useParams } from "next/navigation";
@@ -24,7 +24,9 @@ import {
   X,
   ChevronLeft,
   Loader2,
+  Download,
 } from "lucide-react";
+import QRCode from "qrcode";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -38,6 +40,9 @@ import {
 } from "@/components/ui/tabs";
 import { createClient } from "@/lib/supabase/client";
 import { ShieldBrc } from '@/components/ui/shield-brc'
+import { FichaTecnicaTemplate } from "@/components/propiedades/ficha-tecnica-template";
+import { downloadFichaTecnica } from "@/lib/download-ficha-tecnica";
+import { logError } from "@/lib/log";
 
 interface Property {
   id: string;
@@ -502,6 +507,9 @@ export default function PropertyDetailPage() {
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [currentImage, setCurrentImage] = useState(0);
   const [geocoded, setGeocoded] = useState<{ lat: number; lng: number } | null>(null);
+  const [downloadingFicha, setDownloadingFicha] = useState(false);
+  const [fichaQr, setFichaQr] = useState<string | null>(null);
+  const fichaContainerRef = useRef<HTMLDivElement | null>(null);
 
   const supabase = useMemo(() => createClient(), []);
 
@@ -608,6 +616,45 @@ export default function PropertyDetailPage() {
 
     fetchData();
   }, [id, supabase]);
+
+  // Generate QR for the ficha técnica (points to the public property URL).
+  useEffect(() => {
+    if (!property) return;
+    if (typeof window === "undefined") return;
+    const url = `${window.location.origin}/propiedades/${property.id}`;
+    let cancelled = false;
+    QRCode.toDataURL(url, {
+      errorCorrectionLevel: "M",
+      margin: 0,
+      width: 240,
+      color: { dark: "#0f172a", light: "#ffffff" },
+    })
+      .then((data) => {
+        if (!cancelled) setFichaQr(data);
+      })
+      .catch((err) => logError("ficha QR generation failed", err));
+    return () => {
+      cancelled = true;
+    };
+  }, [property]);
+
+  const handleDownloadFicha = useCallback(async () => {
+    if (!property || downloadingFicha) return;
+    const container = fichaContainerRef.current;
+    if (!container) return;
+    setDownloadingFicha(true);
+    try {
+      const slug = (property.slug || property.id).replace(/[^a-z0-9-]/gi, "-").toLowerCase();
+      await downloadFichaTecnica({
+        container,
+        filename: `ficha-tecnica-${slug}.pdf`,
+      });
+    } catch (err) {
+      logError("ficha download failed", err);
+    } finally {
+      setDownloadingFicha(false);
+    }
+  }, [property, downloadingFicha]);
 
   // Build images array from media or fallback to featured_image_url
   const images = useMemo(() => {
@@ -721,6 +768,26 @@ export default function PropertyDetailPage() {
             </nav>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={downloadingFicha}
+              className="gap-1.5 text-muted-foreground hover:text-white"
+              style={{ transition: "all 0.3s" }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+              onClick={handleDownloadFicha}
+              aria-label="Descargar ficha técnica"
+            >
+              {downloadingFicha ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              <span className="hidden sm:inline">
+                {downloadingFicha ? "Generando..." : "Descargar ficha"}
+              </span>
+            </Button>
             <Button
               size="sm"
               variant="ghost"
@@ -1192,6 +1259,18 @@ export default function PropertyDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Off-screen layout used by the "Descargar ficha técnica" feature.
+          Intentionally excludes any broker / owner info. */}
+      <div ref={fichaContainerRef}>
+        <FichaTecnicaTemplate
+          property={property}
+          media={media.map((m) => ({ id: m.id, url: m.url, alt_text: m.alt_text }))}
+          qrDataUrl={fichaQr}
+          publicUrl={typeof window !== "undefined" ? `${window.location.origin}/propiedades/${property.id}` : `/propiedades/${property.id}`}
+          generatedAt={new Date()}
+        />
+      </div>
     </main>
   );
 }
