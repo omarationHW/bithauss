@@ -124,8 +124,10 @@ function PageHeader({ title }: { title: string }) {
         marginBottom: "24px",
       }}
     >
+      {/* Served from Azure Front Door — the local /public/images/ folder is
+          gitignored, so /images/... 404s in production. */}
       <img
-        src="/images/Logo-BitHauss-Texto-Negro.png"
+        src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Logo-BitHauss-Texto-Negro.png"
         alt="BitHauss"
         crossOrigin="anonymous"
         style={{ height: "32px", width: "auto" }}

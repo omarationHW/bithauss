@@ -88,24 +88,48 @@ export async function downloadFichaTecnica(opts: DownloadFichaOptions): Promise<
 
 /**
  * Resolves once every <img> inside the container has either loaded or errored.
- * html2canvas relies on the DOM being painted, but it does not wait for late
- * network images on its own.
+ * Two failure modes the caller has run into:
+ *   1. An image that 404'd before listeners attach is already
+ *      `complete: true` with `naturalWidth: 0`. The original check required
+ *      `naturalWidth > 0`, so failed images slipped past and the listener
+ *      never fired — `waitForImages` then hung indefinitely and the download
+ *      button stayed in the loading state.
+ *   2. A slow CDN that never responds would still hang. A per-image timeout
+ *      caps the wait at IMAGE_WAIT_TIMEOUT_MS.
  */
+const IMAGE_WAIT_TIMEOUT_MS = 5000;
+
 async function waitForImages(root: HTMLElement): Promise<void> {
   const imgs = Array.from(root.querySelectorAll("img"));
   await Promise.all(
     imgs.map((img) => {
-      if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+      // `complete` is true on both successful load AND error. If we got here
+      // after either, there's nothing left to wait for — resolving prevents
+      // the hang from past failures.
+      if (img.complete) {
+        if (img.naturalWidth === 0) {
+          logError("ficha: image already failed before wait", { src: img.src });
+        }
+        return Promise.resolve();
+      }
       return new Promise<void>((resolve) => {
-        const done = () => {
+        const cleanup = () => {
+          clearTimeout(timer);
           img.removeEventListener("load", done);
           img.removeEventListener("error", onErr);
+        };
+        const done = () => {
+          cleanup();
           resolve();
         };
         const onErr = (ev: Event) => {
           logError("ficha: image failed to load", { src: img.src, ev });
           done();
         };
+        const timer = setTimeout(() => {
+          logError("ficha: image wait timed out", { src: img.src });
+          done();
+        }, IMAGE_WAIT_TIMEOUT_MS);
         img.addEventListener("load", done);
         img.addEventListener("error", onErr);
       });
