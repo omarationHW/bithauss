@@ -116,7 +116,8 @@ export default function ConfiguracionPage() {
       const { data: { session } } = await supabase.auth.getSession();
 
       if (session?.access_token) {
-        await fetch("/api/v1/profiles/me", {
+        const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "";
+        await fetch(`${apiBase}/api/v1/profiles/me`, {
           method: "DELETE",
           headers: {
             Authorization: `Bearer ${session.access_token}`,

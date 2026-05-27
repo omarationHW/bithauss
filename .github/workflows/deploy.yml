@@ -23,7 +23,10 @@ jobs:
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          API_URL: https://bithauss-api.azurewebsites.net
+          # Must be NEXT_PUBLIC_* so Next.js inlines it into the client bundle.
+          # Without the prefix, client-side fetch(`${process.env.NEXT_PUBLIC_API_URL}/...`)
+          # collapses to a relative path and hits the web host (500 on /api/v1/*).
+          NEXT_PUBLIC_API_URL: https://bithauss-api.azurewebsites.net
 
       - name: Prepare standalone package
         run: |
@@ -45,7 +48,7 @@ jobs:
               WEBSITES_PORT=3000 \
               NEXT_PUBLIC_SUPABASE_URL="${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}" \
               NEXT_PUBLIC_SUPABASE_ANON_KEY="${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" \
-              API_URL="https://bithauss-api.azurewebsites.net" \
+              NEXT_PUBLIC_API_URL="https://bithauss-api.azurewebsites.net" \
             --output none
 
       - name: Configure startup

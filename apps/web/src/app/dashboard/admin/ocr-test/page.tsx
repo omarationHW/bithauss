@@ -403,7 +403,8 @@ export default function OcrTestPage() {
       formData.append("file", file);
       formData.append("documentSlug", selectedType);
 
-      const res = await fetch("/api/v1/ocr/validate", {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "";
+      const res = await fetch(`${apiBase}/api/v1/ocr/validate`, {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
