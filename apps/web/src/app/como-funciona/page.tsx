@@ -1,7 +1,7 @@
 ﻿import type { Metadata } from 'next'
 import Link from 'next/link'
 import Image from 'next/image'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, Scale, Cpu, Wallet, Headphones, ShieldCheck, Stamp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ShieldBrc } from '@/components/ui/shield-brc'
 import { BrcExclusionNotice } from '@/components/ui/brc-exclusion-notice'
@@ -107,26 +107,32 @@ const benefits = [
   {
     title: 'Seguridad Jurídica',
     description: 'Validación notarial de cada propiedad',
+    icon: Scale,
   },
   {
     title: 'Tecnología de Punta',
     description: 'Plataforma moderna y rápida',
+    icon: Cpu,
   },
   {
     title: 'Precios Accesibles',
     description: 'Planes desde $499 MXN/mes',
+    icon: Wallet,
   },
   {
     title: 'Soporte Dedicado',
     description: 'Equipo de soporte en español 24/7',
+    icon: Headphones,
   },
   {
     title: 'Sin Fraudes',
     description: 'Protección contra fraudes inmobiliarios',
+    icon: ShieldCheck,
   },
   {
     title: 'Notarios Públicos en México',
     description: 'Notarios certificados en México',
+    icon: Stamp,
   },
 ]
 
@@ -426,18 +432,21 @@ export default function ComoFuncionaPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {benefits.map((benefit) => (
-              <div
-                key={benefit.title}
-                className="rounded-2xl border border-border/50 bg-card p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
-              >
-                <div className="mb-3 h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                  <ShieldBrc className="h-5 w-5 text-primary" />
+            {benefits.map((benefit) => {
+              const Icon = benefit.icon
+              return (
+                <div
+                  key={benefit.title}
+                  className="rounded-2xl border border-border/50 bg-card p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
+                >
+                  <div className="mb-3 h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Icon className="h-5 w-5 text-primary" />
+                  </div>
+                  <h3 className="font-semibold text-foreground">{benefit.title}</h3>
+                  <p className="text-sm text-muted-foreground mt-1">{benefit.description}</p>
                 </div>
-                <h3 className="font-semibold text-foreground">{benefit.title}</h3>
-                <p className="text-sm text-muted-foreground mt-1">{benefit.description}</p>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       </section>
