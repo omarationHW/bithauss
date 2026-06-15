@@ -22,7 +22,7 @@ import { useUser } from "../../../_context/user-context";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ShieldBrc } from '@/components/ui/shield-brc'
+import { ShieldBrc } from "@/components/ui/shield-brc";
 import {
   Select,
   SelectContent,
@@ -36,16 +36,21 @@ import {
 /* ------------------------------------------------------------------ */
 
 const PROPERTY_TYPES = [
-  "Casa",
-  "Departamento",
-  "Terreno",
-  "Oficina",
-  "Local Comercial",
-  "Bodega",
-  "Otro",
+  { value: "CASA", label: "Casa" },
+  { value: "DEPARTAMENTO", label: "Departamento" },
+  { value: "TERRENO", label: "Terreno" },
+  { value: "OFICINA", label: "Oficina" },
+  { value: "LOCAL_COMERCIAL", label: "Local Comercial" },
+  { value: "BODEGA", label: "Bodega" },
+  { value: "OTRO", label: "Otro" },
 ] as const;
 
-const OPERATION_TYPES = ["Venta", "Renta", "Traspaso"] as const;
+const OPERATION_TYPES = [
+  { value: "VENTA", label: "Venta" },
+  { value: "RENTA", label: "Renta" },
+  { value: "VENTA_RENTA", label: "Venta y Renta" },
+  { value: "TRASPASO", label: "Traspaso" },
+] as const;
 
 const CURRENCIES = ["MXN", "USD", "EUR"] as const;
 const CRYPTOS = [
@@ -89,24 +94,37 @@ const MEXICAN_STATES = [
   "Zacatecas",
 ] as const;
 
-const AMENITIES = [
+const COMMON_AREAS = [
   "Alberca",
   "Jardín",
   "Gimnasio",
   "Seguridad 24/7",
-  "Estacionamiento techado",
-  "Cuarto de servicio",
-  "Bodega",
-  "Terraza",
+  "Estacionamiento techado para visitas",
   "Sistema de alarma",
-  "Cocina integral",
   "Elevador",
   "Roof garden",
   "Área de BBQ",
   "Sala de cine",
-  "Cuarto de lavado",
   "Pet friendly",
+  "Salón de eventos",
+  "Cancha deportiva",
+  "Área de juegos infantiles",
 ] as const;
+
+type PrivateFeatureKey =
+  | "has_service_room"
+  | "has_storage"
+  | "has_terrace"
+  | "has_laundry_room"
+  | "has_integrated_kitchen";
+
+const PRIVATE_FEATURES: { key: PrivateFeatureKey; label: string }[] = [
+  { key: "has_service_room", label: "Cuarto de servicio" },
+  { key: "has_storage", label: "Bodega" },
+  { key: "has_terrace", label: "Terraza" },
+  { key: "has_laundry_room", label: "Cuarto de lavado" },
+  { key: "has_integrated_kitchen", label: "Cocina integral" },
+];
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -116,43 +134,39 @@ function slugify(text: string): string {
   return text
     .toString()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 }
 
-/** Map DB uppercase type back to display value */
-function capitalize(str: string): string {
-  if (!str) return "";
-  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+function asNum(s: string): number | null {
+  if (!s.trim()) return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
 }
 
-function dbTypeToDisplay(dbValue: string): string {
+/**
+ * Tolerate the legacy display values (e.g. "Casa", "Local Comercial") that
+ * may still exist in the DB from rows created with the previous form.
+ */
+function normalizeType(dbValue: string | null | undefined): string {
+  if (!dbValue) return "";
   const map: Record<string, string> = {
-    CASA: "Casa",
-    DEPARTAMENTO: "Departamento",
-    TERRENO: "Terreno",
-    OFICINA: "Oficina",
-    "LOCAL COMERCIAL": "Local Comercial",
-    BODEGA: "Bodega",
-    OTRO: "Otro",
+    "Local Comercial": "LOCAL_COMERCIAL",
   };
-  return map[dbValue] ?? capitalize(dbValue);
+  if (map[dbValue]) return map[dbValue];
+  return dbValue.toUpperCase().replace(/\s+/g, "_");
 }
 
-function dbOperationToDisplay(dbValue: string): string {
-  const map: Record<string, string> = {
-    VENTA: "Venta",
-    RENTA: "Renta",
-    TRASPASO: "Traspaso",
-  };
-  return map[dbValue] ?? capitalize(dbValue);
+function normalizeOperation(dbValue: string | null | undefined): string {
+  if (!dbValue) return "";
+  return dbValue.toUpperCase().replace(/\s+/g, "_");
 }
 
 /* ------------------------------------------------------------------ */
-/*  Form state interface                                               */
+/*  Form state                                                         */
 /* ------------------------------------------------------------------ */
 
 interface FormData {
@@ -160,21 +174,32 @@ interface FormData {
   descripcion: string;
   tipo_propiedad: string;
   tipo_operacion: string;
-  precio: string;
+  precio_venta: string;
+  precio_renta: string;
   moneda: string;
   acepta_crypto: boolean;
   cryptos_aceptadas: string[];
+  show_price: boolean;
   area_total: string;
   area_construida: string;
   recamaras: string;
   banos: string;
+  medios_banos: string;
   estacionamientos: string;
-  pisos: string;
+  niveles: string;
+  piso: string;
+  cuota_mantenimiento: string;
+  has_service_room: boolean;
+  has_storage: boolean;
+  has_terrace: boolean;
+  has_laundry_room: boolean;
+  has_integrated_kitchen: boolean;
   direccion: string;
   colonia: string;
   ciudad: string;
   estado: string;
   codigo_postal: string;
+  show_address: boolean;
   amenidades: string[];
 }
 
@@ -183,45 +208,96 @@ const initialFormData: FormData = {
   descripcion: "",
   tipo_propiedad: "",
   tipo_operacion: "",
-  precio: "",
+  precio_venta: "",
+  precio_renta: "",
   moneda: "MXN",
   acepta_crypto: false,
   cryptos_aceptadas: [],
+  show_price: true,
   area_total: "",
   area_construida: "",
   recamaras: "",
   banos: "",
+  medios_banos: "",
   estacionamientos: "",
-  pisos: "",
+  niveles: "",
+  piso: "",
+  cuota_mantenimiento: "",
+  has_service_room: false,
+  has_storage: false,
+  has_terrace: false,
+  has_laundry_room: false,
+  has_integrated_kitchen: false,
   direccion: "",
   colonia: "",
   ciudad: "",
   estado: "",
   codigo_postal: "",
+  show_address: true,
   amenidades: [],
 };
 
 /* ------------------------------------------------------------------ */
-/*  Section card wrapper                                               */
+/*  UI bits                                                            */
 /* ------------------------------------------------------------------ */
 
 function SectionCard({
   title,
+  subtitle,
   children,
 }: {
   title: string;
+  subtitle?: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm sm:p-8">
       <h3
-        className="mb-6 text-lg font-bold text-gray-900"
+        className="text-lg font-bold text-gray-900"
         style={{ fontFamily: "Barlow, Inter, sans-serif" }}
       >
         {title}
       </h3>
+      {subtitle && <p className="mt-1 mb-5 text-xs text-gray-500">{subtitle}</p>}
+      {!subtitle && <div className="mb-5" />}
       {children}
     </div>
+  );
+}
+
+function Toggle({
+  checked,
+  onChange,
+  label,
+  hint,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+  hint?: string;
+}) {
+  return (
+    <label className="flex cursor-pointer items-start gap-3">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className={`relative mt-0.5 inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ${
+          checked ? "bg-emerald-500" : "bg-gray-200"
+        }`}
+      >
+        <span
+          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition-transform duration-200 ${
+            checked ? "translate-x-5" : "translate-x-0"
+          }`}
+        />
+      </button>
+      <span className="text-sm">
+        <span className="block font-medium text-gray-700">{label}</span>
+        {hint && <span className="block text-xs text-gray-500">{hint}</span>}
+      </span>
+    </label>
   );
 }
 
@@ -239,21 +315,26 @@ export default function EditarPropiedadPage() {
   const [form, setForm] = useState<FormData>(initialFormData);
   const [images, setImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
-  /** URLs of existing images already stored in Supabase */
   const [existingImageUrls, setExistingImageUrls] = useState<string[]>([]);
-  /** Existing media row IDs so we can delete removed ones */
   const [existingMediaIds, setExistingMediaIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
-  /** Original slug so we can keep it or regenerate */
   const [originalSlug, setOriginalSlug] = useState<string>("");
-  /** Original status */
   const [, setOriginalStatus] = useState<string>("");
-  /** BRC certification status */
   const [brcStatus, setBrcStatus] = useState<string>("NO_SOLICITADO");
+
+  const isCasa = form.tipo_propiedad === "CASA";
+  const isDepto = form.tipo_propiedad === "DEPARTAMENTO";
+  const isResidential = isCasa || isDepto;
+  const hasSale =
+    form.tipo_operacion === "VENTA" ||
+    form.tipo_operacion === "VENTA_RENTA" ||
+    form.tipo_operacion === "TRASPASO";
+  const hasRent =
+    form.tipo_operacion === "RENTA" || form.tipo_operacion === "VENTA_RENTA";
 
   /* ---- Fetch existing property ---- */
 
@@ -279,33 +360,65 @@ export default function EditarPropiedadPage() {
       setOriginalStatus(property.status ?? "");
       setBrcStatus(property.brc_status ?? "NO_SOLICITADO");
 
+      const op = normalizeOperation(property.operation);
+      // For legacy rows that only have `price`, surface it in whichever
+      // bucket matches the operation so the editor doesn't lose the value.
+      const legacyPrice = property.price != null ? String(property.price) : "";
+      const priceSaleStr =
+        property.price_sale != null
+          ? String(property.price_sale)
+          : op === "VENTA" || op === "TRASPASO"
+            ? legacyPrice
+            : "";
+      const priceRentStr =
+        property.price_rent != null
+          ? String(property.price_rent)
+          : op === "RENTA"
+            ? legacyPrice
+            : "";
+
       setForm({
         titulo: property.title ?? "",
         descripcion: property.description ?? "",
-        tipo_propiedad: dbTypeToDisplay(property.type ?? ""),
-        tipo_operacion: dbOperationToDisplay(property.operation ?? ""),
-        precio: property.price != null ? String(property.price) : "",
+        tipo_propiedad: normalizeType(property.type),
+        tipo_operacion: op,
+        precio_venta: priceSaleStr,
+        precio_renta: priceRentStr,
         moneda: property.currency ?? "MXN",
         acepta_crypto: property.accepts_crypto ?? false,
         cryptos_aceptadas: Array.isArray(property.cryptos_accepted)
           ? property.cryptos_accepted
           : [],
+        show_price: property.show_price ?? true,
         area_total: property.area_total != null ? String(property.area_total) : "",
         area_construida: property.area_built != null ? String(property.area_built) : "",
         recamaras: property.bedrooms != null ? String(property.bedrooms) : "",
         banos: property.bathrooms != null ? String(property.bathrooms) : "",
+        medios_banos:
+          property.half_bathrooms != null ? String(property.half_bathrooms) : "",
         estacionamientos:
           property.parking_spaces != null ? String(property.parking_spaces) : "",
-        pisos: property.floors != null ? String(property.floors) : "",
+        niveles: property.floors != null ? String(property.floors) : "",
+        piso:
+          property.floor_number != null ? String(property.floor_number) : "",
+        cuota_mantenimiento:
+          property.maintenance_fee != null
+            ? String(property.maintenance_fee)
+            : "",
+        has_service_room: property.has_service_room ?? false,
+        has_storage: property.has_storage ?? false,
+        has_terrace: property.has_terrace ?? false,
+        has_laundry_room: property.has_laundry_room ?? false,
+        has_integrated_kitchen: property.has_integrated_kitchen ?? false,
         direccion: property.address_line ?? "",
         colonia: property.neighborhood ?? "",
         ciudad: property.city ?? "",
         estado: property.state ?? "",
         codigo_postal: property.zip_code ?? "",
+        show_address: property.show_address ?? true,
         amenidades: Array.isArray(property.amenities) ? property.amenities : [],
       });
 
-      // Fetch existing media
       const { data: media } = await supabase
         .from("property_media")
         .select("id, url, sort_order")
@@ -368,13 +481,11 @@ export default function EditarPropiedadPage() {
   );
 
   function removeImage(index: number) {
-    // If this index falls within existing images, remove from existing
     if (index < existingImageUrls.length) {
       setExistingImageUrls((prev) => prev.filter((_, i) => i !== index));
       setExistingMediaIds((prev) => prev.filter((_, i) => i !== index));
       setImagePreviews((prev) => prev.filter((_, i) => i !== index));
     } else {
-      // It's a newly added image
       const newIndex = index - existingImageUrls.length;
       setImages((prev) => prev.filter((_, i) => i !== newIndex));
       setImagePreviews((prev) => prev.filter((_, i) => i !== index));
@@ -421,15 +532,36 @@ export default function EditarPropiedadPage() {
   /* ---- Validate ---- */
 
   function validate(): string | null {
-    if (!form.titulo.trim()) return "El titulo es obligatorio.";
-    if (!form.descripcion.trim()) return "La descripcion es obligatoria.";
-    if (!form.tipo_propiedad) return "Selecciona el tipo de propiedad.";
-    if (!form.tipo_operacion) return "Selecciona el tipo de operacion.";
-    if (!form.precio || Number(form.precio) <= 0) return "Ingresa un precio valido.";
+    if (!form.titulo.trim()) return "El título es obligatorio.";
+    if (!form.tipo_propiedad) return "Selecciona el tipo de inmueble.";
+    if (!form.tipo_operacion) return "Selecciona el tipo de operación.";
+    if (!form.descripcion.trim()) return "La descripción es obligatoria.";
+
+    if (hasSale && (!form.precio_venta || Number(form.precio_venta) <= 0)) {
+      return "Ingresa un precio de venta válido.";
+    }
+    if (hasRent && (!form.precio_renta || Number(form.precio_renta) <= 0)) {
+      return "Ingresa un precio de renta válido.";
+    }
+
+    if (isCasa) {
+      if (!form.area_total || Number(form.area_total) <= 0) {
+        return "Ingresa los m² de terreno.";
+      }
+      if (!form.area_construida || Number(form.area_construida) <= 0) {
+        return "Ingresa los m² de construcción.";
+      }
+    }
+    if (isDepto) {
+      if (!form.area_construida || Number(form.area_construida) <= 0) {
+        return "Ingresa el área construida.";
+      }
+    }
+
     if (!form.ciudad.trim()) return "La ciudad es obligatoria.";
     if (!form.estado) return "Selecciona el estado.";
     if (form.codigo_postal && !/^\d{5}$/.test(form.codigo_postal)) {
-      return "El codigo postal debe tener 5 digitos.";
+      return "El código postal debe tener 5 dígitos.";
     }
     return null;
   }
@@ -448,7 +580,7 @@ export default function EditarPropiedadPage() {
     }
 
     if (!user) {
-      setError("Debes iniciar sesion para editar una propiedad.");
+      setError("Debes iniciar sesión para editar una propiedad.");
       return;
     }
 
@@ -457,10 +589,8 @@ export default function EditarPropiedadPage() {
     try {
       const supabase = createClient();
 
-      // Keep original slug unless title changed substantially
       const slug = originalSlug || slugify(form.titulo) + "-" + Date.now().toString(36);
 
-      // Re-geocode in case the address changed (best-effort).
       let latitude: number | null = null;
       let longitude: number | null = null;
       const addressQuery = [
@@ -488,35 +618,46 @@ export default function EditarPropiedadPage() {
         }
       }
 
+      const price_sale = hasSale ? asNum(form.precio_venta) : null;
+      const price_rent = hasRent ? asNum(form.precio_renta) : null;
+      const legacyPrice = price_sale ?? price_rent;
+
       const updatePayload: Record<string, unknown> = {
         title: form.titulo,
         slug,
         description: form.descripcion,
-        type: form.tipo_propiedad.toUpperCase(),
-        operation: form.tipo_operacion.toUpperCase(),
-        price: Number(form.precio),
+        type: form.tipo_propiedad,
+        operation: form.tipo_operacion,
+        price: legacyPrice,
+        price_sale,
+        price_rent,
         currency: form.moneda,
         accepts_crypto: form.acepta_crypto,
-        area_total: form.area_total ? Number(form.area_total) : null,
-        area_built: form.area_construida ? Number(form.area_construida) : null,
-        bedrooms: form.recamaras ? Number(form.recamaras) : null,
-        bathrooms: form.banos ? Number(form.banos) : null,
-        parking_spaces: form.estacionamientos
-          ? Number(form.estacionamientos)
-          : null,
-        floors: form.pisos ? Number(form.pisos) : null,
+        show_price: form.show_price,
+        area_total: asNum(form.area_total),
+        area_built: asNum(form.area_construida),
+        bedrooms: asNum(form.recamaras),
+        bathrooms: asNum(form.banos),
+        half_bathrooms: asNum(form.medios_banos),
+        parking_spaces: asNum(form.estacionamientos),
+        floors: asNum(form.niveles),
+        floor_number: isDepto ? asNum(form.piso) : null,
+        maintenance_fee: isDepto ? asNum(form.cuota_mantenimiento) : null,
+        has_service_room: form.has_service_room,
+        has_storage: form.has_storage,
+        has_terrace: form.has_terrace,
+        has_laundry_room: form.has_laundry_room,
+        has_integrated_kitchen: form.has_integrated_kitchen,
         address_line: form.direccion || null,
         neighborhood: form.colonia || null,
         city: form.ciudad,
         state: form.estado,
         zip_code: form.codigo_postal || null,
+        show_address: form.show_address,
         amenities: form.amenidades,
         status: status === "publicado" ? "PUBLICADO" : "BORRADOR",
-        published_at:
-          status === "publicado" ? new Date().toISOString() : null,
+        published_at: status === "publicado" ? new Date().toISOString() : null,
       };
-      // Only overwrite lat/lng when the geocoder actually returned a hit;
-      // otherwise leave the previous value untouched.
       if (latitude !== null && longitude !== null) {
         updatePayload.latitude = latitude;
         updatePayload.longitude = longitude;
@@ -529,8 +670,7 @@ export default function EditarPropiedadPage() {
 
       if (updateError) throw new Error(updateError.message);
 
-      // Handle media: delete removed existing media rows
-      // Get current existing media IDs from DB and compare
+      // Media: delete removed existing rows
       const { data: currentMedia } = await supabase
         .from("property_media")
         .select("id")
@@ -543,18 +683,12 @@ export default function EditarPropiedadPage() {
           .filter((id) => !idsToKeep.has(id));
 
         if (idsToDelete.length > 0) {
-          await supabase
-            .from("property_media")
-            .delete()
-            .in("id", idsToDelete);
+          await supabase.from("property_media").delete().in("id", idsToDelete);
         }
       }
 
-      // Upload new images if any
       if (images.length > 0) {
         const newImageUrls = await uploadImages(propertyId);
-
-        // Insert new media rows
         const startSortOrder = existingImageUrls.length;
         const mediaInserts = newImageUrls.map((url, idx) => ({
           property_id: propertyId,
@@ -570,10 +704,9 @@ export default function EditarPropiedadPage() {
         if (mediaError) logError("Error saving media:", mediaError);
       }
 
-      // Update featured image: first existing image or first new image
+      // Refresh featured image
       const allImageUrls = [...existingImageUrls];
       if (images.length > 0) {
-        // We just uploaded them, get URLs from the previews or re-fetch
         const { data: allMedia } = await supabase
           .from("property_media")
           .select("url")
@@ -610,7 +743,7 @@ export default function EditarPropiedadPage() {
       }, 1500);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Ocurrio un error inesperado."
+        err instanceof Error ? err.message : "Ocurrió un error inesperado."
       );
     } finally {
       setSubmitting(false);
@@ -634,9 +767,7 @@ export default function EditarPropiedadPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-8 pb-12">
-      {/* ============================================================ */}
-      {/*  Header                                                       */}
-      {/* ============================================================ */}
+      {/* Header */}
       <div>
         <Link
           href="/dashboard/propiedades"
@@ -652,13 +783,11 @@ export default function EditarPropiedadPage() {
           Editar Propiedad
         </h2>
         <p className="mt-1 text-sm text-gray-500">
-          Modifica la informacion de tu propiedad.
+          Modifica la información de tu propiedad.
         </p>
       </div>
 
-      {/* ============================================================ */}
-      {/*  Status messages                                              */}
-      {/* ============================================================ */}
+      {/* Status messages */}
       {error && (
         <div className="flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-medium text-red-700">
           <AlertCircle className="h-5 w-5 flex-shrink-0" />
@@ -672,9 +801,7 @@ export default function EditarPropiedadPage() {
         </div>
       )}
 
-      {/* ============================================================ */}
-      {/*  BRC Certification Status Banner                               */}
-      {/* ============================================================ */}
+      {/* BRC Certification Status Banner */}
       {brcStatus === "NO_SOLICITADO" && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 sm:p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -690,10 +817,11 @@ export default function EditarPropiedadPage() {
                   className="font-bold text-amber-800"
                   style={{ fontFamily: "Barlow, Inter, sans-serif" }}
                 >
-                  Sin certificacion BRC
+                  Sin certificación BRC
                 </h4>
                 <p className="mt-0.5 text-sm text-amber-700">
-                  Esta propiedad aun no cuenta con certificacion BRC. La certificacion aumenta la confianza de los compradores y mejora la visibilidad.
+                  Esta propiedad aún no cuenta con certificación BRC. La certificación
+                  aumenta la confianza de los compradores y mejora la visibilidad.
                 </p>
               </div>
             </div>
@@ -706,7 +834,7 @@ export default function EditarPropiedadPage() {
               }}
             >
               <ShieldBrc className="h-4 w-4" />
-              Solicitar certificacion BRC
+              Solicitar certificación BRC
             </Link>
           </div>
         </div>
@@ -726,10 +854,11 @@ export default function EditarPropiedadPage() {
                 className="font-bold text-blue-800"
                 style={{ fontFamily: "Barlow, Inter, sans-serif" }}
               >
-                Certificacion BRC en revision
+                Certificación BRC en revisión
               </h4>
               <p className="mt-0.5 text-sm text-blue-700">
-                Tu solicitud esta siendo procesada. Te notificaremos cuando haya una actualizacion.
+                Tu solicitud está siendo procesada. Te notificaremos cuando haya una
+                actualización.
               </p>
             </div>
           </div>
@@ -753,21 +882,19 @@ export default function EditarPropiedadPage() {
                 Propiedad Certificada BRC
               </h4>
               <p className="mt-0.5 text-sm text-emerald-700">
-                Documentacion legal verificada por Notario Publico.
+                Documentación legal verificada por Notario Público.
               </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* ============================================================ */}
-      {/*  Informacion Basica                                           */}
-      {/* ============================================================ */}
-      <SectionCard title="Informacion Basica">
+      {/* Información Básica */}
+      <SectionCard title="Información Básica">
         <div className="space-y-5">
           <div>
             <Label htmlFor="titulo" className="mb-1.5 block text-gray-700">
-              Titulo <span className="text-red-500">*</span>
+              Título <span className="text-red-500">*</span>
             </Label>
             <Input
               id="titulo"
@@ -778,24 +905,10 @@ export default function EditarPropiedadPage() {
             />
           </div>
 
-          <div>
-            <Label htmlFor="descripcion" className="mb-1.5 block text-gray-700">
-              Descripcion <span className="text-red-500">*</span>
-            </Label>
-            <Textarea
-              id="descripcion"
-              placeholder="Describe las caracteristicas principales, acabados, distribucion y atractivos de la propiedad..."
-              value={form.descripcion}
-              onChange={(e) => updateField("descripcion", e.target.value)}
-              rows={6}
-              className="rounded-xl"
-            />
-          </div>
-
           <div className="grid gap-5 sm:grid-cols-2">
             <div>
               <Label className="mb-1.5 block text-gray-700">
-                Tipo de propiedad <span className="text-red-500">*</span>
+                Tipo de inmueble <span className="text-red-500">*</span>
               </Label>
               <Select
                 value={form.tipo_propiedad}
@@ -805,9 +918,9 @@ export default function EditarPropiedadPage() {
                   <SelectValue placeholder="Seleccionar tipo" />
                 </SelectTrigger>
                 <SelectContent>
-                  {PROPERTY_TYPES.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {type}
+                  {PROPERTY_TYPES.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>
+                      {t.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -816,238 +929,468 @@ export default function EditarPropiedadPage() {
 
             <div>
               <Label className="mb-1.5 block text-gray-700">
-                Tipo de operacion <span className="text-red-500">*</span>
+                Tipo de operación <span className="text-red-500">*</span>
               </Label>
               <Select
                 value={form.tipo_operacion}
                 onValueChange={(v) => updateField("tipo_operacion", v)}
               >
                 <SelectTrigger className="rounded-xl">
-                  <SelectValue placeholder="Seleccionar operacion" />
+                  <SelectValue placeholder="Seleccionar operación" />
                 </SelectTrigger>
                 <SelectContent>
-                  {OPERATION_TYPES.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {type}
+                  {OPERATION_TYPES.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
           </div>
-        </div>
-      </SectionCard>
 
-      {/* ============================================================ */}
-      {/*  Precio                                                       */}
-      {/* ============================================================ */}
-      <SectionCard title="Precio">
-        <div className="grid gap-5 sm:grid-cols-3">
-          <div className="sm:col-span-1">
-            <Label htmlFor="precio" className="mb-1.5 block text-gray-700">
-              Precio <span className="text-red-500">*</span>
+          <div>
+            <Label htmlFor="descripcion" className="mb-1.5 block text-gray-700">
+              Descripción <span className="text-red-500">*</span>
             </Label>
-            <Input
-              id="precio"
-              type="number"
-              placeholder="0"
-              min={0}
-              value={form.precio}
-              onChange={(e) => updateField("precio", e.target.value)}
+            <Textarea
+              id="descripcion"
+              placeholder="Describe las características principales, acabados, distribución y atractivos de la propiedad..."
+              value={form.descripcion}
+              onChange={(e) => updateField("descripcion", e.target.value)}
+              rows={6}
               className="rounded-xl"
             />
           </div>
-
-          <div>
-            <Label className="mb-1.5 block text-gray-700">Moneda</Label>
-            <Select
-              value={form.moneda}
-              onValueChange={(v) => updateField("moneda", v)}
-            >
-              <SelectTrigger className="rounded-xl">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {CURRENCIES.map((c) => (
-                  <SelectItem key={c} value={c}>
-                    {c}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex items-end">
-            <label className="flex cursor-pointer items-center gap-3">
-              <button
-                type="button"
-                role="switch"
-                aria-checked={form.acepta_crypto}
-                onClick={() => updateField("acepta_crypto", !form.acepta_crypto)}
-                className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ${
-                  form.acepta_crypto ? "bg-emerald-500" : "bg-gray-200"
-                }`}
-              >
-                <span
-                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition-transform duration-200 ${
-                    form.acepta_crypto ? "translate-x-5" : "translate-x-0"
-                  }`}
-                />
-              </button>
-              <span className="text-sm font-medium text-gray-700">
-                Acepta criptomonedas
-              </span>
-            </label>
-          </div>
         </div>
+      </SectionCard>
 
-        {/* Crypto selection */}
-        {form.acepta_crypto && (
-          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-            <p className="text-sm font-semibold text-gray-700 mb-3">
-              Que criptomonedas acepta?
-            </p>
-            <div className="flex flex-wrap gap-3">
-              {CRYPTOS.map((crypto) => {
-                const selected = form.cryptos_aceptadas.includes(crypto.id);
-                return (
-                  <button
-                    key={crypto.id}
-                    type="button"
-                    onClick={() => {
-                      const updated = selected
-                        ? form.cryptos_aceptadas.filter((c) => c !== crypto.id)
-                        : [...form.cryptos_aceptadas, crypto.id];
-                      updateField("cryptos_aceptadas", updated);
-                    }}
-                    className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-200 ${
-                      selected
-                        ? "bg-emerald-500 text-white shadow-sm"
-                        : "bg-white border border-gray-200 text-gray-600 hover:border-emerald-300"
-                    }`}
-                  >
-                    {crypto.id === "BTC" && "\u20bf"}
-                    {crypto.id === "ETH" && "\u039e"}
-                    {crypto.id === "USDC" && "$"}
-                    {crypto.label}
-                  </button>
-                );
-              })}
+      {/* Precio */}
+      <SectionCard
+        title="Precio"
+        subtitle="Si desactivas la publicación del precio, los visitantes verán 'Precio a consultar'."
+      >
+        <div className="space-y-5">
+          <div className="grid gap-5 sm:grid-cols-3">
+            {hasSale && (
+              <div>
+                <Label htmlFor="precio_venta" className="mb-1.5 block text-gray-700">
+                  Precio de venta <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="precio_venta"
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.precio_venta}
+                  onChange={(e) => updateField("precio_venta", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+            )}
+
+            {hasRent && (
+              <div>
+                <Label htmlFor="precio_renta" className="mb-1.5 block text-gray-700">
+                  Precio de renta (mensual) <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="precio_renta"
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.precio_renta}
+                  onChange={(e) => updateField("precio_renta", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+            )}
+
+            <div>
+              <Label className="mb-1.5 block text-gray-700">Moneda</Label>
+              <Select
+                value={form.moneda}
+                onValueChange={(v) => updateField("moneda", v)}
+              >
+                <SelectTrigger className="rounded-xl">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CURRENCIES.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {c}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
-        )}
-      </SectionCard>
 
-      {/* ============================================================ */}
-      {/*  Caracteristicas                                              */}
-      {/* ============================================================ */}
-      <SectionCard title="Caracteristicas">
-        <div className="grid gap-5 grid-cols-2 lg:grid-cols-3">
-          <div>
-            <Label htmlFor="area_total" className="mb-1.5 block text-gray-700">
-              Area total m2
-            </Label>
-            <Input
-              id="area_total"
-              type="number"
-              placeholder="0"
-              min={0}
-              value={form.area_total}
-              onChange={(e) => updateField("area_total", e.target.value)}
-              className="rounded-xl"
+          <div className="flex flex-col gap-3 rounded-xl bg-gray-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <Toggle
+              checked={form.show_price}
+              onChange={(v) => updateField("show_price", v)}
+              label="Publicar precio"
+              hint="Si lo desactivas, en la propiedad pública aparecerá 'Precio a consultar'."
             />
+
+            {hasSale && (
+              <Toggle
+                checked={form.acepta_crypto}
+                onChange={(v) => updateField("acepta_crypto", v)}
+                label="Acepta criptomonedas"
+              />
+            )}
           </div>
 
-          <div>
-            <Label htmlFor="area_construida" className="mb-1.5 block text-gray-700">
-              Area construida m2
-            </Label>
-            <Input
-              id="area_construida"
-              type="number"
-              placeholder="0"
-              min={0}
-              value={form.area_construida}
-              onChange={(e) => updateField("area_construida", e.target.value)}
-              className="rounded-xl"
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="recamaras" className="mb-1.5 block text-gray-700">
-              Recamaras
-            </Label>
-            <Input
-              id="recamaras"
-              type="number"
-              placeholder="0"
-              min={0}
-              value={form.recamaras}
-              onChange={(e) => updateField("recamaras", e.target.value)}
-              className="rounded-xl"
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="banos" className="mb-1.5 block text-gray-700">
-              Banos
-            </Label>
-            <Input
-              id="banos"
-              type="number"
-              placeholder="0"
-              min={0}
-              step={0.5}
-              value={form.banos}
-              onChange={(e) => updateField("banos", e.target.value)}
-              className="rounded-xl"
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="estacionamientos" className="mb-1.5 block text-gray-700">
-              Estacionamientos
-            </Label>
-            <Input
-              id="estacionamientos"
-              type="number"
-              placeholder="0"
-              min={0}
-              value={form.estacionamientos}
-              onChange={(e) => updateField("estacionamientos", e.target.value)}
-              className="rounded-xl"
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="pisos" className="mb-1.5 block text-gray-700">
-              Pisos
-            </Label>
-            <Input
-              id="pisos"
-              type="number"
-              placeholder="0"
-              min={0}
-              value={form.pisos}
-              onChange={(e) => updateField("pisos", e.target.value)}
-              className="rounded-xl"
-            />
-          </div>
+          {form.acepta_crypto && hasSale && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+              <p className="mb-3 text-sm font-semibold text-gray-700">
+                ¿Qué criptomonedas acepta?
+              </p>
+              <div className="flex flex-wrap gap-3">
+                {CRYPTOS.map((crypto) => {
+                  const selected = form.cryptos_aceptadas.includes(crypto.id);
+                  return (
+                    <button
+                      key={crypto.id}
+                      type="button"
+                      onClick={() => {
+                        const updated = selected
+                          ? form.cryptos_aceptadas.filter((c) => c !== crypto.id)
+                          : [...form.cryptos_aceptadas, crypto.id];
+                        updateField("cryptos_aceptadas", updated);
+                      }}
+                      className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-200 ${
+                        selected
+                          ? "bg-emerald-500 text-white shadow-sm"
+                          : "border border-gray-200 bg-white text-gray-600 hover:border-emerald-300"
+                      }`}
+                    >
+                      {crypto.id === "BTC" && "₿"}
+                      {crypto.id === "ETH" && "Ξ"}
+                      {crypto.id === "USDC" && "$"}
+                      {crypto.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </SectionCard>
 
-      {/* ============================================================ */}
-      {/*  Ubicacion                                                    */}
-      {/* ============================================================ */}
-      <SectionCard title="Ubicacion">
+      {/* Características */}
+      {form.tipo_propiedad && (
+        <SectionCard title="Características">
+          {isCasa && (
+            <div className="grid grid-cols-2 gap-5 lg:grid-cols-3">
+              <div>
+                <Label className="mb-1.5 block text-gray-700">
+                  m² de terreno <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.area_total}
+                  onChange={(e) => updateField("area_total", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">
+                  m² de construcción <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.area_construida}
+                  onChange={(e) => updateField("area_construida", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">Recámaras</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.recamaras}
+                  onChange={(e) => updateField("recamaras", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">Baños completos</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.banos}
+                  onChange={(e) => updateField("banos", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">Medios baños</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.medios_banos}
+                  onChange={(e) => updateField("medios_banos", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">Estacionamientos</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.estacionamientos}
+                  onChange={(e) => updateField("estacionamientos", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">Niveles</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.niveles}
+                  onChange={(e) => updateField("niveles", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+            </div>
+          )}
+
+          {isDepto && (
+            <div className="grid grid-cols-2 gap-5 lg:grid-cols-3">
+              <div>
+                <Label className="mb-1.5 block text-gray-700">
+                  Área construida (m²) <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.area_construida}
+                  onChange={(e) => updateField("area_construida", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">
+                  Área total (m²){" "}
+                  <span className="text-xs font-normal text-gray-400">(opcional)</span>
+                </Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.area_total}
+                  onChange={(e) => updateField("area_total", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">Recámaras</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.recamaras}
+                  onChange={(e) => updateField("recamaras", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">Baños completos</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.banos}
+                  onChange={(e) => updateField("banos", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">Medios baños</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.medios_banos}
+                  onChange={(e) => updateField("medios_banos", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">Estacionamientos</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.estacionamientos}
+                  onChange={(e) => updateField("estacionamientos", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">Niveles del depto</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.niveles}
+                  onChange={(e) => updateField("niveles", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">
+                  Piso en el que está{" "}
+                  <span className="text-xs font-normal text-gray-400">(opcional)</span>
+                </Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.piso}
+                  onChange={(e) => updateField("piso", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">
+                  Cuota de mantenimiento (MXN){" "}
+                  <span className="text-xs font-normal text-gray-400">(opcional)</span>
+                </Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.cuota_mantenimiento}
+                  onChange={(e) => updateField("cuota_mantenimiento", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+            </div>
+          )}
+
+          {!isCasa && !isDepto && (
+            <div className="grid grid-cols-2 gap-5 lg:grid-cols-3">
+              <div>
+                <Label className="mb-1.5 block text-gray-700">Área total (m²)</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.area_total}
+                  onChange={(e) => updateField("area_total", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">
+                  Área construida (m²)
+                </Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.area_construida}
+                  onChange={(e) => updateField("area_construida", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">Estacionamientos</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.estacionamientos}
+                  onChange={(e) => updateField("estacionamientos", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+            </div>
+          )}
+        </SectionCard>
+      )}
+
+      {/* Características del inmueble (private features) */}
+      {isResidential && (
+        <SectionCard
+          title="Características del inmueble"
+          subtitle="Espacios privados del inmueble (no son áreas comunes del edificio)."
+        >
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            {PRIVATE_FEATURES.map(({ key, label }) => {
+              const checked = form[key];
+              return (
+                <label
+                  key={key}
+                  className={`flex cursor-pointer items-center gap-2.5 rounded-xl border px-4 py-3 text-sm font-medium transition-all duration-200 ${
+                    checked
+                      ? "border-blue-300 bg-blue-50 text-blue-700"
+                      : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => updateField(key, !checked)}
+                    className="sr-only"
+                  />
+                  <div
+                    className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md border-2 transition-colors duration-200 ${
+                      checked
+                        ? "border-blue-500 bg-blue-500"
+                        : "border-gray-300 bg-white"
+                    }`}
+                  >
+                    {checked && (
+                      <svg className="h-3 w-3 text-white" viewBox="0 0 12 12" fill="none">
+                        <path
+                          d="M10 3L4.5 8.5L2 6"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    )}
+                  </div>
+                  <span className="leading-tight">{label}</span>
+                </label>
+              );
+            })}
+          </div>
+        </SectionCard>
+      )}
+
+      {/* Ubicación */}
+      <SectionCard
+        title="Ubicación"
+        subtitle="La dirección exacta solo se usa para geolocalizar. Puedes ocultarla del público y mostrar solo colonia y ciudad."
+      >
         <div className="space-y-5">
           <div>
             <Label htmlFor="direccion" className="mb-1.5 block text-gray-700">
-              Direccion
+              Dirección{" "}
+              <span className="text-xs font-normal text-gray-400">(uso interno)</span>
             </Label>
             <Input
               id="direccion"
-              placeholder="Calle, numero exterior e interior"
+              placeholder="Calle, número exterior e interior"
               value={form.direccion}
               onChange={(e) => updateField("direccion", e.target.value)}
               className="rounded-xl"
@@ -1074,7 +1417,7 @@ export default function EditarPropiedadPage() {
               </Label>
               <Input
                 id="ciudad"
-                placeholder="Ej. Ciudad de Mexico"
+                placeholder="Ej. Ciudad de México"
                 value={form.ciudad}
                 onChange={(e) => updateField("ciudad", e.target.value)}
                 className="rounded-xl"
@@ -1087,10 +1430,7 @@ export default function EditarPropiedadPage() {
               <Label className="mb-1.5 block text-gray-700">
                 Estado <span className="text-red-500">*</span>
               </Label>
-              <Select
-                value={form.estado}
-                onValueChange={(v) => updateField("estado", v)}
-              >
+              <Select value={form.estado} onValueChange={(v) => updateField("estado", v)}>
                 <SelectTrigger className="rounded-xl">
                   <SelectValue placeholder="Seleccionar estado" />
                 </SelectTrigger>
@@ -1106,7 +1446,7 @@ export default function EditarPropiedadPage() {
 
             <div>
               <Label htmlFor="codigo_postal" className="mb-1.5 block text-gray-700">
-                Codigo postal
+                Código postal
               </Label>
               <Input
                 id="codigo_postal"
@@ -1121,15 +1461,25 @@ export default function EditarPropiedadPage() {
               />
             </div>
           </div>
+
+          <div className="rounded-xl bg-gray-50 p-4">
+            <Toggle
+              checked={form.show_address}
+              onChange={(v) => updateField("show_address", v)}
+              label="Mostrar dirección exacta al público"
+              hint="Si lo desactivas, los visitantes solo verán colonia y ciudad, y el mapa centrará en la colonia."
+            />
+          </div>
         </div>
       </SectionCard>
 
-      {/* ============================================================ */}
-      {/*  Amenidades                                                   */}
-      {/* ============================================================ */}
-      <SectionCard title="Amenidades">
+      {/* Amenidades / Áreas comunes */}
+      <SectionCard
+        title="Amenidades / Áreas comunes"
+        subtitle="Áreas y servicios compartidos del edificio o fraccionamiento."
+      >
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {AMENITIES.map((amenity) => {
+          {COMMON_AREAS.map((amenity) => {
             const checked = form.amenidades.includes(amenity);
             return (
               <label
@@ -1148,17 +1498,11 @@ export default function EditarPropiedadPage() {
                 />
                 <div
                   className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md border-2 transition-colors duration-200 ${
-                    checked
-                      ? "border-blue-500 bg-blue-500"
-                      : "border-gray-300 bg-white"
+                    checked ? "border-blue-500 bg-blue-500" : "border-gray-300 bg-white"
                   }`}
                 >
                   {checked && (
-                    <svg
-                      className="h-3 w-3 text-white"
-                      viewBox="0 0 12 12"
-                      fill="none"
-                    >
+                    <svg className="h-3 w-3 text-white" viewBox="0 0 12 12" fill="none">
                       <path
                         d="M10 3L4.5 8.5L2 6"
                         stroke="currentColor"
@@ -1176,12 +1520,9 @@ export default function EditarPropiedadPage() {
         </div>
       </SectionCard>
 
-      {/* ============================================================ */}
-      {/*  Imagenes                                                     */}
-      {/* ============================================================ */}
-      <SectionCard title="Imagenes">
+      {/* Imágenes */}
+      <SectionCard title="Imágenes">
         <div className="space-y-5">
-          {/* Drop zone */}
           <div
             onDragOver={(e) => {
               e.preventDefault();
@@ -1206,10 +1547,10 @@ export default function EditarPropiedadPage() {
               <ImagePlus className="h-6 w-6" style={{ color: "hsl(221 83% 53%)" }} />
             </div>
             <p className="text-sm font-semibold text-gray-700">
-              Arrastra tus imagenes aqui o haz clic para seleccionar
+              Arrastra tus imágenes aquí o haz clic para seleccionar
             </p>
             <p className="mt-1 text-xs text-gray-500">
-              JPG, PNG o WebP. Maximo 20 imagenes. La primera sera la imagen principal.
+              JPG, PNG o WebP. Máximo 20 imágenes. La primera será la imagen principal.
             </p>
             <input
               ref={fileInputRef}
@@ -1224,7 +1565,6 @@ export default function EditarPropiedadPage() {
             />
           </div>
 
-          {/* Preview grid */}
           {imagePreviews.length > 0 && (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
               {imagePreviews.map((src, idx) => (
@@ -1232,12 +1572,7 @@ export default function EditarPropiedadPage() {
                   key={idx}
                   className="group relative aspect-[4/3] overflow-hidden rounded-xl border border-gray-200 bg-gray-100"
                 >
-                  <Image
-                    src={src}
-                    alt={`Imagen ${idx + 1}`}
-                    fill
-                    className="object-cover"
-                  />
+                  <Image src={src} alt={`Imagen ${idx + 1}`} fill className="object-cover" />
                   {idx === 0 && (
                     <span className="absolute left-2 top-2 rounded-lg bg-blue-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
                       Principal
@@ -1260,9 +1595,7 @@ export default function EditarPropiedadPage() {
         </div>
       </SectionCard>
 
-      {/* ============================================================ */}
-      {/*  Action Buttons                                               */}
-      {/* ============================================================ */}
+      {/* Action Buttons */}
       <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
         <Link
           href="/dashboard/propiedades"
@@ -1291,8 +1624,7 @@ export default function EditarPropiedadPage() {
           onClick={() => handleSubmit("publicado")}
           className="inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-bold text-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
           style={{
-            background:
-              "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
+            background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
           }}
         >
           {submitting ? (

@@ -30,19 +30,31 @@ export interface FichaProperty {
   operation: string;
   description: string | null;
   price: number;
+  price_sale?: number | null;
+  price_rent?: number | null;
   currency: string;
   accepts_crypto: boolean;
+  show_price?: boolean;
   area_total: number | null;
   area_built: number | null;
   bedrooms: number | null;
   bathrooms: number | null;
+  half_bathrooms?: number | null;
   parking_spaces: number | null;
   floors: number | null;
+  floor_number?: number | null;
+  maintenance_fee?: number | null;
+  has_service_room?: boolean;
+  has_storage?: boolean;
+  has_terrace?: boolean;
+  has_laundry_room?: boolean;
+  has_integrated_kitchen?: boolean;
   address_line: string | null;
   neighborhood: string | null;
   city: string;
   state: string;
   zip_code: string | null;
+  show_address?: boolean;
   amenities: string[];
   featured_image_url: string | null;
   brc_status: string;
@@ -94,6 +106,7 @@ function formatPrice(price: number, currency: string): string {
 function operationLabel(op: string): string {
   if (op === "VENTA") return "En venta";
   if (op === "RENTA") return "En renta";
+  if (op === "VENTA_RENTA") return "Venta y renta";
   if (op === "TRASPASO") return "En traspaso";
   return op;
 }
@@ -234,15 +247,19 @@ export function FichaTecnicaTemplate({
   }, [property.neighborhood, property.city, property.state]);
 
   const fullAddress = useMemo(() => {
-    const parts = [
-      property.address_line,
-      property.neighborhood,
-      property.city,
-      property.state,
-      property.zip_code ? `C.P. ${property.zip_code}` : null,
-    ].filter(Boolean) as string[];
-    return parts.join(", ");
+    const showAddress = property.show_address !== false;
+    const parts = showAddress
+      ? [
+          property.address_line,
+          property.neighborhood,
+          property.city,
+          property.state,
+          property.zip_code ? `C.P. ${property.zip_code}` : null,
+        ]
+      : [property.neighborhood, property.city, property.state];
+    return (parts.filter(Boolean) as string[]).join(", ");
   }, [
+    property.show_address,
     property.address_line,
     property.neighborhood,
     property.city,
@@ -412,23 +429,51 @@ export function FichaTecnicaTemplate({
             marginBottom: "24px",
             paddingBottom: "20px",
             borderBottom: "1px solid #e2e8f0",
+            flexWrap: "wrap",
           }}
         >
           {/* Solid color rather than gradient-clip: html2canvas does not support
               -webkit-background-clip: text, which would render the price invisible. */}
-          <span
-            style={{
-              fontSize: "30px",
-              fontWeight: 800,
-              color: "#1d4ed8",
-            }}
-          >
-            {formatPrice(property.price, property.currency)}
-          </span>
-          <span style={{ color: "#64748b", fontSize: "13px" }}>
-            {property.currency}
-          </span>
-          {property.accepts_crypto && (
+          {property.show_price === false ? (
+            <span style={{ fontSize: "24px", fontWeight: 700, color: "#475569" }}>
+              Precio a consultar
+            </span>
+          ) : property.operation === "VENTA_RENTA" ? (
+            <>
+              {(property.price_sale ?? property.price) > 0 && (
+                <span style={{ fontSize: "24px", fontWeight: 800, color: "#1d4ed8" }}>
+                  {formatPrice(property.price_sale ?? property.price, property.currency)}
+                  <span style={{ fontSize: "12px", color: "#64748b", marginLeft: "6px", fontWeight: 500 }}>
+                    {property.currency} · Venta
+                  </span>
+                </span>
+              )}
+              {property.price_rent && property.price_rent > 0 && (
+                <span style={{ fontSize: "22px", fontWeight: 700, color: "#1d4ed8" }}>
+                  {formatPrice(property.price_rent, property.currency)}
+                  <span style={{ fontSize: "12px", color: "#64748b", marginLeft: "6px", fontWeight: 500 }}>
+                    {property.currency}/mes · Renta
+                  </span>
+                </span>
+              )}
+            </>
+          ) : (
+            <>
+              <span style={{ fontSize: "30px", fontWeight: 800, color: "#1d4ed8" }}>
+                {formatPrice(
+                  property.operation === "RENTA"
+                    ? property.price_rent ?? property.price
+                    : property.price_sale ?? property.price,
+                  property.currency,
+                )}
+              </span>
+              <span style={{ color: "#64748b", fontSize: "13px" }}>
+                {property.currency}
+                {property.operation === "RENTA" ? " /mes" : ""}
+              </span>
+            </>
+          )}
+          {property.accepts_crypto && property.show_price !== false && (
             <span
               style={{
                 fontSize: "10px",

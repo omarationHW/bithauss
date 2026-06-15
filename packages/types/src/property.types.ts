@@ -22,17 +22,32 @@ export interface Property {
   status: PropertyStatus;
 
   // Pricing
-  price: number; // decimal in DB
+  price: number; // legacy; for VENTA_RENTA use price_sale / price_rent
+  price_sale: number | null;
+  price_rent: number | null;
   currency: string; // MXN | USD
   accepts_crypto: boolean;
+  /** When false, public listing shows "Precio a consultar" instead of the amount. */
+  show_price: boolean;
 
   // Dimensions & features
-  area_total: number | null; // m²
-  area_built: number | null; // m²
+  area_total: number | null; // m² terreno (CASA) / opcional (DEPARTAMENTO)
+  area_built: number | null; // m² construcción
   bedrooms: number | null;
   bathrooms: number | null;
+  half_bathrooms: number | null;
   parking_spaces: number | null;
   floors: number | null;
+  /** Piso del edificio para DEPARTAMENTO. */
+  floor_number: number | null;
+  maintenance_fee: number | null;
+
+  // Private features (unit-level, NOT building amenities)
+  has_service_room: boolean;
+  has_storage: boolean;
+  has_terrace: boolean;
+  has_laundry_room: boolean;
+  has_integrated_kitchen: boolean;
 
   // Location
   address_line: string | null;
@@ -43,9 +58,11 @@ export interface Property {
   country: string;
   latitude: number | null;
   longitude: number | null;
+  /** When false, the public listing hides street/door and shows colonia+ciudad only. */
+  show_address: boolean;
 
   // Extras
-  amenities: string[]; // JSONB array of amenity slugs
+  amenities: string[]; // JSONB array — common areas only (alberca, gym, etc.)
   featured_image_url: string | null;
 
   // BRC

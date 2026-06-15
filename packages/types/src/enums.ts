@@ -27,6 +27,7 @@ export enum PropertyType {
 export enum PropertyOperation {
   VENTA = 'VENTA',
   RENTA = 'RENTA',
+  VENTA_RENTA = 'VENTA_RENTA',
   TRASPASO = 'TRASPASO',
 }
 

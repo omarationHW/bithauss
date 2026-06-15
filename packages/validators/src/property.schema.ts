@@ -23,12 +23,16 @@ export const createPropertySchema = z.object({
     'BODEGA',
     'OTRO',
   ]),
-  operation: z.enum(['VENTA', 'RENTA', 'TRASPASO']),
+  operation: z.enum(['VENTA', 'RENTA', 'VENTA_RENTA', 'TRASPASO']),
 
-  // Pricing
-  price: z.number().positive('El precio debe ser mayor a 0'),
+  // Pricing — `price` keeps the legacy single value (fallback). For
+  // VENTA_RENTA you should set price_sale and price_rent.
+  price: z.number().positive('El precio debe ser mayor a 0').nullable().optional(),
+  price_sale: z.number().positive('El precio de venta debe ser mayor a 0').nullable().optional(),
+  price_rent: z.number().positive('El precio de renta debe ser mayor a 0').nullable().optional(),
   currency: z.enum(['MXN', 'USD']).default('MXN'),
   accepts_crypto: z.boolean().default(false),
+  show_price: z.boolean().default(true),
 
   // Dimensions & features
   area_total: z.number().positive('El área total debe ser mayor a 0').nullable().optional(),
@@ -45,6 +49,12 @@ export const createPropertySchema = z.object({
     .min(0, 'Los baños no pueden ser negativos')
     .nullable()
     .optional(),
+  half_bathrooms: z
+    .number()
+    .int()
+    .min(0)
+    .nullable()
+    .optional(),
   parking_spaces: z
     .number()
     .int('Los estacionamientos deben ser un número entero')
@@ -57,6 +67,15 @@ export const createPropertySchema = z.object({
     .min(0, 'Los pisos no pueden ser negativos')
     .nullable()
     .optional(),
+  floor_number: z.number().int().min(0).nullable().optional(),
+  maintenance_fee: z.number().min(0).nullable().optional(),
+
+  // Private features (unit-level, NOT building amenities)
+  has_service_room: z.boolean().default(false),
+  has_storage: z.boolean().default(false),
+  has_terrace: z.boolean().default(false),
+  has_laundry_room: z.boolean().default(false),
+  has_integrated_kitchen: z.boolean().default(false),
 
   // Location
   address_line: z.string().max(300).nullable().optional(),
@@ -87,8 +106,9 @@ export const createPropertySchema = z.object({
     .max(180, 'Longitud inválida')
     .nullable()
     .optional(),
+  show_address: z.boolean().default(true),
 
-  // Extras
+  // Extras — `amenities` now refers to the building's common areas only
   amenities: z.array(z.string()).default([]),
   featured_image_url: z.string().url('URL de imagen inválida').nullable().optional(),
 });
@@ -114,7 +134,7 @@ export const propertySearchSchema = z.object({
       'OTRO',
     ])
     .optional(),
-  operation: z.enum(['VENTA', 'RENTA', 'TRASPASO']).optional(),
+  operation: z.enum(['VENTA', 'RENTA', 'VENTA_RENTA', 'TRASPASO']).optional(),
   status: z
     .enum(['BORRADOR', 'PUBLICADO', 'PAUSADO', 'VENDIDO', 'ELIMINADO'])
     .optional(),

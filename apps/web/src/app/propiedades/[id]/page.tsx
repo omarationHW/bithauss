@@ -54,14 +54,25 @@ interface Property {
   operation: string;
   status: string;
   price: number;
+  price_sale: number | null;
+  price_rent: number | null;
   currency: string;
   accepts_crypto: boolean;
+  show_price: boolean;
   area_total: number;
   area_built: number;
   bedrooms: number;
   bathrooms: number;
+  half_bathrooms: number | null;
   parking_spaces: number;
   floors: number;
+  floor_number: number | null;
+  maintenance_fee: number | null;
+  has_service_room: boolean;
+  has_storage: boolean;
+  has_terrace: boolean;
+  has_laundry_room: boolean;
+  has_integrated_kitchen: boolean;
   address_line: string;
   neighborhood: string;
   city: string;
@@ -69,6 +80,7 @@ interface Property {
   zip_code: string;
   latitude: number;
   longitude: number;
+  show_address: boolean;
   amenities: string[];
   featured_image_url: string;
   brc_status: string;
@@ -148,6 +160,8 @@ function operationLabel(operation: string): string {
       return "En Venta";
     case "RENTA":
       return "En Renta";
+    case "VENTA_RENTA":
+      return "Venta y Renta";
     case "TRASPASO":
       return "En Traspaso";
     default:
@@ -155,8 +169,50 @@ function operationLabel(operation: string): string {
   }
 }
 
-function buildMapEmbedUrl(lat: number | null, lng: number | null, neighborhood: string, city: string, state: string): string {
+/**
+ * Render the price block for the listing. When `show_price` is false we
+ * return the "consultar" placeholder, regardless of operation. When the
+ * operation is VENTA_RENTA we surface both amounts on separate lines.
+ */
+function renderPrice(property: Property): { lines: { amount: string; suffix?: string }[]; consult: boolean } {
+  if (!property.show_price) {
+    return { lines: [{ amount: "Precio a consultar" }], consult: true };
+  }
+  const cur = property.currency || "MXN";
+  const lines: { amount: string; suffix?: string }[] = [];
+  if (property.operation === "VENTA_RENTA") {
+    const sale = property.price_sale ?? property.price;
+    const rent = property.price_rent;
+    if (sale) lines.push({ amount: `${formatPrice(sale, cur)} ${cur}`, suffix: " · Venta" });
+    if (rent) lines.push({ amount: `${formatPrice(rent, cur)} ${cur}`, suffix: "/mes · Renta" });
+  } else if (property.operation === "RENTA") {
+    const rent = property.price_rent ?? property.price;
+    lines.push({ amount: `${formatPrice(rent, cur)} ${cur}`, suffix: "/mes" });
+  } else {
+    const amount = property.price_sale ?? property.price;
+    lines.push({ amount: `${formatPrice(amount, cur)} ${cur}` });
+  }
+  return { lines, consult: false };
+}
+
+function buildMapEmbedUrl(
+  lat: number | null,
+  lng: number | null,
+  neighborhood: string,
+  city: string,
+  state: string,
+  showAddress: boolean = true,
+): string {
   const googleKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  // When the owner opted out of publishing the exact address, never render
+  // a pin at lat/lng — fall back to a neighborhood-level query.
+  if (!showAddress) {
+    const q = encodeURIComponent(`${neighborhood}, ${city}, ${state}, México`);
+    if (googleKey) {
+      return `https://www.google.com/maps/embed/v1/place?key=${googleKey}&q=${q}&zoom=14`;
+    }
+    return `https://www.openstreetmap.org/export/embed.html?bbox=-99.3,19.2,-99.0,19.55&layer=mapnik&query=${q}`;
+  }
   if (googleKey) {
     if (lat && lng) {
       return `https://www.google.com/maps/embed/v1/view?key=${googleKey}&center=${lat},${lng}&zoom=16&maptype=roadmap`;
@@ -248,14 +304,25 @@ const demoPropertyData: Property = {
   operation: "VENTA",
   status: "PUBLICADO",
   price: 8500000,
+  price_sale: 8500000,
+  price_rent: null,
   currency: "MXN",
   accepts_crypto: true,
+  show_price: true,
   area_total: 450,
   area_built: 320,
   bedrooms: 4,
   bathrooms: 3,
+  half_bathrooms: 1,
   parking_spaces: 4,
   floors: 2,
+  floor_number: null,
+  maintenance_fee: null,
+  has_service_room: true,
+  has_storage: true,
+  has_terrace: true,
+  has_laundry_room: true,
+  has_integrated_kitchen: true,
   address_line: "Bosques de las Lomas",
   neighborhood: "Bosques de las Lomas",
   city: "Ciudad de México",
@@ -263,6 +330,7 @@ const demoPropertyData: Property = {
   zip_code: "11700",
   latitude: 19.3795,
   longitude: -99.2635,
+  show_address: true,
   amenities: [
     "Alberca",
     "Jardín",
@@ -686,9 +754,12 @@ export default function PropertyDetailPage() {
   if (notFound || !property) return <NotFoundView />;
 
   const isBrcCertified = property.brc_status === "CERTIFICADO";
-  const priceLabel = `${formatPrice(property.price, property.currency)} ${property.currency}`;
-  const operationSuffix = property.operation === "RENTA" ? "/mes" : "";
-  const locationText = [property.address_line, property.neighborhood, property.city, property.zip_code ? `C.P. ${property.zip_code}` : ""].filter(Boolean).join(", ");
+  const priceRender = renderPrice(property);
+  // Honor the owner's privacy choice: when show_address is false, expose
+  // only colonia + ciudad — never street/door or zip.
+  const locationText = property.show_address
+    ? [property.address_line, property.neighborhood, property.city, property.zip_code ? `C.P. ${property.zip_code}` : ""].filter(Boolean).join(", ")
+    : [property.neighborhood, property.city].filter(Boolean).join(", ");
   const ownerName = owner ? `${owner.first_name ?? ""} ${owner.last_name ?? ""}`.trim() : "Asesor";
 
   return (
@@ -886,16 +957,30 @@ export default function PropertyDetailPage() {
                 <span className="text-sm">{locationText}</span>
               </div>
               <div className="mt-4 flex flex-wrap items-center gap-4">
-                <p
-                  className="text-3xl font-bold"
-                  style={{
-                    background: 'linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-                  }}
-                >
-                  {priceLabel}{operationSuffix}
-                </p>
+                <div className="flex flex-col">
+                  {priceRender.lines.map((line, i) => (
+                    <p
+                      key={i}
+                      className={priceRender.consult ? "text-2xl font-bold text-muted-foreground" : "text-3xl font-bold"}
+                      style={
+                        priceRender.consult
+                          ? undefined
+                          : {
+                              background: 'linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))',
+                              WebkitBackgroundClip: 'text',
+                              WebkitTextFillColor: 'transparent',
+                            }
+                      }
+                    >
+                      {line.amount}
+                      {line.suffix && (
+                        <span className="text-sm font-medium text-muted-foreground" style={{ WebkitTextFillColor: 'initial', background: 'none' }}>
+                          {line.suffix}
+                        </span>
+                      )}
+                    </p>
+                  ))}
+                </div>
                 {property.published_at && (
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Calendar className="h-3.5 w-3.5" />
@@ -1042,23 +1127,100 @@ export default function PropertyDetailPage() {
                 </div>
               </TabsContent>
 
-              <TabsContent value="caracteristicas" className="mt-6">
-                {amenities.length > 0 ? (
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {amenities.map((amenity) => (
-                      <div
-                        key={amenity}
-                        className="flex items-center gap-2.5 rounded-xl bg-muted/30 px-4 py-3 transition-colors hover:bg-muted/50"
-                      >
-                        <div className="h-5 w-5 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
-                          <Check className="h-3 w-3 text-accent" />
-                        </div>
-                        <span className="text-sm">{amenity}</span>
+              <TabsContent value="caracteristicas" className="mt-6 space-y-6">
+                {/* Numeric details */}
+                {(() => {
+                  const numericRows: { label: string; value: string }[] = [];
+                  if (property.type === "CASA") {
+                    if (property.area_total) numericRows.push({ label: "m² de terreno", value: `${property.area_total} m²` });
+                    if (property.area_built) numericRows.push({ label: "m² de construcción", value: `${property.area_built} m²` });
+                  } else if (property.type === "DEPARTAMENTO") {
+                    if (property.area_built) numericRows.push({ label: "Área construida", value: `${property.area_built} m²` });
+                    if (property.area_total) numericRows.push({ label: "Área total", value: `${property.area_total} m²` });
+                  } else {
+                    if (property.area_total) numericRows.push({ label: "Área total", value: `${property.area_total} m²` });
+                    if (property.area_built) numericRows.push({ label: "Área construida", value: `${property.area_built} m²` });
+                  }
+                  if (property.bedrooms != null) numericRows.push({ label: "Recámaras", value: String(property.bedrooms) });
+                  if (property.bathrooms != null) numericRows.push({ label: "Baños completos", value: String(property.bathrooms) });
+                  if (property.half_bathrooms != null) numericRows.push({ label: "Medios baños", value: String(property.half_bathrooms) });
+                  if (property.parking_spaces != null) numericRows.push({ label: "Estacionamientos", value: String(property.parking_spaces) });
+                  if (property.floors != null) numericRows.push({ label: property.type === "DEPARTAMENTO" ? "Niveles del depto" : "Niveles", value: String(property.floors) });
+                  if (property.type === "DEPARTAMENTO" && property.floor_number != null) {
+                    numericRows.push({ label: "Piso", value: String(property.floor_number) });
+                  }
+                  if (property.type === "DEPARTAMENTO" && property.maintenance_fee != null) {
+                    numericRows.push({
+                      label: "Cuota de mantenimiento",
+                      value: `${formatPrice(property.maintenance_fee, property.currency || "MXN")} ${property.currency || "MXN"}`,
+                    });
+                  }
+                  if (numericRows.length === 0) return null;
+                  return (
+                    <div>
+                      <h4 className="mb-3 text-sm font-semibold">Detalles</h4>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {numericRows.map((row) => (
+                          <div
+                            key={row.label}
+                            className="flex items-center justify-between rounded-xl bg-muted/30 px-4 py-3"
+                          >
+                            <span className="text-sm text-muted-foreground">{row.label}</span>
+                            <span className="text-sm font-semibold">{row.value}</span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    </div>
+                  );
+                })()}
+
+                {/* Private features */}
+                {(() => {
+                  const features: string[] = [];
+                  if (property.has_service_room) features.push("Cuarto de servicio");
+                  if (property.has_storage) features.push("Bodega");
+                  if (property.has_terrace) features.push("Terraza");
+                  if (property.has_laundry_room) features.push("Cuarto de lavado");
+                  if (property.has_integrated_kitchen) features.push("Cocina integral");
+                  if (features.length === 0) return null;
+                  return (
+                    <div>
+                      <h4 className="mb-3 text-sm font-semibold">Características del inmueble</h4>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {features.map((feature) => (
+                          <div
+                            key={feature}
+                            className="flex items-center gap-2.5 rounded-xl bg-muted/30 px-4 py-3 transition-colors hover:bg-muted/50"
+                          >
+                            <div className="h-5 w-5 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
+                              <Check className="h-3 w-3 text-accent" />
+                            </div>
+                            <span className="text-sm">{feature}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Common areas / amenities */}
+                {amenities.length > 0 && (
+                  <div>
+                    <h4 className="mb-3 text-sm font-semibold">Amenidades / Áreas comunes</h4>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {amenities.map((amenity) => (
+                        <div
+                          key={amenity}
+                          className="flex items-center gap-2.5 rounded-xl bg-muted/30 px-4 py-3 transition-colors hover:bg-muted/50"
+                        >
+                          <div className="h-5 w-5 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
+                            <Check className="h-3 w-3 text-accent" />
+                          </div>
+                          <span className="text-sm">{amenity}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">No hay características registradas.</p>
                 )}
               </TabsContent>
 
@@ -1071,6 +1233,7 @@ export default function PropertyDetailPage() {
                       property.neighborhood,
                       property.city,
                       property.state,
+                      property.show_address,
                     )}
                     width="100%"
                     height="350"

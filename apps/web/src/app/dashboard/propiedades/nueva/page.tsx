@@ -33,16 +33,21 @@ import {
 /* ------------------------------------------------------------------ */
 
 const PROPERTY_TYPES = [
-  "Casa",
-  "Departamento",
-  "Terreno",
-  "Oficina",
-  "Local Comercial",
-  "Bodega",
-  "Otro",
+  { value: "CASA", label: "Casa" },
+  { value: "DEPARTAMENTO", label: "Departamento" },
+  { value: "TERRENO", label: "Terreno" },
+  { value: "OFICINA", label: "Oficina" },
+  { value: "LOCAL_COMERCIAL", label: "Local Comercial" },
+  { value: "BODEGA", label: "Bodega" },
+  { value: "OTRO", label: "Otro" },
 ] as const;
 
-const OPERATION_TYPES = ["Venta", "Renta", "Traspaso"] as const;
+const OPERATION_TYPES = [
+  { value: "VENTA", label: "Venta" },
+  { value: "RENTA", label: "Renta" },
+  { value: "VENTA_RENTA", label: "Venta y Renta" },
+  { value: "TRASPASO", label: "Traspaso" },
+] as const;
 
 const CURRENCIES = ["MXN", "USD", "EUR"] as const;
 const CRYPTOS = [
@@ -86,24 +91,43 @@ const MEXICAN_STATES = [
   "Zacatecas",
 ] as const;
 
-const AMENITIES = [
+/**
+ * Common areas / amenities — these are SHARED building amenities, not
+ * private features of the unit. Private features (cuarto de servicio,
+ * bodega, terraza, cuarto de lavado, cocina integral) are dedicated
+ * booleans below.
+ */
+const COMMON_AREAS = [
   "Alberca",
   "Jardín",
   "Gimnasio",
   "Seguridad 24/7",
-  "Estacionamiento techado",
-  "Cuarto de servicio",
-  "Bodega",
-  "Terraza",
+  "Estacionamiento techado para visitas",
   "Sistema de alarma",
-  "Cocina integral",
   "Elevador",
   "Roof garden",
   "Área de BBQ",
   "Sala de cine",
-  "Cuarto de lavado",
   "Pet friendly",
+  "Salón de eventos",
+  "Cancha deportiva",
+  "Área de juegos infantiles",
 ] as const;
+
+type PrivateFeatureKey =
+  | "has_service_room"
+  | "has_storage"
+  | "has_terrace"
+  | "has_laundry_room"
+  | "has_integrated_kitchen";
+
+const PRIVATE_FEATURES: { key: PrivateFeatureKey; label: string }[] = [
+  { key: "has_service_room", label: "Cuarto de servicio" },
+  { key: "has_storage", label: "Bodega" },
+  { key: "has_terrace", label: "Terraza" },
+  { key: "has_laundry_room", label: "Cuarto de lavado" },
+  { key: "has_integrated_kitchen", label: "Cocina integral" },
+];
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -113,15 +137,21 @@ function slugify(text: string): string {
   return text
     .toString()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 }
 
+function asNum(s: string): number | null {
+  if (!s.trim()) return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
 /* ------------------------------------------------------------------ */
-/*  Form state interface                                               */
+/*  Form state                                                         */
 /* ------------------------------------------------------------------ */
 
 interface FormData {
@@ -129,21 +159,32 @@ interface FormData {
   descripcion: string;
   tipo_propiedad: string;
   tipo_operacion: string;
-  precio: string;
+  precio_venta: string;
+  precio_renta: string;
   moneda: string;
   acepta_crypto: boolean;
   cryptos_aceptadas: string[];
+  show_price: boolean;
   area_total: string;
   area_construida: string;
   recamaras: string;
   banos: string;
+  medios_banos: string;
   estacionamientos: string;
-  pisos: string;
+  niveles: string;
+  piso: string;
+  cuota_mantenimiento: string;
+  has_service_room: boolean;
+  has_storage: boolean;
+  has_terrace: boolean;
+  has_laundry_room: boolean;
+  has_integrated_kitchen: boolean;
   direccion: string;
   colonia: string;
   ciudad: string;
   estado: string;
   codigo_postal: string;
+  show_address: boolean;
   amenidades: string[];
 }
 
@@ -152,21 +193,32 @@ const initialFormData: FormData = {
   descripcion: "",
   tipo_propiedad: "",
   tipo_operacion: "",
-  precio: "",
+  precio_venta: "",
+  precio_renta: "",
   moneda: "MXN",
   acepta_crypto: false,
   cryptos_aceptadas: [],
+  show_price: true,
   area_total: "",
   area_construida: "",
   recamaras: "",
   banos: "",
+  medios_banos: "",
   estacionamientos: "",
-  pisos: "",
+  niveles: "",
+  piso: "",
+  cuota_mantenimiento: "",
+  has_service_room: false,
+  has_storage: false,
+  has_terrace: false,
+  has_laundry_room: false,
+  has_integrated_kitchen: false,
   direccion: "",
   colonia: "",
   ciudad: "",
   estado: "",
   codigo_postal: "",
+  show_address: true,
   amenidades: [],
 };
 
@@ -176,21 +228,67 @@ const initialFormData: FormData = {
 
 function SectionCard({
   title,
+  subtitle,
   children,
 }: {
   title: string;
+  subtitle?: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm sm:p-8">
       <h3
-        className="mb-6 text-lg font-bold text-gray-900"
+        className="text-lg font-bold text-gray-900"
         style={{ fontFamily: "Barlow, Inter, sans-serif" }}
       >
         {title}
       </h3>
+      {subtitle && (
+        <p className="mt-1 mb-5 text-xs text-gray-500">{subtitle}</p>
+      )}
+      {!subtitle && <div className="mb-5" />}
       {children}
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Toggle switch (small reusable)                                     */
+/* ------------------------------------------------------------------ */
+
+function Toggle({
+  checked,
+  onChange,
+  label,
+  hint,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+  hint?: string;
+}) {
+  return (
+    <label className="flex cursor-pointer items-start gap-3">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className={`relative mt-0.5 inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ${
+          checked ? "bg-emerald-500" : "bg-gray-200"
+        }`}
+      >
+        <span
+          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition-transform duration-200 ${
+            checked ? "translate-x-5" : "translate-x-0"
+          }`}
+        />
+      </button>
+      <span className="text-sm">
+        <span className="block font-medium text-gray-700">{label}</span>
+        {hint && <span className="block text-xs text-gray-500">{hint}</span>}
+      </span>
+    </label>
   );
 }
 
@@ -210,6 +308,16 @@ export default function NuevaPropiedadPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+
+  const isCasa = form.tipo_propiedad === "CASA";
+  const isDepto = form.tipo_propiedad === "DEPARTAMENTO";
+  const isResidential = isCasa || isDepto;
+  const hasSale =
+    form.tipo_operacion === "VENTA" ||
+    form.tipo_operacion === "VENTA_RENTA" ||
+    form.tipo_operacion === "TRASPASO";
+  const hasRent =
+    form.tipo_operacion === "RENTA" || form.tipo_operacion === "VENTA_RENTA";
 
   /* ---- Field helpers ---- */
 
@@ -298,10 +406,31 @@ export default function NuevaPropiedadPage() {
 
   function validate(): string | null {
     if (!form.titulo.trim()) return "El título es obligatorio.";
-    if (!form.descripcion.trim()) return "La descripción es obligatoria.";
-    if (!form.tipo_propiedad) return "Selecciona el tipo de propiedad.";
+    if (!form.tipo_propiedad) return "Selecciona el tipo de inmueble.";
     if (!form.tipo_operacion) return "Selecciona el tipo de operación.";
-    if (!form.precio || Number(form.precio) <= 0) return "Ingresa un precio válido.";
+    if (!form.descripcion.trim()) return "La descripción es obligatoria.";
+
+    if (hasSale && (!form.precio_venta || Number(form.precio_venta) <= 0)) {
+      return "Ingresa un precio de venta válido.";
+    }
+    if (hasRent && (!form.precio_renta || Number(form.precio_renta) <= 0)) {
+      return "Ingresa un precio de renta válido.";
+    }
+
+    if (isCasa) {
+      if (!form.area_total || Number(form.area_total) <= 0) {
+        return "Ingresa los m² de terreno.";
+      }
+      if (!form.area_construida || Number(form.area_construida) <= 0) {
+        return "Ingresa los m² de construcción.";
+      }
+    }
+    if (isDepto) {
+      if (!form.area_construida || Number(form.area_construida) <= 0) {
+        return "Ingresa el área construida.";
+      }
+    }
+
     if (!form.ciudad.trim()) return "La ciudad es obligatoria.";
     if (!form.estado) return "Selecciona el estado.";
     if (form.codigo_postal && !/^\d{5}$/.test(form.codigo_postal)) {
@@ -363,7 +492,13 @@ export default function NuevaPropiedadPage() {
         }
       }
 
-      // Insert property first to get ID
+      const price_sale = hasSale ? asNum(form.precio_venta) : null;
+      const price_rent = hasRent ? asNum(form.precio_renta) : null;
+      // Legacy `price` column is NOT NULL in older rows but we made it
+      // nullable in v2; we still fall back to whichever is set so legacy
+      // listings keep displaying a single price.
+      const legacyPrice = price_sale ?? price_rent;
+
       const { data: property, error: insertError } = await supabase
         .from("properties")
         .insert({
@@ -371,17 +506,28 @@ export default function NuevaPropiedadPage() {
           title: form.titulo,
           slug,
           description: form.descripcion,
-          type: form.tipo_propiedad.toUpperCase(),
-          operation: form.tipo_operacion.toUpperCase(),
-          price: Number(form.precio),
+          type: form.tipo_propiedad,
+          operation: form.tipo_operacion,
+          price: legacyPrice,
+          price_sale,
+          price_rent,
           currency: form.moneda,
           accepts_crypto: form.acepta_crypto,
-          area_total: form.area_total ? Number(form.area_total) : null,
-          area_built: form.area_construida ? Number(form.area_construida) : null,
-          bedrooms: form.recamaras ? Number(form.recamaras) : null,
-          bathrooms: form.banos ? Number(form.banos) : null,
-          parking_spaces: form.estacionamientos ? Number(form.estacionamientos) : null,
-          floors: form.pisos ? Number(form.pisos) : null,
+          show_price: form.show_price,
+          area_total: asNum(form.area_total),
+          area_built: asNum(form.area_construida),
+          bedrooms: asNum(form.recamaras),
+          bathrooms: asNum(form.banos),
+          half_bathrooms: asNum(form.medios_banos),
+          parking_spaces: asNum(form.estacionamientos),
+          floors: asNum(form.niveles),
+          floor_number: isDepto ? asNum(form.piso) : null,
+          maintenance_fee: isDepto ? asNum(form.cuota_mantenimiento) : null,
+          has_service_room: form.has_service_room,
+          has_storage: form.has_storage,
+          has_terrace: form.has_terrace,
+          has_laundry_room: form.has_laundry_room,
+          has_integrated_kitchen: form.has_integrated_kitchen,
           address_line: form.direccion || null,
           neighborhood: form.colonia || null,
           city: form.ciudad,
@@ -389,6 +535,7 @@ export default function NuevaPropiedadPage() {
           zip_code: form.codigo_postal || null,
           latitude,
           longitude,
+          show_address: form.show_address,
           amenities: form.amenidades,
           status: status === "publicado" ? "PUBLICADO" : "BORRADOR",
           published_at: status === "publicado" ? new Date().toISOString() : null,
@@ -445,9 +592,7 @@ export default function NuevaPropiedadPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-8 pb-12">
-      {/* ============================================================ */}
-      {/*  Header                                                       */}
-      {/* ============================================================ */}
+      {/* Header */}
       <div>
         <Link
           href="/dashboard/propiedades"
@@ -467,9 +612,7 @@ export default function NuevaPropiedadPage() {
         </p>
       </div>
 
-      {/* ============================================================ */}
-      {/*  Status messages                                              */}
-      {/* ============================================================ */}
+      {/* Status messages */}
       {error && (
         <div className="flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-medium text-red-700">
           <AlertCircle className="h-5 w-5 flex-shrink-0" />
@@ -501,24 +644,10 @@ export default function NuevaPropiedadPage() {
             />
           </div>
 
-          <div>
-            <Label htmlFor="descripcion" className="mb-1.5 block text-gray-700">
-              Descripción <span className="text-red-500">*</span>
-            </Label>
-            <Textarea
-              id="descripcion"
-              placeholder="Describe las características principales, acabados, distribución y atractivos de la propiedad..."
-              value={form.descripcion}
-              onChange={(e) => updateField("descripcion", e.target.value)}
-              rows={6}
-              className="rounded-xl"
-            />
-          </div>
-
           <div className="grid gap-5 sm:grid-cols-2">
             <div>
               <Label className="mb-1.5 block text-gray-700">
-                Tipo de propiedad <span className="text-red-500">*</span>
+                Tipo de inmueble <span className="text-red-500">*</span>
               </Label>
               <Select
                 value={form.tipo_propiedad}
@@ -528,9 +657,9 @@ export default function NuevaPropiedadPage() {
                   <SelectValue placeholder="Seleccionar tipo" />
                 </SelectTrigger>
                 <SelectContent>
-                  {PROPERTY_TYPES.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {type}
+                  {PROPERTY_TYPES.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>
+                      {t.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -549,14 +678,28 @@ export default function NuevaPropiedadPage() {
                   <SelectValue placeholder="Seleccionar operación" />
                 </SelectTrigger>
                 <SelectContent>
-                  {OPERATION_TYPES.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {type}
+                  {OPERATION_TYPES.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          <div>
+            <Label htmlFor="descripcion" className="mb-1.5 block text-gray-700">
+              Descripción <span className="text-red-500">*</span>
+            </Label>
+            <Textarea
+              id="descripcion"
+              placeholder="Describe las características principales, acabados, distribución y atractivos de la propiedad..."
+              value={form.descripcion}
+              onChange={(e) => updateField("descripcion", e.target.value)}
+              rows={6}
+              className="rounded-xl"
+            />
           </div>
         </div>
       </SectionCard>
@@ -564,207 +707,434 @@ export default function NuevaPropiedadPage() {
       {/* ============================================================ */}
       {/*  Precio                                                       */}
       {/* ============================================================ */}
-      <SectionCard title="Precio">
-        <div className="grid gap-5 sm:grid-cols-3">
-          <div className="sm:col-span-1">
-            <Label htmlFor="precio" className="mb-1.5 block text-gray-700">
-              Precio <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id="precio"
-              type="number"
-              placeholder="0"
-              min={0}
-              value={form.precio}
-              onChange={(e) => updateField("precio", e.target.value)}
-              className="rounded-xl"
-            />
-          </div>
-
-          <div>
-            <Label className="mb-1.5 block text-gray-700">Moneda</Label>
-            <Select
-              value={form.moneda}
-              onValueChange={(v) => updateField("moneda", v)}
-            >
-              <SelectTrigger className="rounded-xl">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {CURRENCIES.map((c) => (
-                  <SelectItem key={c} value={c}>
-                    {c}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex items-end">
-            <label className="flex cursor-pointer items-center gap-3">
-              <button
-                type="button"
-                role="switch"
-                aria-checked={form.acepta_crypto}
-                onClick={() => updateField("acepta_crypto", !form.acepta_crypto)}
-                className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ${
-                  form.acepta_crypto ? "bg-emerald-500" : "bg-gray-200"
-                }`}
-              >
-                <span
-                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition-transform duration-200 ${
-                    form.acepta_crypto ? "translate-x-5" : "translate-x-0"
-                  }`}
+      <SectionCard
+        title="Precio"
+        subtitle="Si desactivas la publicación del precio, los visitantes verán 'Precio a consultar'."
+      >
+        <div className="space-y-5">
+          <div className="grid gap-5 sm:grid-cols-3">
+            {hasSale && (
+              <div>
+                <Label htmlFor="precio_venta" className="mb-1.5 block text-gray-700">
+                  Precio de venta <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="precio_venta"
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.precio_venta}
+                  onChange={(e) => updateField("precio_venta", e.target.value)}
+                  className="rounded-xl"
                 />
-              </button>
-              <span className="text-sm font-medium text-gray-700">
-                Acepta criptomonedas
-              </span>
-            </label>
-          </div>
-        </div>
+              </div>
+            )}
 
-        {/* Crypto selection */}
-        {form.acepta_crypto && (
-          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-            <p className="text-sm font-semibold text-gray-700 mb-3">¿Qué criptomonedas acepta?</p>
-            <div className="flex flex-wrap gap-3">
-              {CRYPTOS.map((crypto) => {
-                const selected = form.cryptos_aceptadas.includes(crypto.id);
-                return (
-                  <button
-                    key={crypto.id}
-                    type="button"
-                    onClick={() => {
-                      const updated = selected
-                        ? form.cryptos_aceptadas.filter((c) => c !== crypto.id)
-                        : [...form.cryptos_aceptadas, crypto.id];
-                      updateField("cryptos_aceptadas", updated);
-                    }}
-                    className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-200 ${
-                      selected
-                        ? "bg-emerald-500 text-white shadow-sm"
-                        : "bg-white border border-gray-200 text-gray-600 hover:border-emerald-300"
-                    }`}
-                  >
-                    {crypto.id === "BTC" && "₿"}
-                    {crypto.id === "ETH" && "Ξ"}
-                    {crypto.id === "USDC" && "$"}
-                    {crypto.label}
-                  </button>
-                );
-              })}
+            {hasRent && (
+              <div>
+                <Label htmlFor="precio_renta" className="mb-1.5 block text-gray-700">
+                  Precio de renta (mensual) <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="precio_renta"
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.precio_renta}
+                  onChange={(e) => updateField("precio_renta", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+            )}
+
+            <div>
+              <Label className="mb-1.5 block text-gray-700">Moneda</Label>
+              <Select
+                value={form.moneda}
+                onValueChange={(v) => updateField("moneda", v)}
+              >
+                <SelectTrigger className="rounded-xl">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CURRENCIES.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {c}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
-        )}
-      </SectionCard>
 
-      {/* ============================================================ */}
-      {/*  Características                                              */}
-      {/* ============================================================ */}
-      <SectionCard title="Características">
-        <div className="grid gap-5 grid-cols-2 lg:grid-cols-3">
-          <div>
-            <Label htmlFor="area_total" className="mb-1.5 block text-gray-700">
-              Área total m²
-            </Label>
-            <Input
-              id="area_total"
-              type="number"
-              placeholder="0"
-              min={0}
-              value={form.area_total}
-              onChange={(e) => updateField("area_total", e.target.value)}
-              className="rounded-xl"
+          <div className="flex flex-col gap-3 rounded-xl bg-gray-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <Toggle
+              checked={form.show_price}
+              onChange={(v) => updateField("show_price", v)}
+              label="Publicar precio"
+              hint="Si lo desactivas, en la propiedad pública aparecerá 'Precio a consultar'."
             />
+
+            {hasSale && (
+              <Toggle
+                checked={form.acepta_crypto}
+                onChange={(v) => updateField("acepta_crypto", v)}
+                label="Acepta criptomonedas"
+              />
+            )}
           </div>
 
-          <div>
-            <Label htmlFor="area_construida" className="mb-1.5 block text-gray-700">
-              Área construida m²
-            </Label>
-            <Input
-              id="area_construida"
-              type="number"
-              placeholder="0"
-              min={0}
-              value={form.area_construida}
-              onChange={(e) => updateField("area_construida", e.target.value)}
-              className="rounded-xl"
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="recamaras" className="mb-1.5 block text-gray-700">
-              Recámaras
-            </Label>
-            <Input
-              id="recamaras"
-              type="number"
-              placeholder="0"
-              min={0}
-              value={form.recamaras}
-              onChange={(e) => updateField("recamaras", e.target.value)}
-              className="rounded-xl"
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="banos" className="mb-1.5 block text-gray-700">
-              Baños
-            </Label>
-            <Input
-              id="banos"
-              type="number"
-              placeholder="0"
-              min={0}
-              step={0.5}
-              value={form.banos}
-              onChange={(e) => updateField("banos", e.target.value)}
-              className="rounded-xl"
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="estacionamientos" className="mb-1.5 block text-gray-700">
-              Estacionamientos
-            </Label>
-            <Input
-              id="estacionamientos"
-              type="number"
-              placeholder="0"
-              min={0}
-              value={form.estacionamientos}
-              onChange={(e) => updateField("estacionamientos", e.target.value)}
-              className="rounded-xl"
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="pisos" className="mb-1.5 block text-gray-700">
-              Pisos
-            </Label>
-            <Input
-              id="pisos"
-              type="number"
-              placeholder="0"
-              min={0}
-              value={form.pisos}
-              onChange={(e) => updateField("pisos", e.target.value)}
-              className="rounded-xl"
-            />
-          </div>
+          {form.acepta_crypto && hasSale && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+              <p className="mb-3 text-sm font-semibold text-gray-700">
+                ¿Qué criptomonedas acepta?
+              </p>
+              <div className="flex flex-wrap gap-3">
+                {CRYPTOS.map((crypto) => {
+                  const selected = form.cryptos_aceptadas.includes(crypto.id);
+                  return (
+                    <button
+                      key={crypto.id}
+                      type="button"
+                      onClick={() => {
+                        const updated = selected
+                          ? form.cryptos_aceptadas.filter((c) => c !== crypto.id)
+                          : [...form.cryptos_aceptadas, crypto.id];
+                        updateField("cryptos_aceptadas", updated);
+                      }}
+                      className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-200 ${
+                        selected
+                          ? "bg-emerald-500 text-white shadow-sm"
+                          : "border border-gray-200 bg-white text-gray-600 hover:border-emerald-300"
+                      }`}
+                    >
+                      {crypto.id === "BTC" && "₿"}
+                      {crypto.id === "ETH" && "Ξ"}
+                      {crypto.id === "USDC" && "$"}
+                      {crypto.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </SectionCard>
+
+      {/* ============================================================ */}
+      {/*  Características (conditional on type)                        */}
+      {/* ============================================================ */}
+      {form.tipo_propiedad && (
+        <SectionCard title="Características">
+          {/* CASA */}
+          {isCasa && (
+            <div className="grid grid-cols-2 gap-5 lg:grid-cols-3">
+              <div>
+                <Label className="mb-1.5 block text-gray-700">
+                  m² de terreno <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.area_total}
+                  onChange={(e) => updateField("area_total", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">
+                  m² de construcción <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.area_construida}
+                  onChange={(e) => updateField("area_construida", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">Recámaras</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.recamaras}
+                  onChange={(e) => updateField("recamaras", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">Baños completos</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.banos}
+                  onChange={(e) => updateField("banos", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">Medios baños</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.medios_banos}
+                  onChange={(e) => updateField("medios_banos", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">Estacionamientos</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.estacionamientos}
+                  onChange={(e) => updateField("estacionamientos", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">Niveles</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.niveles}
+                  onChange={(e) => updateField("niveles", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* DEPARTAMENTO */}
+          {isDepto && (
+            <div className="grid grid-cols-2 gap-5 lg:grid-cols-3">
+              <div>
+                <Label className="mb-1.5 block text-gray-700">
+                  Área construida (m²) <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.area_construida}
+                  onChange={(e) => updateField("area_construida", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">
+                  Área total (m²){" "}
+                  <span className="text-xs font-normal text-gray-400">(opcional)</span>
+                </Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.area_total}
+                  onChange={(e) => updateField("area_total", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">Recámaras</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.recamaras}
+                  onChange={(e) => updateField("recamaras", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">Baños completos</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.banos}
+                  onChange={(e) => updateField("banos", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">Medios baños</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.medios_banos}
+                  onChange={(e) => updateField("medios_banos", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">Estacionamientos</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.estacionamientos}
+                  onChange={(e) => updateField("estacionamientos", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">Niveles del depto</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.niveles}
+                  onChange={(e) => updateField("niveles", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">
+                  Piso en el que está{" "}
+                  <span className="text-xs font-normal text-gray-400">(opcional)</span>
+                </Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.piso}
+                  onChange={(e) => updateField("piso", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">
+                  Cuota de mantenimiento (MXN){" "}
+                  <span className="text-xs font-normal text-gray-400">(opcional)</span>
+                </Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.cuota_mantenimiento}
+                  onChange={(e) => updateField("cuota_mantenimiento", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Fallback for non-residential types */}
+          {!isCasa && !isDepto && (
+            <div className="grid grid-cols-2 gap-5 lg:grid-cols-3">
+              <div>
+                <Label className="mb-1.5 block text-gray-700">Área total (m²)</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.area_total}
+                  onChange={(e) => updateField("area_total", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">Área construida (m²)</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.area_construida}
+                  onChange={(e) => updateField("area_construida", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">Estacionamientos</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.estacionamientos}
+                  onChange={(e) => updateField("estacionamientos", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+            </div>
+          )}
+        </SectionCard>
+      )}
+
+      {/* ============================================================ */}
+      {/*  Características del inmueble (private features, residential) */}
+      {/* ============================================================ */}
+      {isResidential && (
+        <SectionCard
+          title="Características del inmueble"
+          subtitle="Espacios privados del inmueble (no son áreas comunes del edificio)."
+        >
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            {PRIVATE_FEATURES.map(({ key, label }) => {
+              const checked = form[key];
+              return (
+                <label
+                  key={key}
+                  className={`flex cursor-pointer items-center gap-2.5 rounded-xl border px-4 py-3 text-sm font-medium transition-all duration-200 ${
+                    checked
+                      ? "border-blue-300 bg-blue-50 text-blue-700"
+                      : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => updateField(key, !checked)}
+                    className="sr-only"
+                  />
+                  <div
+                    className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md border-2 transition-colors duration-200 ${
+                      checked
+                        ? "border-blue-500 bg-blue-500"
+                        : "border-gray-300 bg-white"
+                    }`}
+                  >
+                    {checked && (
+                      <svg className="h-3 w-3 text-white" viewBox="0 0 12 12" fill="none">
+                        <path
+                          d="M10 3L4.5 8.5L2 6"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    )}
+                  </div>
+                  <span className="leading-tight">{label}</span>
+                </label>
+              );
+            })}
+          </div>
+        </SectionCard>
+      )}
 
       {/* ============================================================ */}
       {/*  Ubicación                                                    */}
       {/* ============================================================ */}
-      <SectionCard title="Ubicación">
+      <SectionCard
+        title="Ubicación"
+        subtitle="La dirección exacta solo se usa para geolocalizar. Puedes ocultarla del público y mostrar solo colonia y ciudad."
+      >
         <div className="space-y-5">
           <div>
             <Label htmlFor="direccion" className="mb-1.5 block text-gray-700">
-              Dirección
+              Dirección{" "}
+              <span className="text-xs font-normal text-gray-400">(uso interno)</span>
             </Label>
             <Input
               id="direccion"
@@ -808,10 +1178,7 @@ export default function NuevaPropiedadPage() {
               <Label className="mb-1.5 block text-gray-700">
                 Estado <span className="text-red-500">*</span>
               </Label>
-              <Select
-                value={form.estado}
-                onValueChange={(v) => updateField("estado", v)}
-              >
+              <Select value={form.estado} onValueChange={(v) => updateField("estado", v)}>
                 <SelectTrigger className="rounded-xl">
                   <SelectValue placeholder="Seleccionar estado" />
                 </SelectTrigger>
@@ -842,15 +1209,27 @@ export default function NuevaPropiedadPage() {
               />
             </div>
           </div>
+
+          <div className="rounded-xl bg-gray-50 p-4">
+            <Toggle
+              checked={form.show_address}
+              onChange={(v) => updateField("show_address", v)}
+              label="Mostrar dirección exacta al público"
+              hint="Si lo desactivas, los visitantes solo verán colonia y ciudad, y el mapa centrará en la colonia."
+            />
+          </div>
         </div>
       </SectionCard>
 
       {/* ============================================================ */}
-      {/*  Amenidades                                                   */}
+      {/*  Amenidades / Áreas comunes                                   */}
       {/* ============================================================ */}
-      <SectionCard title="Amenidades">
+      <SectionCard
+        title="Amenidades / Áreas comunes"
+        subtitle="Áreas y servicios compartidos del edificio o fraccionamiento."
+      >
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {AMENITIES.map((amenity) => {
+          {COMMON_AREAS.map((amenity) => {
             const checked = form.amenidades.includes(amenity);
             return (
               <label
@@ -869,17 +1248,11 @@ export default function NuevaPropiedadPage() {
                 />
                 <div
                   className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md border-2 transition-colors duration-200 ${
-                    checked
-                      ? "border-blue-500 bg-blue-500"
-                      : "border-gray-300 bg-white"
+                    checked ? "border-blue-500 bg-blue-500" : "border-gray-300 bg-white"
                   }`}
                 >
                   {checked && (
-                    <svg
-                      className="h-3 w-3 text-white"
-                      viewBox="0 0 12 12"
-                      fill="none"
-                    >
+                    <svg className="h-3 w-3 text-white" viewBox="0 0 12 12" fill="none">
                       <path
                         d="M10 3L4.5 8.5L2 6"
                         stroke="currentColor"
@@ -902,7 +1275,6 @@ export default function NuevaPropiedadPage() {
       {/* ============================================================ */}
       <SectionCard title="Imágenes">
         <div className="space-y-5">
-          {/* Drop zone */}
           <div
             onDragOver={(e) => {
               e.preventDefault();
@@ -945,7 +1317,6 @@ export default function NuevaPropiedadPage() {
             />
           </div>
 
-          {/* Preview grid */}
           {imagePreviews.length > 0 && (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
               {imagePreviews.map((src, idx) => (
@@ -953,12 +1324,7 @@ export default function NuevaPropiedadPage() {
                   key={idx}
                   className="group relative aspect-[4/3] overflow-hidden rounded-xl border border-gray-200 bg-gray-100"
                 >
-                  <Image
-                    src={src}
-                    alt={`Imagen ${idx + 1}`}
-                    fill
-                    className="object-cover"
-                  />
+                  <Image src={src} alt={`Imagen ${idx + 1}`} fill className="object-cover" />
                   {idx === 0 && (
                     <span className="absolute left-2 top-2 rounded-lg bg-blue-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
                       Principal
@@ -981,9 +1347,7 @@ export default function NuevaPropiedadPage() {
         </div>
       </SectionCard>
 
-      {/* ============================================================ */}
-      {/*  Action Buttons                                               */}
-      {/* ============================================================ */}
+      {/* Action Buttons */}
       <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
         <button
           type="button"
@@ -1005,8 +1369,7 @@ export default function NuevaPropiedadPage() {
           onClick={() => handleSubmit("publicado")}
           className="inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-bold text-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
           style={{
-            background:
-              "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
+            background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
           }}
         >
           {submitting ? (

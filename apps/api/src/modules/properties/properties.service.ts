@@ -29,7 +29,7 @@ import {
 } from 'class-validator';
 
 const PROPERTY_TYPES = ['CASA', 'DEPARTAMENTO', 'TERRENO', 'OFICINA', 'LOCAL_COMERCIAL', 'BODEGA', 'OTRO'] as const;
-const PROPERTY_OPERATIONS = ['VENTA', 'RENTA', 'VENTA_RENTA'] as const;
+const PROPERTY_OPERATIONS = ['VENTA', 'RENTA', 'VENTA_RENTA', 'TRASPASO'] as const;
 const PROPERTY_STATUSES = ['BORRADOR', 'PENDIENTE', 'PUBLICADO', 'PAUSADO', 'VENDIDO', 'RENTADO'] as const;
 const PROPERTY_BRC_STATUSES = ['SIN_BRC', 'EN_PROCESO', 'CERTIFICADO', 'RECHAZADO'] as const;
 const CURRENCIES = ['MXN', 'USD'] as const;
@@ -45,18 +45,30 @@ export class CreatePropertyDto {
 
   @IsString() @IsIn(PROPERTY_OPERATIONS as unknown as string[]) operation!: string;
 
-  @IsNumber() @Min(0) @Max(1_000_000_000_000) price!: number;
+  @IsOptional() @IsNumber() @Min(0) @Max(1_000_000_000_000) price?: number;
+  @IsOptional() @IsNumber() @Min(0) @Max(1_000_000_000_000) price_sale?: number;
+  @IsOptional() @IsNumber() @Min(0) @Max(1_000_000_000_000) price_rent?: number;
 
   @IsOptional() @IsString() @IsIn(CURRENCIES as unknown as string[]) currency?: string;
 
   @IsOptional() @IsBoolean() accepts_crypto?: boolean;
+  @IsOptional() @IsBoolean() show_price?: boolean;
 
   @IsOptional() @IsNumber() @Min(0) area_total?: number;
   @IsOptional() @IsNumber() @Min(0) area_built?: number;
   @IsOptional() @IsNumber() @Min(0) @Max(100) bedrooms?: number;
   @IsOptional() @IsNumber() @Min(0) @Max(100) bathrooms?: number;
+  @IsOptional() @IsNumber() @Min(0) @Max(100) half_bathrooms?: number;
   @IsOptional() @IsNumber() @Min(0) @Max(100) parking_spaces?: number;
   @IsOptional() @IsNumber() @Min(0) @Max(200) floors?: number;
+  @IsOptional() @IsNumber() @Min(0) @Max(500) floor_number?: number;
+  @IsOptional() @IsNumber() @Min(0) maintenance_fee?: number;
+
+  @IsOptional() @IsBoolean() has_service_room?: boolean;
+  @IsOptional() @IsBoolean() has_storage?: boolean;
+  @IsOptional() @IsBoolean() has_terrace?: boolean;
+  @IsOptional() @IsBoolean() has_laundry_room?: boolean;
+  @IsOptional() @IsBoolean() has_integrated_kitchen?: boolean;
 
   @IsOptional() @IsString() @Length(0, 300) address_line?: string;
   @IsOptional() @IsString() @Length(0, 200) neighborhood?: string;
@@ -69,6 +81,7 @@ export class CreatePropertyDto {
 
   @IsOptional() @IsNumber() @Min(-90) @Max(90) latitude?: number;
   @IsOptional() @IsNumber() @Min(-180) @Max(180) longitude?: number;
+  @IsOptional() @IsBoolean() show_address?: boolean;
 
   @IsOptional() @IsArray() amenities?: unknown[];
 
@@ -82,14 +95,25 @@ export class UpdatePropertyDto {
   @IsOptional() @IsString() @IsIn(PROPERTY_TYPES as unknown as string[]) type?: string;
   @IsOptional() @IsString() @IsIn(PROPERTY_OPERATIONS as unknown as string[]) operation?: string;
   @IsOptional() @IsNumber() @Min(0) @Max(1_000_000_000_000) price?: number;
+  @IsOptional() @IsNumber() @Min(0) @Max(1_000_000_000_000) price_sale?: number;
+  @IsOptional() @IsNumber() @Min(0) @Max(1_000_000_000_000) price_rent?: number;
   @IsOptional() @IsString() @IsIn(CURRENCIES as unknown as string[]) currency?: string;
   @IsOptional() @IsBoolean() accepts_crypto?: boolean;
+  @IsOptional() @IsBoolean() show_price?: boolean;
   @IsOptional() @IsNumber() @Min(0) area_total?: number;
   @IsOptional() @IsNumber() @Min(0) area_built?: number;
   @IsOptional() @IsNumber() @Min(0) @Max(100) bedrooms?: number;
   @IsOptional() @IsNumber() @Min(0) @Max(100) bathrooms?: number;
+  @IsOptional() @IsNumber() @Min(0) @Max(100) half_bathrooms?: number;
   @IsOptional() @IsNumber() @Min(0) @Max(100) parking_spaces?: number;
   @IsOptional() @IsNumber() @Min(0) @Max(200) floors?: number;
+  @IsOptional() @IsNumber() @Min(0) @Max(500) floor_number?: number;
+  @IsOptional() @IsNumber() @Min(0) maintenance_fee?: number;
+  @IsOptional() @IsBoolean() has_service_room?: boolean;
+  @IsOptional() @IsBoolean() has_storage?: boolean;
+  @IsOptional() @IsBoolean() has_terrace?: boolean;
+  @IsOptional() @IsBoolean() has_laundry_room?: boolean;
+  @IsOptional() @IsBoolean() has_integrated_kitchen?: boolean;
   @IsOptional() @IsString() @Length(0, 300) address_line?: string;
   @IsOptional() @IsString() @Length(0, 200) neighborhood?: string;
   @IsOptional() @IsString() @Length(1, 100) city?: string;
@@ -98,6 +122,7 @@ export class UpdatePropertyDto {
   @IsOptional() @IsString() @Length(0, 100) country?: string;
   @IsOptional() @IsNumber() @Min(-90) @Max(90) latitude?: number;
   @IsOptional() @IsNumber() @Min(-180) @Max(180) longitude?: number;
+  @IsOptional() @IsBoolean() show_address?: boolean;
   @IsOptional() @IsArray() amenities?: unknown[];
   @IsOptional() @IsUrl({ require_tld: false }) featured_image_url?: string;
 }
@@ -194,15 +219,26 @@ export class PropertiesService {
         description: dto.description ?? null,
         type: dto.type,
         operation: dto.operation,
-        price: dto.price,
+        price: dto.price ?? null,
+        price_sale: dto.price_sale ?? null,
+        price_rent: dto.price_rent ?? null,
         currency: dto.currency ?? 'MXN',
         accepts_crypto: dto.accepts_crypto ?? false,
+        show_price: dto.show_price ?? true,
         area_total: dto.area_total ?? null,
         area_built: dto.area_built ?? null,
         bedrooms: dto.bedrooms ?? null,
         bathrooms: dto.bathrooms ?? null,
+        half_bathrooms: dto.half_bathrooms ?? null,
         parking_spaces: dto.parking_spaces ?? null,
         floors: dto.floors ?? null,
+        floor_number: dto.floor_number ?? null,
+        maintenance_fee: dto.maintenance_fee ?? null,
+        has_service_room: dto.has_service_room ?? false,
+        has_storage: dto.has_storage ?? false,
+        has_terrace: dto.has_terrace ?? false,
+        has_laundry_room: dto.has_laundry_room ?? false,
+        has_integrated_kitchen: dto.has_integrated_kitchen ?? false,
         address_line: dto.address_line ?? null,
         neighborhood: dto.neighborhood ?? null,
         city: dto.city,
@@ -211,6 +247,7 @@ export class PropertiesService {
         country: dto.country ?? 'MX',
         latitude: dto.latitude ?? null,
         longitude: dto.longitude ?? null,
+        show_address: dto.show_address ?? true,
         amenities: dto.amenities ?? [],
         featured_image_url: dto.featured_image_url ?? null,
       })
