@@ -8,8 +8,13 @@ export interface Profile {
   email: string;
   role: UserRole;
   first_name: string;
-  last_name: string;
+  last_name: string | null;
   phone: string | null;
+  /** Broker extras (since signup v2). All nullable. */
+  rfc: string | null;
+  address_line: string | null;
+  secondary_email: string | null;
+  secondary_phone: string | null;
   avatar_url: string | null;
   kyc_status: KycStatus;
   company_id: string | null;
@@ -26,11 +31,15 @@ export interface CompanyProfile {
   id: string;
   owner_id: string; // FK → profiles.id
   legal_name: string;
-  trade_name: string;
-  rfc: string;
+  trade_name: string | null;
+  rfc: string | null;
   logo_url: string | null;
   website: string | null;
+  /** Primary contact email for the company. */
+  email: string | null;
+  secondary_email: string | null;
   phone: string | null;
+  secondary_phone: string | null;
   address_line: string | null;
   city: string | null;
   state: string | null;

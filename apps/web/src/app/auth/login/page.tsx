@@ -10,10 +10,30 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 
+/**
+ * Persist the "Remember me" choice into a cookie that both the browser
+ * Supabase client and the SSR middleware read to decide whether to write
+ * Supabase auth cookies as long-lived or session-only. Setting it BEFORE
+ * sign-in is critical — the very first auth cookies are written during
+ * `signInWithPassword`, and we need that initial write to already respect
+ * the user's choice.
+ */
+function persistRememberFlag(remember: boolean) {
+  if (typeof document === "undefined") return;
+  const oneYear = 60 * 60 * 24 * 365;
+  // The flag cookie itself uses the same lifetime convention as the auth
+  // cookies it controls: persistent vs session.
+  const base = `bh_remember=${remember ? "true" : "false"}; Path=/; SameSite=Lax`;
+  document.cookie = remember
+    ? `${base}; Max-Age=${oneYear}${window.location.protocol === "https:" ? "; Secure" : ""}`
+    : `${base}${window.location.protocol === "https:" ? "; Secure" : ""}`;
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
+  // Default to true: matches typical "Stay signed in" behavior people expect.
+  const [rememberMe, setRememberMe] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -26,6 +46,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      persistRememberFlag(rememberMe);
       const supabase = createClient();
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email,
@@ -59,6 +80,7 @@ export default function LoginPage() {
     setSocialLoading(provider);
 
     try {
+      persistRememberFlag(rememberMe);
       const supabase = createClient();
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider,

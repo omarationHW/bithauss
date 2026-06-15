@@ -15,15 +15,24 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
+          // Honor the "Remember me" preference: when bh_remember=false the
+          // user asked us not to persist sessions, so refreshed auth
+          // cookies get written without Max-Age/Expires (session cookies).
+          // Without this, every refresh on a server request would re-write
+          // the cookies as persistent and undo the choice made at login.
+          const persist = request.cookies.get("bh_remember")?.value !== "false";
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value),
           );
           supabaseResponse = NextResponse.next({
             request,
           });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options),
-          );
+          cookiesToSet.forEach(({ name, value, options }) => {
+            const opts = persist
+              ? options
+              : { ...options, maxAge: undefined, expires: undefined };
+            supabaseResponse.cookies.set(name, value, opts);
+          });
         },
       },
     },
