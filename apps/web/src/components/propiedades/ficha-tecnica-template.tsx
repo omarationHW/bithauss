@@ -114,11 +114,14 @@ function operationLabel(op: string): string {
 function typeLabel(t: string): string {
   const map: Record<string, string> = {
     CASA: "Casa",
+    CASA_CONDOMINIO: "Casa en condominio",
     DEPARTAMENTO: "Departamento",
     TERRENO: "Terreno",
     OFICINA: "Oficina",
     LOCAL_COMERCIAL: "Local comercial",
     BODEGA: "Bodega",
+    HOTEL: "Hotel",
+    DEPARTAMENTO_HOTEL: "Departamento en hotel",
     EDIFICIO: "Edificio",
     QUINTA: "Quinta",
   };
@@ -288,11 +291,12 @@ export function FichaTecnicaTemplate({
     return out.slice(1); // featured already shows on page 1
   }, [property.featured_image_url, media]);
 
-  // 2 photos per gallery page (top + bottom).
+  // 6 photos per gallery page (2 columns x 3 rows) for a compact layout.
+  const GALLERY_PER_PAGE = 6;
   const galleryPages = useMemo(() => {
     const chunks: FichaMedia[][] = [];
-    for (let i = 0; i < galleryPhotos.length; i += 2) {
-      chunks.push(galleryPhotos.slice(i, i + 2));
+    for (let i = 0; i < galleryPhotos.length; i += GALLERY_PER_PAGE) {
+      chunks.push(galleryPhotos.slice(i, i + GALLERY_PER_PAGE));
     }
     return chunks;
   }, [galleryPhotos]);
@@ -741,18 +745,19 @@ export function FichaTecnicaTemplate({
             <div
               style={{
                 flex: 1,
-                display: "flex",
-                flexDirection: "column",
-                gap: "16px",
+                minHeight: 0,
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gridTemplateRows: "repeat(3, 1fr)",
+                gap: "12px",
               }}
             >
               {chunk.map((m, mIdx) => (
                 <div
                   key={m.id ?? `m-${mIdx}`}
                   style={{
-                    flex: 1,
                     minHeight: 0,
-                    borderRadius: "14px",
+                    borderRadius: "12px",
                     overflow: "hidden",
                     border: "1px solid #e2e8f0",
                     background: "#f1f5f9",

@@ -98,10 +98,15 @@ interface MappedProperty {
 
 const PROPERTY_TYPE_MAP: Record<string, string> = {
   CASA: "Casa",
+  CASA_CONDOMINIO: "Casa en Condominio",
   DEPARTAMENTO: "Departamento",
   TERRENO: "Terreno",
   OFICINA: "Oficina",
+  LOCAL_COMERCIAL: "Local Comercial",
   LOCAL: "Local",
+  BODEGA: "Bodega",
+  HOTEL: "Hotel",
+  DEPARTAMENTO_HOTEL: "Departamento en Hotel",
 };
 
 function normalize(s: string): string {
@@ -529,7 +534,9 @@ function PropiedadesPageInner() {
       } else {
         const dbProperties = (data || []) as PropertyFromDB[];
         const realMapped = dbProperties.map(mapProperty);
-        setProperties([...realMapped, ...demoProperties]);
+        // Show only real listings from the DB (demoProperties is kept solely as
+        // a fallback when the query fails — see the error branch above).
+        setProperties(realMapped);
       }
       setLoading(false);
     }

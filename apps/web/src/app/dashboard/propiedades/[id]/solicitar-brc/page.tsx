@@ -78,7 +78,7 @@ export default function SolicitarBrcPage() {
   const [documentTypes, setDocumentTypes] = useState<BrcDocumentType[]>([]);
   const [files, setFiles] = useState<Record<string, File | null>>({});
   const [validatingDocId, setValidatingDocId] = useState<string | null>(null);
-  const [ocrResults, setOcrResults] = useState<Record<string, { valid: boolean; confidence: string; message: string; detectedType: string; extractedData: Record<string, unknown> }>>({});
+  const [ocrResults, setOcrResults] = useState<Record<string, { valid: boolean; confidence: string; message: string; detectedType: string; extractedData: Record<string, unknown>; standaloneChecks?: Array<{ rule: string; label: string; status: string; message: string }> }>>({});
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -302,6 +302,16 @@ export default function SolicitarBrcPage() {
         } = supabase.storage.from("brc-documents").getPublicUrl(filePath);
 
         const ocr = ocrResults[docTypeId];
+        // Normalize OCR standalone checks (CURP format, INE vigencia, boleta age, etc.)
+        // from { rule, label, status, message } to { label, passed, detail }.
+        const standaloneChecks =
+          Array.isArray(ocr?.standaloneChecks) && ocr.standaloneChecks.length > 0
+            ? ocr.standaloneChecks.map((c) => ({
+                label: c.label,
+                passed: c.status === "pass",
+                detail: c.message,
+              }))
+            : null;
         await supabase.from("brc_documents").insert({
           expediente_id: expediente.id,
           document_type_id: docTypeId,
@@ -316,6 +326,7 @@ export default function SolicitarBrcPage() {
           ocr_valid: ocr?.valid ?? null,
           ocr_extracted_data: ocr?.extractedData ?? null,
           ocr_validated_at: ocr ? new Date().toISOString() : null,
+          ocr_standalone_checks: standaloneChecks,
         });
       }
 

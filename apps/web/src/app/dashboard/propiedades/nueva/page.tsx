@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -15,7 +15,20 @@ import {
 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
+import {
+  applyWatermark,
+  loadWatermarkConfig,
+  isWatermarkActive,
+  WM_SUFFIX,
+  DEFAULT_WATERMARK_CONFIG,
+  type WatermarkConfig,
+} from "@/lib/watermark";
 import { logError } from "@/lib/log";
+import {
+  usePostalLookup,
+  COLONIA_OTRA,
+  type PostalRecord,
+} from "@/lib/postal";
 import { useUser } from "../../_context/user-context";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,11 +47,14 @@ import {
 
 const PROPERTY_TYPES = [
   { value: "CASA", label: "Casa" },
+  { value: "CASA_CONDOMINIO", label: "Casa en Condominio" },
   { value: "DEPARTAMENTO", label: "Departamento" },
   { value: "TERRENO", label: "Terreno" },
   { value: "OFICINA", label: "Oficina" },
   { value: "LOCAL_COMERCIAL", label: "Local Comercial" },
   { value: "BODEGA", label: "Bodega" },
+  { value: "HOTEL", label: "Hotel" },
+  { value: "DEPARTAMENTO_HOTEL", label: "Departamento en Hotel" },
   { value: "OTRO", label: "Otro" },
 ] as const;
 
@@ -315,6 +331,14 @@ export default function NuevaPropiedadPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [watermark, setWatermark] = useState<WatermarkConfig>(
+    DEFAULT_WATERMARK_CONFIG
+  );
+
+  // Load the user's watermark configuration so new photos can be stamped.
+  useEffect(() => {
+    loadWatermarkConfig().then(setWatermark);
+  }, []);
 
   const isCasa = form.tipo_propiedad === "CASA";
   const isDepto = form.tipo_propiedad === "DEPARTAMENTO";
@@ -331,6 +355,41 @@ export default function NuevaPropiedadPage() {
   function updateField<K extends keyof FormData>(key: K, value: FormData[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
+
+  /* ---- Postal code (SEPOMEX) lookup ---- */
+
+  // True once the user has typed in the CP field, so we only auto-fill
+  // estado/ciudad/colonia in response to a real edit (never silently).
+  const cpEditedRef = useRef(false);
+  // When true the colonia field falls back to a free-text input even if the
+  // CP has a colonia catalog (user chose "Otra (escribir)").
+  const [coloniaLibre, setColoniaLibre] = useState(false);
+
+  const handlePostalResolve = useCallback((rec: PostalRecord | null) => {
+    if (!rec || !cpEditedRef.current) return;
+    setColoniaLibre(false);
+    if ((MEXICAN_STATES as readonly string[]).includes(rec.estado)) {
+      updateField("estado", rec.estado);
+    }
+    updateField("ciudad", rec.ciudad || rec.municipio);
+    // Drop a stale colonia that isn't part of the new CP so the dropdown
+    // starts on its placeholder instead of an out-of-list value.
+    setForm((prev) =>
+      rec.colonias.includes(prev.colonia) ? prev : { ...prev, colonia: "" }
+    );
+  }, []);
+
+  const { colonias: cpColonias } = usePostalLookup(
+    form.codigo_postal,
+    handlePostalResolve
+  );
+
+  // Show the colonia dropdown when the CP has a catalog, the user hasn't
+  // opted into free text, and the current value is empty or part of the list.
+  const showColoniaSelect =
+    cpColonias.length > 0 &&
+    !coloniaLibre &&
+    (form.colonia === "" || cpColonias.includes(form.colonia));
 
   function toggleAmenity(amenity: string) {
     setForm((prev) => ({
@@ -356,12 +415,22 @@ export default function NuevaPropiedadPage() {
 
       setImages((prev) => [...prev, ...toAdd]);
 
-      toAdd.forEach((file) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          setImagePreviews((prev) => [...prev, e.target?.result as string]);
-        };
-        reader.readAsDataURL(file);
+      // Build previews preserving the EXACT order of `toAdd`. Using
+      // Promise.all (instead of pushing inside each FileReader.onload) keeps
+      // `imagePreviews` index-aligned with `images`, even if a reader finishes
+      // before another. Otherwise the photo shown as "Principal" (preview[0])
+      // could differ from the real cover (images[0] -> sort_order 0).
+      Promise.all(
+        toAdd.map(
+          (file) =>
+            new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onload = (e) => resolve(e.target?.result as string);
+              reader.readAsDataURL(file);
+            })
+        )
+      ).then((previews) => {
+        setImagePreviews((prev) => [...prev, ...previews]);
       });
     },
     [images.length]
@@ -386,14 +455,26 @@ export default function NuevaPropiedadPage() {
     const supabase = createClient();
     const urls: string[] = [];
 
+    const wmActive = isWatermarkActive(watermark);
+
     for (let i = 0; i < images.length; i++) {
-      const file = images[i]!;
-      const ext = file.name.split(".").pop() ?? "jpg";
-      const path = `${user?.id}/${propertyId}/${i}.${ext}`;
+      const original = images[i]!;
+      // Bake the watermark into the photo before upload when enabled. The
+      // `-wm` suffix marks the object as already watermarked.
+      const file: Blob = wmActive
+        ? await applyWatermark(original, watermark)
+        : original;
+      const ext = wmActive ? "jpg" : (original.name.split(".").pop() ?? "jpg");
+      const suffix = wmActive ? WM_SUFFIX : "";
+      const path = `${user?.id}/${propertyId}/${i}${suffix}.${ext}`;
 
       const { error: uploadError } = await supabase.storage
         .from("properties")
-        .upload(path, file as File, { cacheControl: "3600", upsert: true });
+        .upload(path, file, {
+          cacheControl: "3600",
+          upsert: true,
+          contentType: wmActive ? "image/jpeg" : original.type,
+        });
 
       if (uploadError) {
         throw new Error(`Error subiendo imagen ${i + 1}: ${uploadError.message}`);
@@ -1157,13 +1238,60 @@ export default function NuevaPropiedadPage() {
               <Label htmlFor="colonia" className="mb-1.5 block text-gray-700">
                 Colonia
               </Label>
-              <Input
-                id="colonia"
-                placeholder="Nombre de la colonia"
-                value={form.colonia}
-                onChange={(e) => updateField("colonia", e.target.value)}
-                className="rounded-xl"
-              />
+              {showColoniaSelect ? (
+                <Select
+                  value={
+                    cpColonias.includes(form.colonia) ? form.colonia : ""
+                  }
+                  onValueChange={(v) => {
+                    if (v === COLONIA_OTRA) {
+                      setColoniaLibre(true);
+                      updateField("colonia", "");
+                    } else {
+                      updateField("colonia", v);
+                    }
+                  }}
+                >
+                  <SelectTrigger className="rounded-xl">
+                    <SelectValue placeholder="Selecciona la colonia" />
+                  </SelectTrigger>
+                  <SelectContent
+                    position="popper"
+                    className="max-h-60 overflow-y-auto"
+                  >
+                    {cpColonias.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value={COLONIA_OTRA}>
+                      Otra (escribir)
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <>
+                  <Input
+                    id="colonia"
+                    placeholder="Nombre de la colonia"
+                    value={form.colonia}
+                    onChange={(e) => updateField("colonia", e.target.value)}
+                    className="rounded-xl"
+                  />
+                  {cpColonias.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setColoniaLibre(false);
+                        updateField("colonia", "");
+                      }}
+                      className="mt-1.5 text-xs font-medium text-blue-600 hover:text-blue-700"
+                    >
+                      Elegir de la lista de colonias del C.P.
+                    </button>
+                  )}
+                </>
+              )}
             </div>
 
             <div>
@@ -1210,10 +1338,15 @@ export default function NuevaPropiedadPage() {
                 value={form.codigo_postal}
                 onChange={(e) => {
                   const val = e.target.value.replace(/\D/g, "").slice(0, 5);
+                  cpEditedRef.current = true;
                   updateField("codigo_postal", val);
                 }}
                 className="rounded-xl"
               />
+              <p className="mt-1.5 text-xs text-gray-500">
+                Escribe el C.P. y completaremos estado, ciudad y colonias
+                automáticamente.
+              </p>
             </div>
           </div>
 

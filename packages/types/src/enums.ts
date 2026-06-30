@@ -16,11 +16,14 @@ export enum UserRole {
 // ──────────────────────────────────────────────
 export enum PropertyType {
   CASA = 'CASA',
+  CASA_CONDOMINIO = 'CASA_CONDOMINIO',
   DEPARTAMENTO = 'DEPARTAMENTO',
   TERRENO = 'TERRENO',
   OFICINA = 'OFICINA',
   LOCAL_COMERCIAL = 'LOCAL_COMERCIAL',
   BODEGA = 'BODEGA',
+  HOTEL = 'HOTEL',
+  DEPARTAMENTO_HOTEL = 'DEPARTAMENTO_HOTEL',
   OTRO = 'OTRO',
 }
 

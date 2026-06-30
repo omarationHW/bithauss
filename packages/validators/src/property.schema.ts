@@ -16,11 +16,14 @@ export const createPropertySchema = z.object({
     .optional(),
   type: z.enum([
     'CASA',
+    'CASA_CONDOMINIO',
     'DEPARTAMENTO',
     'TERRENO',
     'OFICINA',
     'LOCAL_COMERCIAL',
     'BODEGA',
+    'HOTEL',
+    'DEPARTAMENTO_HOTEL',
     'OTRO',
   ]),
   operation: z.enum(['VENTA', 'RENTA', 'VENTA_RENTA', 'TRASPASO']),
@@ -126,11 +129,14 @@ export const propertySearchSchema = z.object({
   type: z
     .enum([
       'CASA',
+      'CASA_CONDOMINIO',
       'DEPARTAMENTO',
       'TERRENO',
       'OFICINA',
       'LOCAL_COMERCIAL',
       'BODEGA',
+      'HOTEL',
+      'DEPARTAMENTO_HOTEL',
       'OTRO',
     ])
     .optional(),

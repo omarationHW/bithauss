@@ -15,7 +15,10 @@ import {
   MessageSquare,
   Loader2,
   ChevronDown,
+  ExternalLink,
+  RefreshCw,
 } from "lucide-react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { logError } from "@/lib/log";
 import { useUser } from "../_context/user-context";
@@ -65,11 +68,14 @@ const STATUS_MAP: Record<DbStatus, LeadEstado> = {
   DESCARTADO: "Descartado",
 };
 
-const STATUS_FLOW: DbStatus[] = [
+/* All lead statuses — a lead can be moved freely between any of them,
+   including recovering a lead that was marked as "Descartado". */
+const ALL_STATUSES: DbStatus[] = [
   "NUEVO",
   "CONTACTADO",
   "EN_NEGOCIACION",
   "CONVERTIDO",
+  "DESCARTADO",
 ];
 
 function getEstadoBadge(estado: LeadEstado) {
@@ -153,6 +159,40 @@ export default function LeadsPage() {
   useEffect(() => {
     fetchLeads();
   }, [fetchLeads]);
+
+  /* ---- Auto-refresh: re-fetch when the tab regains focus/visibility, and
+     subscribe to realtime inserts/updates so new leads appear without a manual
+     reload (fixes "el lead no aparecía hasta que regresé al dashboard"). ---- */
+  useEffect(() => {
+    if (!user) return;
+
+    const refresh = () => {
+      if (document.visibilityState === "visible") fetchLeads();
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`leads-owner-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "leads",
+          filter: `owner_id=eq.${user.id}`,
+        },
+        () => fetchLeads()
+      )
+      .subscribe();
+
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+      supabase.removeChannel(channel);
+    };
+  }, [user, fetchLeads]);
 
   /* ---- Body scroll lock ---- */
   useEffect(() => {
@@ -322,17 +362,9 @@ export default function LeadsPage() {
     "Descartado",
   ];
 
-  /* ---- Next possible statuses for a lead ---- */
+  /* ---- Statuses a lead can be switched to (any except the current one) ---- */
   function getNextStatuses(current: DbStatus): DbStatus[] {
-    const idx = STATUS_FLOW.indexOf(current);
-    const options: DbStatus[] = [];
-    if (idx >= 0 && idx < STATUS_FLOW.length - 1) {
-      options.push(STATUS_FLOW[idx + 1]!);
-    }
-    if (current !== "DESCARTADO") {
-      options.push("DESCARTADO");
-    }
-    return options;
+    return ALL_STATUSES.filter((s) => s !== current);
   }
 
   /* ---- Loading state ---- */
@@ -362,10 +394,19 @@ export default function LeadsPage() {
             Da seguimiento a todos tus prospectos de clientes.
           </p>
         </div>
-        <button className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-all duration-300 hover:bg-gray-50 hover:shadow-md">
-          <Download className="h-4 w-4" />
-          Exportar CSV
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => fetchLeads()}
+            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-all duration-300 hover:bg-gray-50 hover:shadow-md"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Actualizar
+          </button>
+          <button className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-all duration-300 hover:bg-gray-50 hover:shadow-md">
+            <Download className="h-4 w-4" />
+            Exportar CSV
+          </button>
+        </div>
       </div>
 
       {/* ============================================================ */}
@@ -745,28 +786,59 @@ export default function LeadsPage() {
                 <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
                   Propiedad de interés
                 </h4>
-                <div className="flex items-center gap-3 rounded-xl border border-gray-100 p-3">
-                  <div
-                    className="h-9 w-9 rounded-lg flex items-center justify-center"
-                    style={{
-                      background:
-                        "linear-gradient(135deg, hsl(221 83% 53% / 0.1), hsl(160 84% 39% / 0.1))",
-                    }}
+                {selectedLead.propertyId ? (
+                  <Link
+                    href={`/propiedades/${selectedLead.propertyId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group flex items-center gap-3 rounded-xl border border-gray-100 p-3 transition-all hover:border-blue-200 hover:bg-blue-50/50"
                   >
-                    <Eye
-                      className="h-4 w-4"
-                      style={{ color: "hsl(221 83% 53%)" }}
-                    />
+                    <div
+                      className="h-9 w-9 rounded-lg flex items-center justify-center"
+                      style={{
+                        background:
+                          "linear-gradient(135deg, hsl(221 83% 53% / 0.1), hsl(160 84% 39% / 0.1))",
+                      }}
+                    >
+                      <Eye
+                        className="h-4 w-4"
+                        style={{ color: "hsl(221 83% 53%)" }}
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-gray-900 group-hover:text-blue-700">
+                        {selectedLead.propiedad}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        Recibido el {selectedLead.fecha}
+                      </p>
+                    </div>
+                    <ExternalLink className="h-4 w-4 shrink-0 text-gray-300 transition-colors group-hover:text-blue-500" />
+                  </Link>
+                ) : (
+                  <div className="flex items-center gap-3 rounded-xl border border-gray-100 p-3">
+                    <div
+                      className="h-9 w-9 rounded-lg flex items-center justify-center"
+                      style={{
+                        background:
+                          "linear-gradient(135deg, hsl(221 83% 53% / 0.1), hsl(160 84% 39% / 0.1))",
+                      }}
+                    >
+                      <Eye
+                        className="h-4 w-4"
+                        style={{ color: "hsl(221 83% 53%)" }}
+                      />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">
+                        {selectedLead.propiedad}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        Recibido el {selectedLead.fecha}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">
-                      {selectedLead.propiedad}
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      Recibido el {selectedLead.fecha}
-                    </p>
-                  </div>
-                </div>
+                )}
               </div>
 
               {/* Actions */}

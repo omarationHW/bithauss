@@ -10,6 +10,7 @@ import {
   IsOptional,
   Length,
   IsUUID,
+  IsObject,
 } from 'class-validator';
 import { SupabaseConfigService } from '../../config/supabase.config';
 
@@ -26,6 +27,10 @@ export class CertifyExpedienteDto {
 
 export class RejectExpedienteDto {
   @IsOptional() @IsString() @Length(0, 5000) reason?: string;
+}
+
+export class OcrCorrectionDto {
+  @IsObject() corrected_data!: Record<string, unknown>;
 }
 
 @Injectable()
@@ -160,6 +165,41 @@ export class BrcService {
     return { id: documentId, status: 'RECHAZADO', reviewed_at: now };
   }
 
+  /* ----- Correct OCR-extracted data for a single document ----- */
+  async updateOcrCorrection(documentId: string, userId: string, dto: OcrCorrectionDto) {
+    const supabase = this.supabaseConfig.getAdminClient();
+    const { data: doc } = await supabase
+      .from('brc_documents')
+      .select('id, expediente_id')
+      .eq('id', documentId)
+      .maybeSingle();
+    if (!doc) throw new NotFoundException('Documento no encontrado');
+
+    await this.assertNotaryOnExpediente(doc.expediente_id, userId);
+
+    const now = new Date().toISOString();
+    const { data: updated, error } = await supabase
+      .from('brc_documents')
+      .update({
+        ocr_corrected_data: dto.corrected_data,
+        ocr_reviewed_by: userId,
+        ocr_reviewed_at: now,
+      })
+      .eq('id', documentId)
+      .select('*')
+      .single();
+    if (error || !updated) throw new BadRequestException(error?.message ?? 'Error al guardar la corrección OCR');
+
+    await supabase.from('brc_expediente_logs').insert({
+      expediente_id: doc.expediente_id,
+      action: 'OCR_CORREGIDO',
+      performed_by: userId,
+      metadata: { document_id: documentId },
+    });
+
+    return updated;
+  }
+
   /* ----- Certify an expediente ----- */
   async certifyExpediente(expedienteId: string, userId: string, dto: CertifyExpedienteDto) {
     const supabase = this.supabaseConfig.getAdminClient();
@@ -206,10 +246,11 @@ export class BrcService {
     await supabase.from('brc_validations').insert({
       expediente_id: expedienteId,
       property_id: expediente.property_id,
-      validated_by: userId,
+      notary_id: userId,
+      is_approved: true,
       validation_type: 'CERTIFICACION',
       result: 'APROBADO',
-      notes: dto.observations ?? null,
+      observations: dto.observations ?? null,
     });
 
     // 5. Log

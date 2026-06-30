@@ -14,10 +14,25 @@ import {
   AlertCircle,
   ShieldAlert,
   Clock,
+  Star,
+  GripVertical,
 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
+import {
+  applyWatermark,
+  loadWatermarkConfig,
+  isWatermarkActive,
+  WM_SUFFIX,
+  DEFAULT_WATERMARK_CONFIG,
+  type WatermarkConfig,
+} from "@/lib/watermark";
 import { logError } from "@/lib/log";
+import {
+  usePostalLookup,
+  COLONIA_OTRA,
+  type PostalRecord,
+} from "@/lib/postal";
 import { useUser } from "../../../_context/user-context";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,11 +52,14 @@ import {
 
 const PROPERTY_TYPES = [
   { value: "CASA", label: "Casa" },
+  { value: "CASA_CONDOMINIO", label: "Casa en Condominio" },
   { value: "DEPARTAMENTO", label: "Departamento" },
   { value: "TERRENO", label: "Terreno" },
   { value: "OFICINA", label: "Oficina" },
   { value: "LOCAL_COMERCIAL", label: "Local Comercial" },
   { value: "BODEGA", label: "Bodega" },
+  { value: "HOTEL", label: "Hotel" },
+  { value: "DEPARTAMENTO_HOTEL", label: "Departamento en Hotel" },
   { value: "OTRO", label: "Otro" },
 ] as const;
 
@@ -175,6 +193,12 @@ function normalizeOperation(dbValue: string | null | undefined): string {
 /* ------------------------------------------------------------------ */
 /*  Form state                                                         */
 /* ------------------------------------------------------------------ */
+
+/** A photo in the editor: either one already persisted in the DB
+ *  ("existing") or a freshly added file pending upload ("new"). */
+type EditImage =
+  | { kind: "existing"; id: string; url: string }
+  | { kind: "new"; file: File; preview: string };
 
 interface FormData {
   titulo: string;
@@ -320,10 +344,14 @@ export default function EditarPropiedadPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState<FormData>(initialFormData);
-  const [images, setImages] = useState<File[]>([]);
-  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
-  const [existingImageUrls, setExistingImageUrls] = useState<string[]>([]);
-  const [existingMediaIds, setExistingMediaIds] = useState<string[]>([]);
+  // Unified, ordered photo list — existing (already in DB) and newly added
+  // files live in the SAME array so they can be freely reordered and any one
+  // can be set as the cover. Index 0 is always the principal/cover photo.
+  const [orderedImages, setOrderedImages] = useState<EditImage[]>([]);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [watermark, setWatermark] = useState<WatermarkConfig>(
+    DEFAULT_WATERMARK_CONFIG
+  );
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -433,9 +461,9 @@ export default function EditarPropiedadPage() {
         .order("sort_order", { ascending: true });
 
       if (media && media.length > 0) {
-        setExistingImageUrls(media.map((m) => m.url));
-        setExistingMediaIds(media.map((m) => m.id));
-        setImagePreviews(media.map((m) => m.url));
+        setOrderedImages(
+          media.map((m) => ({ kind: "existing", id: m.id, url: m.url }))
+        );
       }
 
       setLoading(false);
@@ -444,11 +472,46 @@ export default function EditarPropiedadPage() {
     fetchProperty();
   }, [propertyId]);
 
+  // Load the user's watermark configuration for stamping newly added photos.
+  useEffect(() => {
+    loadWatermarkConfig().then(setWatermark);
+  }, []);
+
   /* ---- Field helpers ---- */
 
   function updateField<K extends keyof FormData>(key: K, value: FormData[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
+
+  /* ---- Postal code (SEPOMEX) lookup ---- */
+
+  // True once the user edits the CP field. On initial load the existing CP is
+  // looked up only to populate the colonia dropdown — never to overwrite the
+  // saved estado/ciudad/colonia.
+  const cpEditedRef = useRef(false);
+  const [coloniaLibre, setColoniaLibre] = useState(false);
+
+  const handlePostalResolve = useCallback((rec: PostalRecord | null) => {
+    if (!rec || !cpEditedRef.current) return;
+    setColoniaLibre(false);
+    if ((MEXICAN_STATES as readonly string[]).includes(rec.estado)) {
+      updateField("estado", rec.estado);
+    }
+    updateField("ciudad", rec.ciudad || rec.municipio);
+    setForm((prev) =>
+      rec.colonias.includes(prev.colonia) ? prev : { ...prev, colonia: "" }
+    );
+  }, []);
+
+  const { colonias: cpColonias } = usePostalLookup(
+    form.codigo_postal,
+    handlePostalResolve
+  );
+
+  const showColoniaSelect =
+    cpColonias.length > 0 &&
+    !coloniaLibre &&
+    (form.colonia === "" || cpColonias.includes(form.colonia));
 
   function toggleAmenity(amenity: string) {
     setForm((prev) => ({
@@ -461,7 +524,7 @@ export default function EditarPropiedadPage() {
 
   /* ---- Image handling ---- */
 
-  const totalImageCount = existingImageUrls.length + images.length;
+  const totalImageCount = orderedImages.length;
 
   const addImages = useCallback(
     (files: FileList | File[]) => {
@@ -471,32 +534,65 @@ export default function EditarPropiedadPage() {
       if (newFiles.length === 0) return;
 
       const totalAllowed = 20;
-      const remaining = totalAllowed - totalImageCount;
+      const remaining = totalAllowed - orderedImages.length;
       const toAdd = newFiles.slice(0, remaining);
+      if (toAdd.length === 0) return;
 
-      setImages((prev) => [...prev, ...toAdd]);
-
-      toAdd.forEach((file) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          setImagePreviews((prev) => [...prev, e.target?.result as string]);
-        };
-        reader.readAsDataURL(file);
+      // Build the new entries preserving the exact order of `toAdd` (Promise.all
+      // keeps array order regardless of which FileReader finishes first).
+      Promise.all(
+        toAdd.map(
+          (file) =>
+            new Promise<EditImage>((resolve) => {
+              const reader = new FileReader();
+              reader.onload = (e) =>
+                resolve({
+                  kind: "new",
+                  file,
+                  preview: e.target?.result as string,
+                });
+              reader.readAsDataURL(file);
+            })
+        )
+      ).then((items) => {
+        setOrderedImages((prev) => [...prev, ...items]);
       });
     },
-    [totalImageCount]
+    [orderedImages.length]
   );
 
   function removeImage(index: number) {
-    if (index < existingImageUrls.length) {
-      setExistingImageUrls((prev) => prev.filter((_, i) => i !== index));
-      setExistingMediaIds((prev) => prev.filter((_, i) => i !== index));
-      setImagePreviews((prev) => prev.filter((_, i) => i !== index));
-    } else {
-      const newIndex = index - existingImageUrls.length;
-      setImages((prev) => prev.filter((_, i) => i !== newIndex));
-      setImagePreviews((prev) => prev.filter((_, i) => i !== index));
-    }
+    setOrderedImages((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  /** Move a photo to the front so it becomes the principal/cover photo. */
+  function setAsPrincipal(index: number) {
+    setOrderedImages((prev) => {
+      if (index <= 0 || index >= prev.length) return prev;
+      const copy = [...prev];
+      const [item] = copy.splice(index, 1);
+      copy.unshift(item!);
+      return copy;
+    });
+  }
+
+  /** Reorder a photo from one position to another (drag & drop). */
+  function moveImage(from: number, to: number) {
+    setOrderedImages((prev) => {
+      if (
+        from === to ||
+        from < 0 ||
+        to < 0 ||
+        from >= prev.length ||
+        to >= prev.length
+      ) {
+        return prev;
+      }
+      const copy = [...prev];
+      const [item] = copy.splice(from, 1);
+      copy.splice(to, 0, item!);
+      return copy;
+    });
   }
 
   function handleDrop(e: React.DragEvent) {
@@ -509,18 +605,27 @@ export default function EditarPropiedadPage() {
 
   /* ---- Upload new images to Supabase Storage ---- */
 
-  async function uploadImages(propId: string): Promise<string[]> {
+  async function uploadFiles(propId: string, files: File[]): Promise<string[]> {
     const supabase = createClient();
     const urls: string[] = [];
+    const wmActive = isWatermarkActive(watermark);
 
-    for (let i = 0; i < images.length; i++) {
-      const file = images[i]!;
-      const ext = file.name.split(".").pop() ?? "jpg";
-      const path = `${user?.id}/${propId}/${Date.now()}_${i}.${ext}`;
+    for (let i = 0; i < files.length; i++) {
+      const original = files[i]!;
+      const file: Blob = wmActive
+        ? await applyWatermark(original, watermark)
+        : original;
+      const ext = wmActive ? "jpg" : (original.name.split(".").pop() ?? "jpg");
+      const suffix = wmActive ? WM_SUFFIX : "";
+      const path = `${user?.id}/${propId}/${Date.now()}_${i}${suffix}.${ext}`;
 
       const { error: uploadError } = await supabase.storage
         .from("properties")
-        .upload(path, file as File, { cacheControl: "3600", upsert: true });
+        .upload(path, file, {
+          cacheControl: "3600",
+          upsert: true,
+          contentType: wmActive ? "image/jpeg" : original.type,
+        });
 
       if (uploadError) {
         throw new Error(`Error subiendo imagen ${i + 1}: ${uploadError.message}`);
@@ -677,31 +782,30 @@ export default function EditarPropiedadPage() {
 
       if (updateError) throw new Error(updateError.message);
 
-      // Media: delete removed existing rows
-      const { data: currentMedia } = await supabase
-        .from("property_media")
-        .select("id")
-        .eq("property_id", propertyId);
+      // Media: upload any newly added files (in their displayed order), then
+      // rewrite the whole property_media set so sort_order matches the exact
+      // order shown in the editor. Index 0 is the principal/cover photo.
+      const newFiles = orderedImages
+        .filter((img): img is Extract<EditImage, { kind: "new" }> => img.kind === "new")
+        .map((img) => img.file);
 
-      if (currentMedia) {
-        const idsToKeep = new Set(existingMediaIds);
-        const idsToDelete = currentMedia
-          .map((m) => m.id)
-          .filter((id) => !idsToKeep.has(id));
+      const uploadedUrls =
+        newFiles.length > 0 ? await uploadFiles(propertyId, newFiles) : [];
 
-        if (idsToDelete.length > 0) {
-          await supabase.from("property_media").delete().in("id", idsToDelete);
-        }
-      }
+      let uploadCursor = 0;
+      const finalUrls = orderedImages.map((img) =>
+        img.kind === "existing" ? img.url : uploadedUrls[uploadCursor++]!
+      );
 
-      if (images.length > 0) {
-        const newImageUrls = await uploadImages(propertyId);
-        const startSortOrder = existingImageUrls.length;
-        const mediaInserts = newImageUrls.map((url, idx) => ({
+      // Replace all media rows with the new ordered set.
+      await supabase.from("property_media").delete().eq("property_id", propertyId);
+
+      if (finalUrls.length > 0) {
+        const mediaInserts = finalUrls.map((url, idx) => ({
           property_id: propertyId,
           url,
           media_type: "IMAGE",
-          sort_order: startSortOrder + idx,
+          sort_order: idx,
         }));
 
         const { error: mediaError } = await supabase
@@ -711,33 +815,12 @@ export default function EditarPropiedadPage() {
         if (mediaError) logError("Error saving media:", mediaError);
       }
 
-      // Refresh featured image
-      const allImageUrls = [...existingImageUrls];
-      if (images.length > 0) {
-        const { data: allMedia } = await supabase
-          .from("property_media")
-          .select("url")
-          .eq("property_id", propertyId)
-          .order("sort_order", { ascending: true })
-          .limit(1);
-
-        if (allMedia && allMedia[0]) {
-          await supabase
-            .from("properties")
-            .update({ featured_image_url: allMedia[0].url })
-            .eq("id", propertyId);
-        }
-      } else if (allImageUrls.length > 0) {
-        await supabase
-          .from("properties")
-          .update({ featured_image_url: allImageUrls[0] })
-          .eq("id", propertyId);
-      } else {
-        await supabase
-          .from("properties")
-          .update({ featured_image_url: null })
-          .eq("id", propertyId);
-      }
+      // Keep featured_image_url (used by listing cards) in sync with the cover
+      // photo (index 0), so cards and the detail page show the same principal.
+      await supabase
+        .from("properties")
+        .update({ featured_image_url: finalUrls[0] ?? null })
+        .eq("id", propertyId);
 
       setSuccess(
         status === "publicado"
@@ -1409,13 +1492,60 @@ export default function EditarPropiedadPage() {
               <Label htmlFor="colonia" className="mb-1.5 block text-gray-700">
                 Colonia
               </Label>
-              <Input
-                id="colonia"
-                placeholder="Nombre de la colonia"
-                value={form.colonia}
-                onChange={(e) => updateField("colonia", e.target.value)}
-                className="rounded-xl"
-              />
+              {showColoniaSelect ? (
+                <Select
+                  value={
+                    cpColonias.includes(form.colonia) ? form.colonia : ""
+                  }
+                  onValueChange={(v) => {
+                    if (v === COLONIA_OTRA) {
+                      setColoniaLibre(true);
+                      updateField("colonia", "");
+                    } else {
+                      updateField("colonia", v);
+                    }
+                  }}
+                >
+                  <SelectTrigger className="rounded-xl">
+                    <SelectValue placeholder="Selecciona la colonia" />
+                  </SelectTrigger>
+                  <SelectContent
+                    position="popper"
+                    className="max-h-60 overflow-y-auto"
+                  >
+                    {cpColonias.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value={COLONIA_OTRA}>
+                      Otra (escribir)
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <>
+                  <Input
+                    id="colonia"
+                    placeholder="Nombre de la colonia"
+                    value={form.colonia}
+                    onChange={(e) => updateField("colonia", e.target.value)}
+                    className="rounded-xl"
+                  />
+                  {cpColonias.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setColoniaLibre(false);
+                        updateField("colonia", "");
+                      }}
+                      className="mt-1.5 text-xs font-medium text-blue-600 hover:text-blue-700"
+                    >
+                      Elegir de la lista de colonias del C.P.
+                    </button>
+                  )}
+                </>
+              )}
             </div>
 
             <div>
@@ -1462,10 +1592,15 @@ export default function EditarPropiedadPage() {
                 value={form.codigo_postal}
                 onChange={(e) => {
                   const val = e.target.value.replace(/\D/g, "").slice(0, 5);
+                  cpEditedRef.current = true;
                   updateField("codigo_postal", val);
                 }}
                 className="rounded-xl"
               />
+              <p className="mt-1.5 text-xs text-gray-500">
+                Escribe el C.P. y completaremos estado, ciudad y colonias
+                automáticamente.
+              </p>
             </div>
           </div>
 
@@ -1557,7 +1692,7 @@ export default function EditarPropiedadPage() {
               Arrastra tus imágenes aquí o haz clic para seleccionar
             </p>
             <p className="mt-1 text-xs text-gray-500">
-              JPG, PNG o WebP. Máximo 20 imágenes. La primera será la imagen principal.
+              JPG, PNG o WebP. Máximo 20 imágenes.
             </p>
             <input
               ref={fileInputRef}
@@ -1572,32 +1707,83 @@ export default function EditarPropiedadPage() {
             />
           </div>
 
-          {imagePreviews.length > 0 && (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-              {imagePreviews.map((src, idx) => (
-                <div
-                  key={idx}
-                  className="group relative aspect-[4/3] overflow-hidden rounded-xl border border-gray-200 bg-gray-100"
-                >
-                  <Image src={src} alt={`Imagen ${idx + 1}`} fill className="object-cover" />
-                  {idx === 0 && (
-                    <span className="absolute left-2 top-2 rounded-lg bg-blue-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                      Principal
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeImage(idx);
-                    }}
-                    className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity duration-200 hover:bg-black/70 group-hover:opacity-100"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
+          {orderedImages.length > 0 && (
+            <>
+              <p className="text-xs text-gray-500">
+                Arrastra las fotos para reordenarlas. La primera (
+                <span className="font-semibold text-blue-600">Principal</span>) es
+                la portada que se muestra en la publicación. Pasa el cursor sobre
+                una foto y usa <Star className="inline h-3 w-3" /> para hacerla
+                principal.
+              </p>
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                {orderedImages.map((img, idx) => {
+                  const src = img.kind === "existing" ? img.url : img.preview;
+                  const key = img.kind === "existing" ? img.id : `new-${idx}-${img.preview.slice(-16)}`;
+                  return (
+                    <div
+                      key={key}
+                      draggable
+                      onDragStart={() => setDragIndex(idx)}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (dragIndex !== null) moveImage(dragIndex, idx);
+                        setDragIndex(null);
+                      }}
+                      onDragEnd={() => setDragIndex(null)}
+                      className={`group relative aspect-[4/3] cursor-move overflow-hidden rounded-xl border bg-gray-100 transition-all ${
+                        idx === 0
+                          ? "border-blue-400 ring-2 ring-blue-200"
+                          : "border-gray-200"
+                      } ${dragIndex === idx ? "opacity-50" : ""}`}
+                    >
+                      <Image
+                        src={src}
+                        alt={`Imagen ${idx + 1}`}
+                        fill
+                        className="object-cover"
+                      />
+
+                      {/* Drag affordance */}
+                      <span className="absolute left-2 bottom-2 flex h-6 w-6 items-center justify-center rounded-md bg-black/40 text-white opacity-0 transition-opacity group-hover:opacity-100">
+                        <GripVertical className="h-3.5 w-3.5" />
+                      </span>
+
+                      {idx === 0 ? (
+                        <span className="absolute left-2 top-2 rounded-lg bg-blue-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                          Principal
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          title="Hacer principal"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setAsPrincipal(idx);
+                          }}
+                          className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity duration-200 hover:bg-blue-600 group-hover:opacity-100"
+                        >
+                          <Star className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        title="Eliminar"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeImage(idx);
+                        }}
+                        className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity duration-200 hover:bg-black/70 group-hover:opacity-100"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
           )}
         </div>
       </SectionCard>

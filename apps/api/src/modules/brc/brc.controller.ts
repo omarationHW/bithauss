@@ -13,6 +13,7 @@ import {
   RejectDocumentDto,
   CertifyExpedienteDto,
   RejectExpedienteDto,
+  OcrCorrectionDto,
 } from './brc.service';
 
 @Controller('brc')
@@ -36,6 +37,16 @@ export class BrcController {
     @Body() dto: RejectDocumentDto,
   ) {
     return this.brcService.rejectDocument(id, userId, dto);
+  }
+
+  @Roles('NOTARIO', 'ADMIN', 'OPERADOR_BRC')
+  @Patch('documents/:id/ocr-correction')
+  updateOcrCorrection(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: OcrCorrectionDto,
+  ) {
+    return this.brcService.updateOcrCorrection(id, userId, dto);
   }
 
   @Roles('NOTARIO', 'ADMIN')
