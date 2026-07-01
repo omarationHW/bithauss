@@ -1,0 +1,6 @@
+node_modules
+dist
+# Generated outputs (re-render any time)
+out
+# Screenshots are captured from the live site — keep them out of git
+public/screenshots

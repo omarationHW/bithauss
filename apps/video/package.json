@@ -1,0 +1,26 @@
+{
+  "name": "@bithauss/video",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "remotion studio",
+    "build:reel": "remotion render Reel20 out/reel-20s.mp4",
+    "build:demo": "remotion render Demo90 out/demo-90s.mp4",
+    "capture": "tsx scripts/capture-screenshots.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remotion/bundler": "^4.0.275",
+    "@remotion/cli": "^4.0.275",
+    "remotion": "^4.0.275",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "playwright": "^1.55.1",
+    "tsx": "^4.19.0",
+    "typescript": "^5.9.3"
+  }
+}
