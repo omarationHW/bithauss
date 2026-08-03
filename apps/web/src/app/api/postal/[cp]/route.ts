@@ -1,64 +1,14 @@
 import { NextResponse } from "next/server";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-import { logError } from "@/lib/log";
+import { lookupPostal } from "@/lib/sepomex-server";
 
 export const runtime = "nodejs";
 
 /* ------------------------------------------------------------------ */
 /*  SEPOMEX postal-code API                                            */
 /*                                                                     */
-/*  The catalog lives as files in apps/web/data/sepomex/<2digits>.json */
-/*  (NOT in the client bundle). We read the relevant prefix file with  */
-/*  fs and cache the parsed object in a module-level Map so repeated   */
-/*  requests for the same prefix never re-read from disk.              */
+/*  Reading + caching of the catalog lives in @/lib/sepomex-server,    */
+/*  shared with /api/localidades/*. The dataset stays on the server.   */
 /* ------------------------------------------------------------------ */
-
-interface PostalRecord {
-  estado: string;
-  municipio: string;
-  ciudad: string;
-  colonias: string[];
-}
-
-type PrefixFile = Record<string, PostalRecord>;
-
-// prefix (2 digits) -> parsed file (or null when the file does not exist)
-const cache = new Map<string, PrefixFile | null>();
-
-/**
- * Resolve the data directory. `next dev`/`next start` run with cwd at the
- * package root (apps/web), but if launched from the monorepo root the data
- * lives under apps/web/data — so we probe both candidates.
- */
-function dataCandidates(prefix: string): string[] {
-  const cwd = process.cwd();
-  return [
-    path.join(cwd, "data", "sepomex", `${prefix}.json`),
-    path.join(cwd, "apps", "web", "data", "sepomex", `${prefix}.json`),
-  ];
-}
-
-async function loadPrefix(prefix: string): Promise<PrefixFile | null> {
-  if (cache.has(prefix)) return cache.get(prefix) ?? null;
-
-  let parsed: PrefixFile | null = null;
-  for (const file of dataCandidates(prefix)) {
-    try {
-      const raw = await readFile(file, "utf8");
-      parsed = JSON.parse(raw) as PrefixFile;
-      break;
-    } catch (err) {
-      // ENOENT just means this candidate path isn't the right one; keep trying.
-      if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
-        logError("postal: failed reading prefix file", err);
-      }
-    }
-  }
-
-  cache.set(prefix, parsed);
-  return parsed;
-}
 
 export async function GET(
   _req: Request,
@@ -73,9 +23,7 @@ export async function GET(
     );
   }
 
-  const prefix = cp.slice(0, 2);
-  const file = await loadPrefix(prefix);
-  const record = file?.[cp];
+  const record = await lookupPostal(cp);
 
   if (!record) {
     return NextResponse.json(

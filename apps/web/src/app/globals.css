@@ -39,9 +39,17 @@
   --radius: 0.625rem;
 }
 
+/* Height of the fixed chrome (Navbar 4rem + PriceTicker 2.25rem). Any page
+   whose content starts at the top of the viewport must offset by this much,
+   otherwise the ticker sits on top of the first heading. */
+:root {
+  --header-offset: 6.25rem;
+}
+
 @layer base {
   html {
     scroll-behavior: smooth;
+    scroll-padding-top: var(--header-offset);
   }
   *,
   ::after,

@@ -1,6 +1,5 @@
 import Image from 'next/image'
 import { cn } from '@/lib/utils'
-import { BrcExclusionNotice } from '@/components/ui/brc-exclusion-notice'
 
 type Step = {
   title: string
@@ -95,8 +94,6 @@ export function BrcSection() {
             Raíces Certificados (BRC) es el primer sistema de verificación notarial digital que
             valida la autenticidad de cada propiedad, protegiendo a compradores y vendedores.
           </p>
-
-          <BrcExclusionNotice className="mx-auto mt-6 max-w-3xl" />
 
           {/* Steps */}
           <div className="mt-10">

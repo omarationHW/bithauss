@@ -1,11 +1,22 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element -- html2canvas captures raw <img>
+   elements with an explicit crossOrigin="anonymous"; next/image would inject a
+   proxied/lazy <img> that taints the canvas. */
+
 /**
  * Off-screen printable layout used by the "Descargar ficha técnica" feature.
  *
  * Each direct child marked with `data-page` is captured by html2canvas as a
- * standalone PDF page. Dimensions match A4 portrait at 96 DPI (794x1123 px)
- * so the resulting PDF preserves the visual proportions of the screen render.
+ * standalone PDF page. Dimensions match A4 at 96 DPI — 794x1123 px in portrait,
+ * 1123x794 px in landscape — so the resulting PDF preserves the visual
+ * proportions of the screen render.
+ *
+ * Two layouts, chosen by the user before downloading (see FichaOptionsDialog):
+ *   - "full": cover + details + gallery pages (the original sheet).
+ *   - "single": one page with the hero photo, key data, a trimmed description
+ *     and a strip of thumbnails. It must never overflow, so every block is
+ *     height-capped and the description is truncated.
  *
  * Intentionally excludes any broker / owner / company info — the sheet is
  * meant to circulate as a property fact sheet without revealing the agent.
@@ -22,6 +33,11 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { ShieldBrc } from "@/components/ui/shield-brc";
+import {
+  DEFAULT_FICHA_OPTIONS,
+  type FichaOptions,
+  type FichaOrientation,
+} from "./ficha-options";
 
 export interface FichaProperty {
   id: string;
@@ -74,25 +90,43 @@ export interface FichaTecnicaTemplateProps {
   /** Public URL of the property (used as caption next to the QR). */
   publicUrl: string;
   generatedAt: Date;
+  /** Orientation / layout / photo choices made in the download dialog. */
+  options?: FichaOptions;
 }
 
-const PAGE_STYLE: React.CSSProperties = {
-  width: "794px",
-  height: "1123px",
-  background: "#ffffff",
-  color: "#0f172a",
-  fontFamily:
-    "Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
-  position: "relative",
-  padding: "48px 56px",
-  boxSizing: "border-box",
-  display: "flex",
-  flexDirection: "column",
-  overflow: "hidden",
-};
+/** A4 at 96 DPI. */
+const PAGE_SHORT_PX = 794;
+const PAGE_LONG_PX = 1123;
+
+function pageStyle(orientation: FichaOrientation): React.CSSProperties {
+  const landscape = orientation === "landscape";
+  return {
+    width: `${landscape ? PAGE_LONG_PX : PAGE_SHORT_PX}px`,
+    height: `${landscape ? PAGE_SHORT_PX : PAGE_LONG_PX}px`,
+    background: "#ffffff",
+    color: "#0f172a",
+    fontFamily:
+      "Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+    position: "relative",
+    padding: landscape ? "36px 48px" : "48px 56px",
+    boxSizing: "border-box",
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+  };
+}
 
 const ACCENT_GRADIENT =
   "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))";
+
+const SECTION_TITLE_STYLE: React.CSSProperties = {
+  fontSize: "13px",
+  letterSpacing: "0.12em",
+  textTransform: "uppercase",
+  color: "#3b82f6",
+  fontWeight: 700,
+  margin: 0,
+};
 
 function formatPrice(price: number, currency: string): string {
   return new Intl.NumberFormat("es-MX", {
@@ -128,10 +162,149 @@ function typeLabel(t: string): string {
   return map[t] ?? t;
 }
 
+/**
+ * Collapses whitespace and cuts on a word boundary. The single-page sheet has a
+ * fixed budget for the description, so the text has to be trimmed before it can
+ * push the thumbnails off the page.
+ */
+function truncate(text: string, max: number): string {
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (clean.length <= max) return clean;
+  const cut = clean.slice(0, max);
+  const lastSpace = cut.lastIndexOf(" ");
+  const base = lastSpace > max * 0.6 ? cut.slice(0, lastSpace) : cut;
+  return `${base.replace(/[\s,.;:]+$/, "")}…`;
+}
+
+/**
+ * Height budget for the 1-page sheet (A4 @ 96 DPI, both orientations).
+ *
+ * IMPORTANT — why no text block is ever clipped here: html2canvas rasterises a
+ * *clone* of the document, and the clone re-wraps text with slightly different
+ * metrics (measured: a paragraph that takes 6 lines on screen came out as 7,
+ * and glyphs sit a few px lower). Anything with `overflow: hidden` around text
+ * — a pixel `maxHeight` *or* `-webkit-line-clamp` — therefore slices the last
+ * line in half in the PDF even though it fits perfectly in the DOM. So text is
+ * only ever bounded by character truncation (which ends with a visible "…"),
+ * and the layout reserves room for the extra line the clone may add.
+ *
+ * Measured heights on a real listing (long title + long description):
+ * portrait  1123 - 96 padding = 1027 usable; header 73 + footer 32 -> 922 body;
+ *           minus 24 safety   = 898 available.
+ *           hero 264 + title block 109 + price 54 + specs 56 +
+ *           description 147 + gallery strip 118 + 5 gaps x 14 = 70   => 818,
+ *           leaving ~80 px for the clone's re-wrapping (an extra title line is
+ *           31 px, an extra description line 20 px, a wrapped price row 33 px).
+ * landscape 794 - 72 padding = 722 usable; header 73 + footer 32 -> 617 body;
+ *           minus 24 safety  = 593 available.
+ *           left  hero 320 + gap 14 + gallery strip 238               => 572.
+ *           right title 109 + price 54 + specs 112 + description 107 +
+ *                 QR block 88 + 5 gaps x 12 = 60                      => 530,
+ *           leaving ~63 px of the same re-wrapping headroom.
+ */
+const SINGLE_LAYOUT = {
+  portrait: {
+    heroHeight: 264,
+    thumbCols: 4,
+    thumbCount: 4,
+    thumbHeight: 90,
+    qrSize: 88,
+    gap: 14,
+    specCount: 4,
+    titleChars: 100,
+    addressChars: 84,
+    descriptionChars: 500,
+  },
+  landscape: {
+    heroHeight: 320,
+    thumbCols: 3,
+    thumbCount: 6,
+    thumbHeight: 100,
+    qrSize: 72,
+    gap: 12,
+    specCount: 6,
+    titleChars: 78,
+    addressChars: 70,
+    descriptionChars: 340,
+  },
+} as const;
+
+/** Free space kept between the content column and the page footer. */
+const SINGLE_BOTTOM_SAFETY_PX = 24;
+
+/**
+ * Space available for the description on the "Detalles" page, in rendered
+ * lines. Everything else on that page is fixed: address + datos block (~138 px),
+ * QR card (140 px) and, when present, the amenities grid. Budget (body height
+ * 922 px portrait / 617 px landscape, line 21.5 px at 13px/1.65) minus a ~20 %
+ * margin for html2canvas re-wrapping the text a bit wider than the DOM.
+ */
+const DETAILS_TEXT = {
+  portrait: {
+    charsPerLine: 92,
+    linesWithAmenities: 14,
+    linesWithoutAmenities: 22,
+    maxAmenities: 14,
+  },
+  landscape: {
+    charsPerLine: 140,
+    linesWithAmenities: 6,
+    linesWithoutAmenities: 10,
+    maxAmenities: 9,
+  },
+} as const;
+
+/**
+ * Trims text to a number of rendered lines. Honours the explicit line breaks
+ * the details page keeps with `white-space: pre-wrap` and estimates wrapping
+ * from an average characters-per-line figure.
+ */
+function truncateToLines(
+  text: string,
+  maxLines: number,
+  charsPerLine: number,
+): string {
+  const source = text.replace(/\r\n/g, "\n").split("\n");
+  const out: string[] = [];
+  let used = 0;
+  for (const raw of source) {
+    const line = raw.trimEnd();
+    const cost = Math.max(1, Math.ceil(line.length / charsPerLine));
+    if (used + cost > maxLines) {
+      const room = maxLines - used;
+      if (room > 0 && line.length > 0) {
+        out.push(truncate(line, room * charsPerLine));
+        return out.join("\n");
+      }
+      // No room left (or the next line is blank): mark the last written line
+      // instead of leaving a lone "…" hanging under an empty paragraph.
+      while (out.length > 0 && out[out.length - 1]!.trim() === "") out.pop();
+      if (out.length > 0) {
+        const last = out[out.length - 1]!;
+        out[out.length - 1] = `${last.replace(/[\s.,;:]+$/, "")}…`;
+      }
+      return out.join("\n");
+    }
+    out.push(line);
+    used += cost;
+  }
+  return out.join("\n");
+}
+
+type SpecIcon = React.ComponentType<{ size?: number; color?: string }>;
+
+interface Spec {
+  key: string;
+  icon: SpecIcon;
+  label: string;
+  value: string;
+}
+
 function PageHeader({ title }: { title: string }) {
   return (
     <header
       style={{
+        flexShrink: 0,
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
@@ -175,6 +348,7 @@ function PageFooter({
   return (
     <footer
       style={{
+        flexShrink: 0,
         marginTop: "auto",
         paddingTop: "16px",
         borderTop: "1px solid #e2e8f0",
@@ -201,19 +375,13 @@ function PageFooter({
   );
 }
 
-function StatTile({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: React.ComponentType<{ size?: number; color?: string }>;
-  label: string;
-  value: string;
-}) {
+function StatTile({ icon: Icon, label, value }: Omit<Spec, "key">) {
   return (
     <div
       style={{
-        flex: "1 1 0",
+        // Basis instead of `1 1 0`: with six tiles a zero basis squeezed each
+        // one to ~100 px and broke "600 m²" across two lines.
+        flex: "1 1 150px",
         border: "1px solid #e2e8f0",
         borderRadius: "14px",
         padding: "14px 16px",
@@ -227,9 +395,233 @@ function StatTile({
       <div style={{ fontSize: "10px", color: "#64748b", letterSpacing: "0.08em", textTransform: "uppercase" }}>
         {label}
       </div>
-      <div style={{ fontSize: "18px", fontWeight: 700, color: "#0f172a" }}>
+      <div style={{ fontSize: "18px", fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap" }}>
         {value}
       </div>
+    </div>
+  );
+}
+
+/** Compact horizontal variant of StatTile used by the 1-page sheet. */
+function SpecChip({ icon: Icon, label, value }: Omit<Spec, "key">) {
+  return (
+    <div
+      style={{
+        flex: "1 1 150px",
+        minWidth: 0,
+        border: "1px solid #e2e8f0",
+        borderRadius: "12px",
+        padding: "9px 12px",
+        display: "flex",
+        alignItems: "center",
+        gap: "10px",
+        background: "#f8fafc",
+      }}
+    >
+      <Icon size={18} color="#3b82f6" />
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: "9px", color: "#64748b", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+          {label}
+        </div>
+        <div style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
+          {value}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PriceBlock({
+  property,
+  compact = false,
+}: {
+  property: FichaProperty;
+  compact?: boolean;
+}) {
+  const mainSize = compact ? "26px" : "30px";
+  const dualSize = compact ? "21px" : "24px";
+  const dualAltSize = compact ? "19px" : "22px";
+
+  // Solid color rather than gradient-clip: html2canvas does not support
+  // -webkit-background-clip: text, which would render the price invisible.
+  if (property.show_price === false) {
+    return (
+      <span style={{ fontSize: dualSize, fontWeight: 700, color: "#475569" }}>
+        Precio a consultar
+      </span>
+    );
+  }
+
+  if (property.operation === "VENTA_RENTA") {
+    return (
+      <>
+        {(property.price_sale ?? property.price) > 0 && (
+          <span style={{ fontSize: dualSize, fontWeight: 800, color: "#1d4ed8" }}>
+            {formatPrice(property.price_sale ?? property.price, property.currency)}
+            <span style={{ fontSize: "12px", color: "#64748b", marginLeft: "6px", fontWeight: 500 }}>
+              {property.currency} · Venta
+            </span>
+          </span>
+        )}
+        {property.price_rent && property.price_rent > 0 && (
+          <span style={{ fontSize: dualAltSize, fontWeight: 700, color: "#1d4ed8" }}>
+            {formatPrice(property.price_rent, property.currency)}
+            <span style={{ fontSize: "12px", color: "#64748b", marginLeft: "6px", fontWeight: 500 }}>
+              {property.currency}/mes · Renta
+            </span>
+          </span>
+        )}
+        {property.accepts_crypto && <CryptoBadge />}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <span style={{ fontSize: mainSize, fontWeight: 800, color: "#1d4ed8" }}>
+        {formatPrice(
+          property.operation === "RENTA"
+            ? property.price_rent ?? property.price
+            : property.price_sale ?? property.price,
+          property.currency,
+        )}
+      </span>
+      <span style={{ color: "#64748b", fontSize: "13px" }}>
+        {property.currency}
+        {property.operation === "RENTA" ? " /mes" : ""}
+      </span>
+      {property.accepts_crypto && <CryptoBadge />}
+    </>
+  );
+}
+
+function CryptoBadge() {
+  return (
+    <span
+      style={{
+        fontSize: "10px",
+        fontWeight: 600,
+        color: "#16a34a",
+        background: "#dcfce7",
+        padding: "4px 8px",
+        borderRadius: "6px",
+      }}
+    >
+      Acepta cripto
+    </span>
+  );
+}
+
+function HeroBadges({
+  operation,
+  isBrcCertified,
+}: {
+  operation: string;
+  isBrcCertified: boolean;
+}) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: "12px",
+        left: "12px",
+        display: "flex",
+        gap: "8px",
+      }}
+    >
+      <span
+        style={{
+          background: ACCENT_GRADIENT,
+          color: "#fff",
+          fontSize: "11px",
+          fontWeight: 600,
+          padding: "6px 10px",
+          borderRadius: "8px",
+        }}
+      >
+        {operationLabel(operation)}
+      </span>
+      {isBrcCertified && (
+        <span
+          style={{
+            background: "#0f172a",
+            color: "#fff",
+            fontSize: "11px",
+            fontWeight: 600,
+            padding: "6px 10px",
+            borderRadius: "8px",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px",
+          }}
+        >
+          <ShieldBrc style={{ width: "12px", height: "12px" }} />
+          Certificada BRC
+        </span>
+      )}
+    </div>
+  );
+}
+
+function Thumbnail({ photo, index }: { photo: FichaMedia; index: number }) {
+  return (
+    <div
+      style={{
+        // Must fill the sized wrapper: with `height: auto` the inner <img>
+        // falls back to its intrinsic height and spills below the grid row.
+        height: "100%",
+        minWidth: 0,
+        minHeight: 0,
+        borderRadius: "10px",
+        overflow: "hidden",
+        border: "1px solid #e2e8f0",
+        background: "#f1f5f9",
+      }}
+    >
+      <img
+        src={photo.url}
+        alt={photo.alt_text ?? `Foto ${index + 1}`}
+        crossOrigin="anonymous"
+        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+      />
+    </div>
+  );
+}
+
+function QrBlock({
+  qrDataUrl,
+  size,
+}: {
+  qrDataUrl: string | null;
+  size: number;
+}) {
+  if (!qrDataUrl) return null;
+  return (
+    <div
+      style={{
+        flexShrink: 0,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: "6px",
+      }}
+    >
+      <img
+        src={qrDataUrl}
+        alt="QR code"
+        style={{ width: `${size}px`, height: `${size}px`, display: "block" }}
+      />
+      <span
+        style={{
+          fontSize: "8px",
+          color: "#94a3b8",
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          fontWeight: 600,
+        }}
+      >
+        Ver en línea
+      </span>
     </div>
   );
 }
@@ -240,8 +632,13 @@ export function FichaTecnicaTemplate({
   qrDataUrl,
   publicUrl,
   generatedAt,
+  options = DEFAULT_FICHA_OPTIONS,
 }: FichaTecnicaTemplateProps) {
+  const { orientation, layout, includeAllPhotos } = options;
+  const isLandscape = orientation === "landscape";
   const isBrcCertified = property.brc_status === "CERTIFICADO";
+  const PAGE_STYLE = useMemo(() => pageStyle(orientation), [orientation]);
+
   const location = useMemo(() => {
     const parts = [property.neighborhood, property.city, property.state].filter(
       Boolean,
@@ -270,6 +667,36 @@ export function FichaTecnicaTemplate({
     property.zip_code,
   ]);
 
+  const specs = useMemo<Spec[]>(() => {
+    const out: Spec[] = [];
+    if (property.area_total != null) {
+      out.push({ key: "area_total", icon: Ruler, label: "Área total", value: `${property.area_total} m²` });
+    }
+    if (property.area_built != null) {
+      out.push({ key: "area_built", icon: Building2, label: "Construcción", value: `${property.area_built} m²` });
+    }
+    if (property.bedrooms != null) {
+      out.push({ key: "bedrooms", icon: BedDouble, label: "Recámaras", value: String(property.bedrooms) });
+    }
+    if (property.bathrooms != null) {
+      out.push({ key: "bathrooms", icon: Bath, label: "Baños", value: String(property.bathrooms) });
+    }
+    if (property.parking_spaces != null) {
+      out.push({ key: "parking", icon: Car, label: "Estacionamientos", value: String(property.parking_spaces) });
+    }
+    if (property.floors != null) {
+      out.push({ key: "floors", icon: Building2, label: "Pisos / niveles", value: String(property.floors) });
+    }
+    return out;
+  }, [
+    property.area_total,
+    property.area_built,
+    property.bedrooms,
+    property.bathrooms,
+    property.parking_spaces,
+    property.floors,
+  ]);
+
   // Photos for gallery: dedupe featured + media.
   const galleryPhotos = useMemo(() => {
     const urls = new Set<string>();
@@ -291,28 +718,308 @@ export function FichaTecnicaTemplate({
     return out.slice(1); // featured already shows on page 1
   }, [property.featured_image_url, media]);
 
-  // 6 photos per gallery page (2 columns x 3 rows) for a compact layout.
-  const GALLERY_PER_PAGE = 6;
+  // 6 photos per gallery page in portrait (2x3), 8 in landscape (4x2).
+  const galleryPerPage = isLandscape ? 8 : 6;
   const galleryPages = useMemo(() => {
     const chunks: FichaMedia[][] = [];
-    for (let i = 0; i < galleryPhotos.length; i += GALLERY_PER_PAGE) {
-      chunks.push(galleryPhotos.slice(i, i + GALLERY_PER_PAGE));
+    for (let i = 0; i < galleryPhotos.length; i += galleryPerPage) {
+      chunks.push(galleryPhotos.slice(i, i + galleryPerPage));
     }
-    return chunks;
-  }, [galleryPhotos]);
+    // Unchecking "incluir todas las fotografías" keeps a single gallery page.
+    return includeAllPhotos ? chunks : chunks.slice(0, 1);
+  }, [galleryPhotos, galleryPerPage, includeAllPhotos]);
 
   const totalPages = 2 + galleryPages.length; // cover + details + gallery pages
 
+  // Details page: keep the description + amenities within the page budget.
+  const detailsText = isLandscape
+    ? DETAILS_TEXT.landscape
+    : DETAILS_TEXT.portrait;
+  const hasAmenities = (property.amenities?.length ?? 0) > 0;
+  const shownAmenities = (property.amenities ?? []).slice(
+    0,
+    detailsText.maxAmenities,
+  );
+  const hiddenAmenities = (property.amenities?.length ?? 0) - shownAmenities.length;
+
+  const wrapperStyle: React.CSSProperties = {
+    position: "absolute",
+    left: "-10000px",
+    top: 0,
+    pointerEvents: "none",
+  };
+
+  // ====================== 1-PAGE SUMMARY ======================
+  if (layout === "single") {
+    const L = isLandscape ? SINGLE_LAYOUT.landscape : SINGLE_LAYOUT.portrait;
+    const thumbs = galleryPhotos.slice(0, L.thumbCount);
+    const description = property.description
+      ? truncate(property.description, L.descriptionChars)
+      : null;
+
+    const heroNode = property.featured_image_url ? (
+      <div
+        style={{
+          flexShrink: 0,
+          width: "100%",
+          height: `${L.heroHeight}px`,
+          borderRadius: "16px",
+          overflow: "hidden",
+          position: "relative",
+          background: "#e2e8f0",
+        }}
+      >
+        <img
+          src={property.featured_image_url}
+          alt={property.title}
+          crossOrigin="anonymous"
+          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+        />
+        <HeroBadges operation={property.operation} isBrcCertified={isBrcCertified} />
+      </div>
+    ) : null;
+
+    const titleNode = (
+      <div style={{ flexShrink: 0 }}>
+        <div
+          style={{
+            fontSize: "11px",
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+            color: "#3b82f6",
+            fontWeight: 600,
+            marginBottom: "6px",
+          }}
+        >
+          {typeLabel(property.type)}
+        </div>
+        <h1
+          style={{
+            fontSize: "24px",
+            fontWeight: 700,
+            lineHeight: 1.3,
+            margin: 0,
+            color: "#0f172a",
+          }}
+        >
+          {truncate(property.title, L.titleChars)}
+        </h1>
+        <div
+          style={{
+            marginTop: "10px",
+            display: "flex",
+            alignItems: "flex-start",
+            gap: "6px",
+            color: "#64748b",
+            fontSize: "13px",
+            lineHeight: 1.45,
+          }}
+        >
+          <span style={{ flexShrink: 0, paddingTop: "2px" }}>
+            <MapPin size={14} />
+          </span>
+          <span style={{ minWidth: 0 }}>
+            {truncate(fullAddress || location, L.addressChars)}
+          </span>
+        </div>
+      </div>
+    );
+
+    const priceNode = (
+      <div
+        style={{
+          flexShrink: 0,
+          display: "flex",
+          alignItems: "baseline",
+          gap: "10px",
+          paddingBottom: "14px",
+          borderBottom: "1px solid #e2e8f0",
+          flexWrap: "wrap",
+        }}
+      >
+        <PriceBlock property={property} compact />
+      </div>
+    );
+
+    const specsNode = specs.length > 0 && (
+      <div
+        style={{
+          flexShrink: 0,
+          display: "flex",
+          gap: "10px",
+          flexWrap: "wrap",
+        }}
+      >
+        {specs.slice(0, L.specCount).map((s) => (
+          <SpecChip key={s.key} icon={s.icon} label={s.label} value={s.value} />
+        ))}
+      </div>
+    );
+
+    const descriptionNode = description && (
+      <div style={{ flexShrink: 0 }}>
+        <h2 style={SECTION_TITLE_STYLE}>Descripción</h2>
+        <p
+          style={{
+            fontSize: "12.5px",
+            lineHeight: 1.6,
+            color: "#334155",
+            margin: "8px 0 0",
+          }}
+        >
+          {description}
+        </p>
+      </div>
+    );
+
+    const thumbsNode = thumbs.length > 0 && (
+      <div style={{ flexShrink: 0 }}>
+        <h2 style={SECTION_TITLE_STYLE}>Galería</h2>
+        <div
+          style={{
+            marginTop: "8px",
+            display: "grid",
+            gridTemplateColumns: `repeat(${L.thumbCols}, 1fr)`,
+            gap: "10px",
+          }}
+        >
+          {thumbs.map((m, i) => (
+            <div key={m.id ?? `thumb-${i}`} style={{ height: `${L.thumbHeight}px` }}>
+              <Thumbnail photo={m} index={i} />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+
+    return (
+      <div style={wrapperStyle} aria-hidden="true">
+        <section data-page="1" style={PAGE_STYLE}>
+          <PageHeader title="Ficha técnica · Resumen" />
+
+          {isLandscape ? (
+            <div
+              style={{
+                flex: 1,
+                minHeight: 0,
+                overflow: "hidden",
+                display: "flex",
+                gap: "28px",
+                paddingBottom: `${SINGLE_BOTTOM_SAFETY_PX}px`,
+              }}
+            >
+              {/* Left: hero + thumbnails. No `overflow: hidden` on the columns:
+                  html2canvas draws glyphs a couple of px lower than the DOM, so
+                  a clip right under the last line shaves it off. The parent row
+                  clips instead, 24 px further down. */}
+              <div
+                style={{
+                  width: "470px",
+                  flexShrink: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "14px",
+                  minHeight: 0,
+                }}
+              >
+                {heroNode}
+                {thumbsNode}
+              </div>
+
+              {/* Right: data + description + QR */}
+              <div
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  minHeight: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: `${L.gap}px`,
+                }}
+              >
+                {titleNode}
+                {priceNode}
+                {specsNode}
+                {descriptionNode}
+                <div
+                  style={{
+                    marginTop: "auto",
+                    flexShrink: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "14px",
+                  }}
+                >
+                  <QrBlock qrDataUrl={qrDataUrl} size={L.qrSize} />
+                  <div style={{ minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        color: "#0f172a",
+                        fontWeight: 600,
+                        wordBreak: "break-all",
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {publicUrl}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "9px",
+                        color: "#94a3b8",
+                        marginTop: "4px",
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      Escanea el código para ver la propiedad completa y todas las fotografías.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div
+              style={{
+                flex: 1,
+                minHeight: 0,
+                overflow: "hidden",
+                display: "flex",
+                flexDirection: "column",
+                gap: `${L.gap}px`,
+                paddingBottom: `${SINGLE_BOTTOM_SAFETY_PX}px`,
+              }}
+            >
+              {heroNode}
+              {titleNode}
+              {priceNode}
+              {specsNode}
+              {descriptionNode}
+              {/* Follows the description instead of being pinned to the bottom:
+                  the spare height reserved for text growth then shows up as a
+                  bottom margin rather than as a hole in the middle. */}
+              <div
+                style={{
+                  flexShrink: 0,
+                  display: "flex",
+                  alignItems: "flex-end",
+                  gap: "16px",
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>{thumbsNode}</div>
+                <QrBlock qrDataUrl={qrDataUrl} size={L.qrSize} />
+              </div>
+            </div>
+          )}
+
+          <PageFooter pageNum={1} totalPages={1} generatedAt={generatedAt} />
+        </section>
+      </div>
+    );
+  }
+
+  // ====================== FULL SHEET ======================
   return (
-    <div
-      style={{
-        position: "absolute",
-        left: "-10000px",
-        top: 0,
-        pointerEvents: "none",
-      }}
-      aria-hidden="true"
-    >
+    <div style={wrapperStyle} aria-hidden="true">
       {/* ====================== PAGE 1: COVER ====================== */}
       <section data-page="1" style={PAGE_STYLE}>
         <PageHeader title="Ficha técnica" />
@@ -322,7 +1029,7 @@ export function FichaTecnicaTemplate({
           <div
             style={{
               width: "100%",
-              height: "280px",
+              height: isLandscape ? "230px" : "280px",
               borderRadius: "16px",
               overflow: "hidden",
               marginBottom: "24px",
@@ -341,46 +1048,7 @@ export function FichaTecnicaTemplate({
                 display: "block",
               }}
             />
-            <div
-              style={{
-                position: "absolute",
-                top: "12px",
-                left: "12px",
-                display: "flex",
-                gap: "8px",
-              }}
-            >
-              <span
-                style={{
-                  background: ACCENT_GRADIENT,
-                  color: "#fff",
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  padding: "6px 10px",
-                  borderRadius: "8px",
-                }}
-              >
-                {operationLabel(property.operation)}
-              </span>
-              {isBrcCertified && (
-                <span
-                  style={{
-                    background: "#0f172a",
-                    color: "#fff",
-                    fontSize: "11px",
-                    fontWeight: 600,
-                    padding: "6px 10px",
-                    borderRadius: "8px",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px",
-                  }}
-                >
-                  <ShieldBrc style={{ width: "12px", height: "12px" }} />
-                  Certificada BRC
-                </span>
-              )}
-            </div>
+            <HeroBadges operation={property.operation} isBrcCertified={isBrcCertified} />
           </div>
         )}
 
@@ -402,7 +1070,7 @@ export function FichaTecnicaTemplate({
             style={{
               fontSize: "26px",
               fontWeight: 700,
-              lineHeight: 1.2,
+              lineHeight: 1.3,
               margin: 0,
               color: "#0f172a",
             }}
@@ -411,15 +1079,18 @@ export function FichaTecnicaTemplate({
           </h1>
           <div
             style={{
-              marginTop: "8px",
+              marginTop: "10px",
               display: "flex",
-              alignItems: "center",
+              alignItems: "flex-start",
               gap: "6px",
               color: "#64748b",
               fontSize: "13px",
+              lineHeight: 1.45,
             }}
           >
-            <MapPin size={14} />
+            <span style={{ flexShrink: 0, paddingTop: "2px" }}>
+              <MapPin size={14} />
+            </span>
             <span>{location}</span>
           </div>
         </div>
@@ -436,61 +1107,7 @@ export function FichaTecnicaTemplate({
             flexWrap: "wrap",
           }}
         >
-          {/* Solid color rather than gradient-clip: html2canvas does not support
-              -webkit-background-clip: text, which would render the price invisible. */}
-          {property.show_price === false ? (
-            <span style={{ fontSize: "24px", fontWeight: 700, color: "#475569" }}>
-              Precio a consultar
-            </span>
-          ) : property.operation === "VENTA_RENTA" ? (
-            <>
-              {(property.price_sale ?? property.price) > 0 && (
-                <span style={{ fontSize: "24px", fontWeight: 800, color: "#1d4ed8" }}>
-                  {formatPrice(property.price_sale ?? property.price, property.currency)}
-                  <span style={{ fontSize: "12px", color: "#64748b", marginLeft: "6px", fontWeight: 500 }}>
-                    {property.currency} · Venta
-                  </span>
-                </span>
-              )}
-              {property.price_rent && property.price_rent > 0 && (
-                <span style={{ fontSize: "22px", fontWeight: 700, color: "#1d4ed8" }}>
-                  {formatPrice(property.price_rent, property.currency)}
-                  <span style={{ fontSize: "12px", color: "#64748b", marginLeft: "6px", fontWeight: 500 }}>
-                    {property.currency}/mes · Renta
-                  </span>
-                </span>
-              )}
-            </>
-          ) : (
-            <>
-              <span style={{ fontSize: "30px", fontWeight: 800, color: "#1d4ed8" }}>
-                {formatPrice(
-                  property.operation === "RENTA"
-                    ? property.price_rent ?? property.price
-                    : property.price_sale ?? property.price,
-                  property.currency,
-                )}
-              </span>
-              <span style={{ color: "#64748b", fontSize: "13px" }}>
-                {property.currency}
-                {property.operation === "RENTA" ? " /mes" : ""}
-              </span>
-            </>
-          )}
-          {property.accepts_crypto && property.show_price !== false && (
-            <span
-              style={{
-                fontSize: "10px",
-                fontWeight: 600,
-                color: "#16a34a",
-                background: "#dcfce7",
-                padding: "4px 8px",
-                borderRadius: "6px",
-              }}
-            >
-              Acepta cripto
-            </span>
-          )}
+          <PriceBlock property={property} />
         </div>
 
         {/* Specs grid */}
@@ -502,48 +1119,9 @@ export function FichaTecnicaTemplate({
             flexWrap: "wrap",
           }}
         >
-          {property.area_total != null && (
-            <StatTile
-              icon={Ruler}
-              label="Área total"
-              value={`${property.area_total} m²`}
-            />
-          )}
-          {property.area_built != null && (
-            <StatTile
-              icon={Building2}
-              label="Construcción"
-              value={`${property.area_built} m²`}
-            />
-          )}
-          {property.bedrooms != null && (
-            <StatTile
-              icon={BedDouble}
-              label="Recámaras"
-              value={String(property.bedrooms)}
-            />
-          )}
-          {property.bathrooms != null && (
-            <StatTile
-              icon={Bath}
-              label="Baños"
-              value={String(property.bathrooms)}
-            />
-          )}
-          {property.parking_spaces != null && (
-            <StatTile
-              icon={Car}
-              label="Estacionamientos"
-              value={String(property.parking_spaces)}
-            />
-          )}
-          {property.floors != null && (
-            <StatTile
-              icon={Building2}
-              label="Pisos / niveles"
-              value={String(property.floors)}
-            />
-          )}
+          {specs.map((s) => (
+            <StatTile key={s.key} icon={s.icon} label={s.label} value={s.value} />
+          ))}
         </div>
 
         <PageFooter
@@ -557,22 +1135,11 @@ export function FichaTecnicaTemplate({
       <section data-page="2" style={PAGE_STYLE}>
         <PageHeader title="Detalles" />
 
-        {/* Description */}
+        {/* Description — bounded so the QR card and the footer below always fit;
+            a description longer than the page used to push them out of it. */}
         {property.description && (
           <div style={{ marginBottom: "24px" }}>
-            <h2
-              style={{
-                fontSize: "13px",
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-                color: "#3b82f6",
-                fontWeight: 700,
-                marginBottom: "10px",
-                margin: 0,
-              }}
-            >
-              Descripción
-            </h2>
+            <h2 style={SECTION_TITLE_STYLE}>Descripción</h2>
             <p
               style={{
                 fontSize: "13px",
@@ -582,36 +1149,30 @@ export function FichaTecnicaTemplate({
                 marginTop: "10px",
               }}
             >
-              {property.description}
+              {truncateToLines(
+                property.description,
+                hasAmenities
+                  ? detailsText.linesWithAmenities
+                  : detailsText.linesWithoutAmenities,
+                detailsText.charsPerLine,
+              )}
             </p>
           </div>
         )}
 
         {/* Amenities */}
-        {property.amenities && property.amenities.length > 0 && (
+        {hasAmenities && (
           <div style={{ marginBottom: "24px" }}>
-            <h2
-              style={{
-                fontSize: "13px",
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-                color: "#3b82f6",
-                fontWeight: 700,
-                marginBottom: "12px",
-                margin: 0,
-              }}
-            >
-              Amenidades
-            </h2>
+            <h2 style={SECTION_TITLE_STYLE}>Amenidades</h2>
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "1fr 1fr",
+                gridTemplateColumns: isLandscape ? "1fr 1fr 1fr" : "1fr 1fr",
                 gap: "8px 16px",
                 marginTop: "12px",
               }}
             >
-              {property.amenities.map((a, i) => (
+              {shownAmenities.map((a, i) => (
                 <div
                   key={`${a}-${i}`}
                   style={{
@@ -627,6 +1188,11 @@ export function FichaTecnicaTemplate({
                 </div>
               ))}
             </div>
+            {hiddenAmenities > 0 && (
+              <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "10px" }}>
+                y {hiddenAmenities} amenidad{hiddenAmenities === 1 ? "" : "es"} más
+              </div>
+            )}
           </div>
         )}
 
@@ -640,17 +1206,7 @@ export function FichaTecnicaTemplate({
           }}
         >
           <div>
-            <h2
-              style={{
-                fontSize: "13px",
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-                color: "#3b82f6",
-                fontWeight: 700,
-                margin: 0,
-                marginBottom: "10px",
-              }}
-            >
+            <h2 style={{ ...SECTION_TITLE_STYLE, marginBottom: "10px" }}>
               Ubicación
             </h2>
             <p style={{ fontSize: "12px", color: "#334155", lineHeight: 1.6, margin: 0 }}>
@@ -658,17 +1214,7 @@ export function FichaTecnicaTemplate({
             </p>
           </div>
           <div>
-            <h2
-              style={{
-                fontSize: "13px",
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-                color: "#3b82f6",
-                fontWeight: 700,
-                margin: 0,
-                marginBottom: "10px",
-              }}
-            >
+            <h2 style={{ ...SECTION_TITLE_STYLE, marginBottom: "10px" }}>
               Datos generales
             </h2>
             <dl style={{ fontSize: "12px", color: "#334155", margin: 0 }}>
@@ -747,8 +1293,8 @@ export function FichaTecnicaTemplate({
                 flex: 1,
                 minHeight: 0,
                 display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gridTemplateRows: "repeat(3, 1fr)",
+                gridTemplateColumns: isLandscape ? "1fr 1fr 1fr 1fr" : "1fr 1fr",
+                gridTemplateRows: isLandscape ? "repeat(2, 1fr)" : "repeat(3, 1fr)",
                 gap: "12px",
               }}
             >

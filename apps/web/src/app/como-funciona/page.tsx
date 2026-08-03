@@ -140,7 +140,7 @@ export default function ComoFuncionaPage() {
       {/* ================================================================== */}
       {/*  1. Hero                                                           */}
       {/* ================================================================== */}
-      <section className="relative overflow-hidden min-h-[65vh] flex items-end">
+      <section className="relative overflow-hidden min-h-[65vh] flex items-end pt-[var(--header-offset)]">
         {/* Background gradient */}
         <div
           className="absolute inset-0"

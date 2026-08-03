@@ -1,39 +1,41 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
-import Image from "next/image";
+import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
 import {
   ArrowLeft,
   Upload,
-  X,
   Loader2,
-  ImagePlus,
   CheckCircle2,
   AlertCircle,
   ShieldAlert,
   Clock,
-  Star,
-  GripVertical,
 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
 import {
-  applyWatermark,
+  applyWatermarkDetailed,
   loadWatermarkConfig,
   isWatermarkActive,
-  WM_SUFFIX,
+  watermarkSignature,
+  watermarkStoragePath,
+  originalStoragePath,
+  newPhotoKey,
+  WM_BUCKET,
   DEFAULT_WATERMARK_CONFIG,
   type WatermarkConfig,
 } from "@/lib/watermark";
 import { logError } from "@/lib/log";
-import {
-  usePostalLookup,
-  COLONIA_OTRA,
-  type PostalRecord,
-} from "@/lib/postal";
+import { getPropertyTypeFlags } from "@/lib/property-types";
 import { useUser } from "../../../_context/user-context";
+import {
+  PhotoManager,
+  MAX_PROPERTY_IMAGES,
+  moveItem,
+  promoteToFront,
+  type PhotoItem,
+} from "@/components/propiedades/photo-manager";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -45,6 +47,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  LocationPicker,
+  INITIAL_LOCATION_STATUS,
+  validateLocation,
+  type LocationStatus,
+  type LocationValue,
+} from "@/components/ui/location-picker";
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
@@ -75,41 +84,6 @@ const CRYPTOS = [
   { id: "BTC", label: "Bitcoin (BTC)" },
   { id: "ETH", label: "Ethereum (ETH)" },
   { id: "USDC", label: "USD Coin (USDC)" },
-] as const;
-
-const MEXICAN_STATES = [
-  "Aguascalientes",
-  "Baja California",
-  "Baja California Sur",
-  "Campeche",
-  "Chiapas",
-  "Chihuahua",
-  "Ciudad de México",
-  "Coahuila",
-  "Colima",
-  "Durango",
-  "Estado de México",
-  "Guanajuato",
-  "Guerrero",
-  "Hidalgo",
-  "Jalisco",
-  "Michoacán",
-  "Morelos",
-  "Nayarit",
-  "Nuevo León",
-  "Oaxaca",
-  "Puebla",
-  "Querétaro",
-  "Quintana Roo",
-  "San Luis Potosí",
-  "Sinaloa",
-  "Sonora",
-  "Tabasco",
-  "Tamaulipas",
-  "Tlaxcala",
-  "Veracruz",
-  "Yucatán",
-  "Zacatecas",
 ] as const;
 
 const COMMON_AREAS = [
@@ -341,14 +315,12 @@ export default function EditarPropiedadPage() {
   const params = useParams();
   const propertyId = params.id as string;
   const { user } = useUser();
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState<FormData>(initialFormData);
   // Unified, ordered photo list — existing (already in DB) and newly added
   // files live in the SAME array so they can be freely reordered and any one
   // can be set as the cover. Index 0 is always the principal/cover photo.
   const [orderedImages, setOrderedImages] = useState<EditImage[]>([]);
-  const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [watermark, setWatermark] = useState<WatermarkConfig>(
     DEFAULT_WATERMARK_CONFIG
   );
@@ -356,14 +328,20 @@ export default function EditarPropiedadPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [dragOver, setDragOver] = useState(false);
   const [originalSlug, setOriginalSlug] = useState<string>("");
   const [, setOriginalStatus] = useState<string>("");
   const [brcStatus, setBrcStatus] = useState<string>("NO_SOLICITADO");
 
-  const isCasa = form.tipo_propiedad === "CASA";
-  const isDepto = form.tipo_propiedad === "DEPARTAMENTO";
-  const isResidential = isCasa || isDepto;
+  // Conditional fields per property type (CASA_CONDOMINIO behaves like a
+  // house, DEPARTAMENTO_HOTEL like an apartment, HOTEL has its own set).
+  const {
+    isCasa,
+    isDepto,
+    isHotel,
+    isResidential,
+    showMaintenanceFee,
+    showFloorNumber,
+  } = getPropertyTypeFlags(form.tipo_propiedad);
   const hasSale =
     form.tipo_operacion === "VENTA" ||
     form.tipo_operacion === "VENTA_RENTA" ||
@@ -483,35 +461,25 @@ export default function EditarPropiedadPage() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  /* ---- Postal code (SEPOMEX) lookup ---- */
+  /* ---- Location (SEPOMEX catalog) ---- */
 
-  // True once the user edits the CP field. On initial load the existing CP is
-  // looked up only to populate the colonia dropdown — never to overwrite the
-  // saved estado/ciudad/colonia.
-  const cpEditedRef = useRef(false);
-  const [coloniaLibre, setColoniaLibre] = useState(false);
-
-  const handlePostalResolve = useCallback((rec: PostalRecord | null) => {
-    if (!rec || !cpEditedRef.current) return;
-    setColoniaLibre(false);
-    if ((MEXICAN_STATES as readonly string[]).includes(rec.estado)) {
-      updateField("estado", rec.estado);
-    }
-    updateField("ciudad", rec.ciudad || rec.municipio);
-    setForm((prev) =>
-      rec.colonias.includes(prev.colonia) ? prev : { ...prev, colonia: "" }
-    );
-  }, []);
-
-  const { colonias: cpColonias } = usePostalLookup(
-    form.codigo_postal,
-    handlePostalResolve
+  // Reported by <LocationPicker>: tells us whether the saved (or edited)
+  // estado/municipio/colonia combination exists in the catalog. Legacy
+  // listings with a place outside the catalog are flagged there.
+  const [locationStatus, setLocationStatus] = useState<LocationStatus>(
+    INITIAL_LOCATION_STATUS
   );
 
-  const showColoniaSelect =
-    cpColonias.length > 0 &&
-    !coloniaLibre &&
-    (form.colonia === "" || cpColonias.includes(form.colonia));
+  const locationValue: LocationValue = {
+    estado: form.estado,
+    ciudad: form.ciudad,
+    colonia: form.colonia,
+    codigo_postal: form.codigo_postal,
+  };
+
+  const handleLocationChange = useCallback((patch: Partial<LocationValue>) => {
+    setForm((prev) => ({ ...prev, ...patch }));
+  }, []);
 
   function toggleAmenity(amenity: string) {
     setForm((prev) => ({
@@ -524,8 +492,6 @@ export default function EditarPropiedadPage() {
 
   /* ---- Image handling ---- */
 
-  const totalImageCount = orderedImages.length;
-
   const addImages = useCallback(
     (files: FileList | File[]) => {
       const newFiles = Array.from(files).filter((f) =>
@@ -533,8 +499,7 @@ export default function EditarPropiedadPage() {
       );
       if (newFiles.length === 0) return;
 
-      const totalAllowed = 20;
-      const remaining = totalAllowed - orderedImages.length;
+      const remaining = MAX_PROPERTY_IMAGES - orderedImages.length;
       const toAdd = newFiles.slice(0, remaining);
       if (toAdd.length === 0) return;
 
@@ -565,66 +530,63 @@ export default function EditarPropiedadPage() {
     setOrderedImages((prev) => prev.filter((_, i) => i !== index));
   }
 
-  /** Move a photo to the front so it becomes the principal/cover photo. */
-  function setAsPrincipal(index: number) {
-    setOrderedImages((prev) => {
-      if (index <= 0 || index >= prev.length) return prev;
-      const copy = [...prev];
-      const [item] = copy.splice(index, 1);
-      copy.unshift(item!);
-      return copy;
-    });
-  }
-
-  /** Reorder a photo from one position to another (drag & drop). */
-  function moveImage(from: number, to: number) {
-    setOrderedImages((prev) => {
-      if (
-        from === to ||
-        from < 0 ||
-        to < 0 ||
-        from >= prev.length ||
-        to >= prev.length
-      ) {
-        return prev;
-      }
-      const copy = [...prev];
-      const [item] = copy.splice(from, 1);
-      copy.splice(to, 0, item!);
-      return copy;
-    });
-  }
-
-  function handleDrop(e: React.DragEvent) {
-    e.preventDefault();
-    setDragOver(false);
-    if (e.dataTransfer.files) {
-      addImages(e.dataTransfer.files);
-    }
-  }
+  const photoItems: PhotoItem[] = orderedImages.map((img, idx) => ({
+    key: img.kind === "existing" ? img.id : `new-${idx}-${img.preview.slice(-24)}`,
+    src: img.kind === "existing" ? img.url : img.preview,
+  }));
 
   /* ---- Upload new images to Supabase Storage ---- */
 
+  /**
+   * Uploads newly added photos, stamping the watermark when one is configured.
+   *
+   * The pristine file is ALWAYS archived under `originals/` first — a stamped
+   * JPEG cannot be re-stamped with a different watermark once the source is
+   * gone, which is what left older listings stuck with their original mark.
+   */
   async function uploadFiles(propId: string, files: File[]): Promise<string[]> {
     const supabase = createClient();
     const urls: string[] = [];
     const wmActive = isWatermarkActive(watermark);
+    const signature = watermarkSignature(watermark);
+    const userId = user?.id ?? "";
 
     for (let i = 0; i < files.length; i++) {
       const original = files[i]!;
-      const file: Blob = wmActive
-        ? await applyWatermark(original, watermark)
-        : original;
-      const ext = wmActive ? "jpg" : (original.name.split(".").pop() ?? "jpg");
-      const suffix = wmActive ? WM_SUFFIX : "";
-      const path = `${user?.id}/${propId}/${Date.now()}_${i}${suffix}.${ext}`;
+      const photoKey = newPhotoKey();
+
+      // Non-fatal: failing to archive only costs re-markability later.
+      const { error: origError } = await supabase.storage
+        .from(WM_BUCKET)
+        .upload(originalStoragePath(userId, propId, photoKey), original, {
+          cacheControl: "3600",
+          upsert: true,
+          contentType: original.type || "image/jpeg",
+        });
+      if (origError) {
+        logError("no se pudo archivar el original de la foto", origError);
+      }
+
+      const stamped = wmActive
+        ? await applyWatermarkDetailed(original, watermark)
+        : null;
+      if (stamped?.error) {
+        logError("watermark stamping failed on upload", stamped.error);
+      }
+
+      const useWm = !!stamped?.watermarked;
+      const file: Blob = useWm ? stamped!.blob : original;
+      const ext = useWm ? "jpg" : (original.name.split(".").pop() ?? "jpg");
+      const path = useWm
+        ? watermarkStoragePath(userId, propId, photoKey, signature)
+        : `${userId}/${propId}/${photoKey}.${ext}`;
 
       const { error: uploadError } = await supabase.storage
-        .from("properties")
+        .from(WM_BUCKET)
         .upload(path, file, {
           cacheControl: "3600",
           upsert: true,
-          contentType: wmActive ? "image/jpeg" : original.type,
+          contentType: useWm ? "image/jpeg" : original.type,
         });
 
       if (uploadError) {
@@ -633,7 +595,7 @@ export default function EditarPropiedadPage() {
 
       const {
         data: { publicUrl },
-      } = supabase.storage.from("properties").getPublicUrl(path);
+      } = supabase.storage.from(WM_BUCKET).getPublicUrl(path);
 
       urls.push(publicUrl);
     }
@@ -670,11 +632,11 @@ export default function EditarPropiedadPage() {
       }
     }
 
-    if (!form.ciudad.trim()) return "La ciudad es obligatoria.";
-    if (!form.estado) return "Selecciona el estado.";
-    if (form.codigo_postal && !/^\d{5}$/.test(form.codigo_postal)) {
-      return "El código postal debe tener 5 dígitos.";
-    }
+    // Location must exist in the SEPOMEX catalog (estado -> municipio ->
+    // colonia), with free text allowed only for an explicit "Otra" colonia.
+    const locationError = validateLocation(locationValue, locationStatus);
+    if (locationError) return locationError;
+
     return null;
   }
 
@@ -753,8 +715,10 @@ export default function EditarPropiedadPage() {
         half_bathrooms: asNum(form.medios_banos),
         parking_spaces: asNum(form.estacionamientos),
         floors: asNum(form.niveles),
-        floor_number: isDepto ? asNum(form.piso) : null,
-        maintenance_fee: isDepto ? asNum(form.cuota_mantenimiento) : null,
+        floor_number: showFloorNumber ? asNum(form.piso) : null,
+        maintenance_fee: showMaintenanceFee
+          ? asNum(form.cuota_mantenimiento)
+          : null,
         has_service_room: form.has_service_room,
         has_storage: form.has_storage,
         has_terrace: form.has_terrace,
@@ -1256,6 +1220,25 @@ export default function EditarPropiedadPage() {
                   className="rounded-xl"
                 />
               </div>
+              {/* En condominio la cuota de mantenimiento siempre aplica */}
+              {showMaintenanceFee && (
+                <div>
+                  <Label className="mb-1.5 block text-gray-700">
+                    Cuota de mantenimiento (MXN){" "}
+                    <span className="text-xs font-normal text-gray-400">(opcional)</span>
+                  </Label>
+                  <Input
+                    type="number"
+                    placeholder="0"
+                    min={0}
+                    value={form.cuota_mantenimiento}
+                    onChange={(e) =>
+                      updateField("cuota_mantenimiento", e.target.value)
+                    }
+                    className="rounded-xl"
+                  />
+                </div>
+              )}
             </div>
           )}
 
@@ -1374,7 +1357,86 @@ export default function EditarPropiedadPage() {
             </div>
           )}
 
-          {!isCasa && !isDepto && (
+          {/* HOTEL (whole property) */}
+          {isHotel && (
+            <div className="grid grid-cols-2 gap-5 lg:grid-cols-3">
+              <div>
+                <Label className="mb-1.5 block text-gray-700">
+                  m² de terreno{" "}
+                  <span className="text-xs font-normal text-gray-400">(opcional)</span>
+                </Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.area_total}
+                  onChange={(e) => updateField("area_total", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">
+                  m² de construcción
+                </Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.area_construida}
+                  onChange={(e) => updateField("area_construida", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                {/* Stored in `bedrooms` to keep the DB schema unchanged */}
+                <Label className="mb-1.5 block text-gray-700">Habitaciones</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.recamaras}
+                  onChange={(e) => updateField("recamaras", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">Baños completos</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.banos}
+                  onChange={(e) => updateField("banos", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">Niveles</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.niveles}
+                  onChange={(e) => updateField("niveles", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-gray-700">Estacionamientos</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min={0}
+                  value={form.estacionamientos}
+                  onChange={(e) => updateField("estacionamientos", e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Fallback for the remaining types (terreno, local, bodega...) */}
+          {!isCasa && !isDepto && !isHotel && (
             <div className="grid grid-cols-2 gap-5 lg:grid-cols-3">
               <div>
                 <Label className="mb-1.5 block text-gray-700">Área total (m²)</Label>
@@ -1487,122 +1549,12 @@ export default function EditarPropiedadPage() {
             />
           </div>
 
-          <div className="grid gap-5 sm:grid-cols-2">
-            <div>
-              <Label htmlFor="colonia" className="mb-1.5 block text-gray-700">
-                Colonia
-              </Label>
-              {showColoniaSelect ? (
-                <Select
-                  value={
-                    cpColonias.includes(form.colonia) ? form.colonia : ""
-                  }
-                  onValueChange={(v) => {
-                    if (v === COLONIA_OTRA) {
-                      setColoniaLibre(true);
-                      updateField("colonia", "");
-                    } else {
-                      updateField("colonia", v);
-                    }
-                  }}
-                >
-                  <SelectTrigger className="rounded-xl">
-                    <SelectValue placeholder="Selecciona la colonia" />
-                  </SelectTrigger>
-                  <SelectContent
-                    position="popper"
-                    className="max-h-60 overflow-y-auto"
-                  >
-                    {cpColonias.map((c) => (
-                      <SelectItem key={c} value={c}>
-                        {c}
-                      </SelectItem>
-                    ))}
-                    <SelectItem value={COLONIA_OTRA}>
-                      Otra (escribir)
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              ) : (
-                <>
-                  <Input
-                    id="colonia"
-                    placeholder="Nombre de la colonia"
-                    value={form.colonia}
-                    onChange={(e) => updateField("colonia", e.target.value)}
-                    className="rounded-xl"
-                  />
-                  {cpColonias.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setColoniaLibre(false);
-                        updateField("colonia", "");
-                      }}
-                      className="mt-1.5 text-xs font-medium text-blue-600 hover:text-blue-700"
-                    >
-                      Elegir de la lista de colonias del C.P.
-                    </button>
-                  )}
-                </>
-              )}
-            </div>
-
-            <div>
-              <Label htmlFor="ciudad" className="mb-1.5 block text-gray-700">
-                Ciudad <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="ciudad"
-                placeholder="Ej. Ciudad de México"
-                value={form.ciudad}
-                onChange={(e) => updateField("ciudad", e.target.value)}
-                className="rounded-xl"
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-5 sm:grid-cols-2">
-            <div>
-              <Label className="mb-1.5 block text-gray-700">
-                Estado <span className="text-red-500">*</span>
-              </Label>
-              <Select value={form.estado} onValueChange={(v) => updateField("estado", v)}>
-                <SelectTrigger className="rounded-xl">
-                  <SelectValue placeholder="Seleccionar estado" />
-                </SelectTrigger>
-                <SelectContent position="popper" className="max-h-60 overflow-y-auto">
-                  {MEXICAN_STATES.map((state) => (
-                    <SelectItem key={state} value={state}>
-                      {state}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="codigo_postal" className="mb-1.5 block text-gray-700">
-                Código postal
-              </Label>
-              <Input
-                id="codigo_postal"
-                placeholder="00000"
-                maxLength={5}
-                value={form.codigo_postal}
-                onChange={(e) => {
-                  const val = e.target.value.replace(/\D/g, "").slice(0, 5);
-                  cpEditedRef.current = true;
-                  updateField("codigo_postal", val);
-                }}
-                className="rounded-xl"
-              />
-              <p className="mt-1.5 text-xs text-gray-500">
-                Escribe el C.P. y completaremos estado, ciudad y colonias
-                automáticamente.
-              </p>
-            </div>
-          </div>
+          <LocationPicker
+            value={locationValue}
+            onChange={handleLocationChange}
+            onStatusChange={setLocationStatus}
+            idPrefix="editar"
+          />
 
           <div className="rounded-xl bg-gray-50 p-4">
             <Toggle
@@ -1664,128 +1616,17 @@ export default function EditarPropiedadPage() {
 
       {/* Imágenes */}
       <SectionCard title="Imágenes">
-        <div className="space-y-5">
-          <div
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragOver(true);
-            }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-            className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-12 text-center transition-all duration-200 ${
-              dragOver
-                ? "border-blue-400 bg-blue-50"
-                : "border-gray-300 bg-gray-50 hover:border-gray-400 hover:bg-gray-100"
-            }`}
-          >
-            <div
-              className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl"
-              style={{
-                background:
-                  "linear-gradient(135deg, hsl(221 83% 53% / 0.1), hsl(160 84% 39% / 0.1))",
-              }}
-            >
-              <ImagePlus className="h-6 w-6" style={{ color: "hsl(221 83% 53%)" }} />
-            </div>
-            <p className="text-sm font-semibold text-gray-700">
-              Arrastra tus imágenes aquí o haz clic para seleccionar
-            </p>
-            <p className="mt-1 text-xs text-gray-500">
-              JPG, PNG o WebP. Máximo 20 imágenes.
-            </p>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={(e) => {
-                if (e.target.files) addImages(e.target.files);
-                e.target.value = "";
-              }}
-              className="hidden"
-            />
-          </div>
-
-          {orderedImages.length > 0 && (
-            <>
-              <p className="text-xs text-gray-500">
-                Arrastra las fotos para reordenarlas. La primera (
-                <span className="font-semibold text-blue-600">Principal</span>) es
-                la portada que se muestra en la publicación. Pasa el cursor sobre
-                una foto y usa <Star className="inline h-3 w-3" /> para hacerla
-                principal.
-              </p>
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-                {orderedImages.map((img, idx) => {
-                  const src = img.kind === "existing" ? img.url : img.preview;
-                  const key = img.kind === "existing" ? img.id : `new-${idx}-${img.preview.slice(-16)}`;
-                  return (
-                    <div
-                      key={key}
-                      draggable
-                      onDragStart={() => setDragIndex(idx)}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        if (dragIndex !== null) moveImage(dragIndex, idx);
-                        setDragIndex(null);
-                      }}
-                      onDragEnd={() => setDragIndex(null)}
-                      className={`group relative aspect-[4/3] cursor-move overflow-hidden rounded-xl border bg-gray-100 transition-all ${
-                        idx === 0
-                          ? "border-blue-400 ring-2 ring-blue-200"
-                          : "border-gray-200"
-                      } ${dragIndex === idx ? "opacity-50" : ""}`}
-                    >
-                      <Image
-                        src={src}
-                        alt={`Imagen ${idx + 1}`}
-                        fill
-                        className="object-cover"
-                      />
-
-                      {/* Drag affordance */}
-                      <span className="absolute left-2 bottom-2 flex h-6 w-6 items-center justify-center rounded-md bg-black/40 text-white opacity-0 transition-opacity group-hover:opacity-100">
-                        <GripVertical className="h-3.5 w-3.5" />
-                      </span>
-
-                      {idx === 0 ? (
-                        <span className="absolute left-2 top-2 rounded-lg bg-blue-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                          Principal
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          title="Hacer principal"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setAsPrincipal(idx);
-                          }}
-                          className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity duration-200 hover:bg-blue-600 group-hover:opacity-100"
-                        >
-                          <Star className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-
-                      <button
-                        type="button"
-                        title="Eliminar"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeImage(idx);
-                        }}
-                        className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity duration-200 hover:bg-black/70 group-hover:opacity-100"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </div>
+        <PhotoManager
+          items={photoItems}
+          onAdd={addImages}
+          onRemove={removeImage}
+          onMove={(from, to) =>
+            setOrderedImages((prev) => moveItem(prev, from, to))
+          }
+          onSetPrincipal={(idx) =>
+            setOrderedImages((prev) => promoteToFront(prev, idx))
+          }
+        />
       </SectionCard>
 
       {/* Action Buttons */}

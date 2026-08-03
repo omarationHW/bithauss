@@ -192,7 +192,7 @@ export default function NosotrosPage() {
       {/* ============================================================ */}
       {/*  1. Hero                                                     */}
       {/* ============================================================ */}
-      <section className="relative overflow-hidden min-h-[70vh] flex items-center justify-center">
+      <section className="relative overflow-hidden min-h-[70vh] flex items-center justify-center pt-[var(--header-offset)]">
         <Image
           src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Nosotros.jpg"
           alt="BitHauss - Transformando el mercado inmobiliario"
@@ -202,8 +202,8 @@ export default function NosotrosPage() {
         />
         <div className="absolute inset-0 bg-blue-900/60" />
 
-        <div className="relative z-10 mx-auto max-w-4xl px-4 text-center text-white animate-fade-in-up">
-          <h1 className="text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl">
+        <div className="relative z-10 mx-auto max-w-4xl px-4 py-10 sm:py-14 text-center text-white animate-fade-in-up">
+          <h1 className="text-3xl font-bold tracking-tight sm:text-5xl md:text-6xl">
             Transformando el Mercado Inmobiliario en México
           </h1>
 

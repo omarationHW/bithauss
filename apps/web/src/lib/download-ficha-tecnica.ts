@@ -2,25 +2,34 @@
  * Captures the off-screen <FichaTecnicaTemplate /> page-by-page with html2canvas
  * and assembles a multi-page A4 PDF via jsPDF.
  *
- * The template renders direct children marked `data-page="N"` sized to 794x1123
- * CSS px (A4 at 96 DPI). We render each as its own PDF page so layout never
- * stretches across page breaks.
+ * The template renders direct children marked `data-page="N"` sized to A4 at
+ * 96 DPI — 794x1123 CSS px in portrait, 1123x794 in landscape. We render each
+ * as its own PDF page so layout never stretches across page breaks. The caller
+ * must pass the same orientation the template was rendered with.
  */
 
 import { logError } from "./log";
 
-const PAGE_WIDTH_MM = 210;
-const PAGE_HEIGHT_MM = 297;
+/** A4 in millimetres. */
+const A4_SHORT_MM = 210;
+const A4_LONG_MM = 297;
+
+export type FichaPdfOrientation = "portrait" | "landscape";
 
 export interface DownloadFichaOptions {
   /** Container DOM element that holds one or more [data-page] children. */
   container: HTMLElement;
   /** File stem; ".pdf" is appended automatically. */
   filename: string;
+  /** Must match the orientation the template rendered its pages with. */
+  orientation?: FichaPdfOrientation;
 }
 
 export async function downloadFichaTecnica(opts: DownloadFichaOptions): Promise<void> {
-  const { container, filename } = opts;
+  const { container, filename, orientation = "portrait" } = opts;
+  const isLandscape = orientation === "landscape";
+  const pageWidthMm = isLandscape ? A4_LONG_MM : A4_SHORT_MM;
+  const pageHeightMm = isLandscape ? A4_SHORT_MM : A4_LONG_MM;
 
   const pages = Array.from(
     container.querySelectorAll<HTMLElement>("[data-page]"),
@@ -50,7 +59,7 @@ export async function downloadFichaTecnica(opts: DownloadFichaOptions): Promise<
   ]);
 
   const pdf = new jsPDF({
-    orientation: "portrait",
+    orientation,
     unit: "mm",
     format: "a4",
     compress: true,
@@ -70,14 +79,14 @@ export async function downloadFichaTecnica(opts: DownloadFichaOptions): Promise<
     });
 
     const imgData = canvas.toDataURL("image/jpeg", 0.92);
-    if (i > 0) pdf.addPage("a4", "portrait");
+    if (i > 0) pdf.addPage("a4", orientation);
     pdf.addImage(
       imgData,
       "JPEG",
       0,
       0,
-      PAGE_WIDTH_MM,
-      PAGE_HEIGHT_MM,
+      pageWidthMm,
+      pageHeightMm,
       undefined,
       "FAST",
     );

@@ -41,6 +41,13 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { ShieldBrc } from '@/components/ui/shield-brc'
 import { FichaTecnicaTemplate } from "@/components/propiedades/ficha-tecnica-template";
+import { FichaOptionsDialog } from "@/components/propiedades/ficha-options-dialog";
+import {
+  DEFAULT_FICHA_OPTIONS,
+  readFichaOptions,
+  saveFichaOptions,
+  type FichaOptions,
+} from "@/components/propiedades/ficha-options";
 import { downloadFichaTecnica } from "@/lib/download-ficha-tecnica";
 import { logError } from "@/lib/log";
 
@@ -232,7 +239,7 @@ function buildMapEmbedUrl(
 
 function LoadingSkeleton() {
   return (
-    <main className="min-h-screen bg-background pt-[100px]">
+    <main className="min-h-screen bg-background pt-[var(--header-offset)]">
       <div className="border-b bg-muted/30">
         <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8 flex items-center gap-4">
           <div className="h-9 w-24 rounded-md bg-muted animate-pulse" />
@@ -274,7 +281,7 @@ function LoadingSkeleton() {
 
 function NotFoundView() {
   return (
-    <main className="min-h-screen bg-background pt-[100px] flex items-center justify-center">
+    <main className="min-h-screen bg-background pt-[var(--header-offset)] flex items-center justify-center">
       <div className="text-center space-y-4">
         <h1 className="text-3xl font-bold">Propiedad no encontrada</h1>
         <p className="text-muted-foreground">
@@ -291,85 +298,6 @@ function NotFoundView() {
   );
 }
 
-const CDN_BASE = "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images";
-
-const demoPropertyData: Property = {
-  id: "demo-1",
-  owner_id: "demo-owner",
-  title: "Casa Moderna en Bosques de las Lomas",
-  slug: "casa-moderna-bosques-lomas",
-  description:
-    "Espectacular residencia de estilo contemporáneo ubicada en una de las zonas más exclusivas de la Ciudad de México. Esta propiedad cuenta con amplios espacios iluminados con luz natural, acabados de primera calidad, cocina integral equipada con electrodomésticos de línea europea, pisos de mármol y madera de ingeniería.\n\nLa casa dispone de un jardín privado con alberca climatizada y terraza techada ideal para reuniones. Cuenta con sistema de seguridad perimetral, domótica integral y estacionamiento para 4 vehículos.\n\nUbicada a minutos de centros comerciales, colegios de prestigio y vías rápidas de acceso.",
-  type: "CASA",
-  operation: "VENTA",
-  status: "PUBLICADO",
-  price: 8500000,
-  price_sale: 8500000,
-  price_rent: null,
-  currency: "MXN",
-  accepts_crypto: true,
-  show_price: true,
-  area_total: 450,
-  area_built: 320,
-  bedrooms: 4,
-  bathrooms: 3,
-  half_bathrooms: 1,
-  parking_spaces: 4,
-  floors: 2,
-  floor_number: null,
-  maintenance_fee: null,
-  has_service_room: true,
-  has_storage: true,
-  has_terrace: true,
-  has_laundry_room: true,
-  has_integrated_kitchen: true,
-  address_line: "Bosques de las Lomas",
-  neighborhood: "Bosques de las Lomas",
-  city: "Ciudad de México",
-  state: "Ciudad de México",
-  zip_code: "11700",
-  latitude: 19.3795,
-  longitude: -99.2635,
-  show_address: true,
-  amenities: [
-    "Alberca",
-    "Jardín",
-    "Seguridad 24/7",
-    "Estacionamiento techado",
-    "Terraza",
-    "Sistema de alarma",
-    "Cocina integral",
-    "Roof garden",
-    "Área de BBQ",
-    "Cuarto de lavado",
-  ],
-  featured_image_url: `${CDN_BASE}/Casa1.jpg`,
-  brc_status: "CERTIFICADO",
-  brc_certificate_id: "BRC-DEMO-001",
-  view_count: 245,
-  lead_count: 12,
-  published_at: new Date(Date.now() - 10 * 60 * 60 * 1000).toISOString(),
-  created_at: new Date(Date.now() - 10 * 60 * 60 * 1000).toISOString(),
-};
-
-const demoMediaList: PropertyMedia[] = [
-  { id: "dm-1", property_id: "demo-1", url: `${CDN_BASE}/Casa1.jpg`, media_type: "IMAGE", alt_text: "Fachada principal", sort_order: 0 },
-  { id: "dm-2", property_id: "demo-1", url: `${CDN_BASE}/casa2.jpg`, media_type: "IMAGE", alt_text: "Sala de estar", sort_order: 1 },
-  { id: "dm-3", property_id: "demo-1", url: `${CDN_BASE}/casa3.jpg`, media_type: "IMAGE", alt_text: "Cocina integral", sort_order: 2 },
-  { id: "dm-4", property_id: "demo-1", url: `${CDN_BASE}/casa4.jpg`, media_type: "IMAGE", alt_text: "Recámara principal", sort_order: 3 },
-  { id: "dm-5", property_id: "demo-1", url: `${CDN_BASE}/casa5.jpg`, media_type: "IMAGE", alt_text: "Jardín y alberca", sort_order: 4 },
-  { id: "dm-6", property_id: "demo-1", url: `${CDN_BASE}/casa6.jpg`, media_type: "IMAGE", alt_text: "Terraza", sort_order: 5 },
-];
-
-const demoOwner: Profile = {
-  id: "demo-owner",
-  email: "contacto@bithauss.com",
-  first_name: "Alejandro",
-  last_name: "Ramírez Torres",
-  phone: "+52 55 1234 5678",
-  avatar_url: "",
-  role: "BROKER",
-};
 
 function ContactForm({ propertyId, ownerId }: { propertyId: string; ownerId: string }) {
   const [name, setName] = useState("");
@@ -577,6 +505,11 @@ export default function PropertyDetailPage() {
   const [geocoded, setGeocoded] = useState<{ lat: number; lng: number } | null>(null);
   const [downloadingFicha, setDownloadingFicha] = useState(false);
   const [fichaQr, setFichaQr] = useState<string | null>(null);
+  const [fichaDialogOpen, setFichaDialogOpen] = useState(false);
+  const [fichaOptions, setFichaOptions] = useState<FichaOptions>(DEFAULT_FICHA_OPTIONS);
+  // Set once the user confirms the dialog: the template re-renders with the new
+  // options and the effect below captures it on the next commit.
+  const [pendingFicha, setPendingFicha] = useState<FichaOptions | null>(null);
   const fichaContainerRef = useRef<HTMLDivElement | null>(null);
 
   const supabase = useMemo(() => createClient(), []);
@@ -611,22 +544,18 @@ export default function PropertyDetailPage() {
       setLoading(true);
       setNotFound(false);
 
-      // Handle demo properties with hardcoded data
-      if (id.startsWith("demo-")) {
-        setProperty(demoPropertyData);
-        setMedia(demoMediaList);
-        setOwner(demoOwner);
-        setSimilarProperties([]);
-        setLoading(false);
-        return;
-      }
+      // The route param is normally the UUID, but properties also carry a
+      // slug and those URLs get shared. Querying `id=eq.<slug>` makes Postgres
+      // reject the whole request ("invalid input syntax for type uuid"), so
+      // pick the column by shape instead.
+      const isUuid =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
-      // Fetch property
       const { data: prop, error: propError } = await supabase
         .from("properties")
         .select("*")
-        .eq("id", id)
-        .single();
+        .eq(isUuid ? "id" : "slug", id)
+        .maybeSingle();
 
       if (propError || !prop) {
         setNotFound(true);
@@ -645,7 +574,7 @@ export default function PropertyDetailPage() {
         supabase
           .from("property_media")
           .select("*")
-          .eq("property_id", id)
+          .eq("property_id", prop.id)
           .order("sort_order", { ascending: true }),
         supabase
           .from("profiles")
@@ -660,7 +589,7 @@ export default function PropertyDetailPage() {
           .select("id, title, city, state, price, currency, operation, bedrooms, bathrooms, area_total, featured_image_url, brc_status")
           .eq("status", "PUBLICADO")
           .eq("city", prop.city ?? "")
-          .neq("id", id)
+          .neq("id", prop.id)
           .limit(3),
       ]);
 
@@ -675,9 +604,7 @@ export default function PropertyDetailPage() {
       }
 
       // Increment view count (fire and forget)
-      if (!id.startsWith("demo-")) {
-        supabase.rpc("increment_property_view_count", { property_id: id }).then();
-      }
+      supabase.rpc("increment_property_view_count", { property_id: prop.id }).then();
 
       setLoading(false);
     }
@@ -706,23 +633,52 @@ export default function PropertyDetailPage() {
     };
   }, [property]);
 
-  const handleDownloadFicha = useCallback(async () => {
-    if (!property || downloadingFicha) return;
-    const container = fichaContainerRef.current;
-    if (!container) return;
+  // Restore the last choice of the session (client-only, avoids hydration drift).
+  useEffect(() => {
+    setFichaOptions(readFichaOptions());
+  }, []);
+
+  const handleConfirmFicha = useCallback((options: FichaOptions) => {
+    saveFichaOptions(options);
+    setFichaOptions(options);
+    setFichaDialogOpen(false);
     setDownloadingFicha(true);
-    try {
-      const slug = (property.slug || property.id).replace(/[^a-z0-9-]/gi, "-").toLowerCase();
-      await downloadFichaTecnica({
-        container,
-        filename: `ficha-tecnica-${slug}.pdf`,
-      });
-    } catch (err) {
-      logError("ficha download failed", err);
-    } finally {
+    setPendingFicha(options);
+  }, []);
+
+  // Runs after the template has re-rendered with `pendingFicha`, so html2canvas
+  // always captures the layout the user asked for.
+  useEffect(() => {
+    if (!pendingFicha || !property) return;
+    const container = fichaContainerRef.current;
+    if (!container) {
+      setPendingFicha(null);
       setDownloadingFicha(false);
+      return;
     }
-  }, [property, downloadingFicha]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const slug = (property.slug || property.id).replace(/[^a-z0-9-]/gi, "-").toLowerCase();
+        const suffix = pendingFicha.layout === "single" ? "-resumen" : "";
+        await downloadFichaTecnica({
+          container,
+          filename: `ficha-tecnica-${slug}${suffix}.pdf`,
+          orientation: pendingFicha.orientation,
+        });
+      } catch (err) {
+        logError("ficha download failed", err);
+      } finally {
+        if (!cancelled) {
+          setPendingFicha(null);
+          setDownloadingFicha(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingFicha, property]);
 
   // Build images array from media or fallback to featured_image_url
   const images = useMemo(() => {
@@ -763,7 +719,7 @@ export default function PropertyDetailPage() {
   const ownerName = owner ? `${owner.first_name ?? ""} ${owner.last_name ?? ""}`.trim() : "Asesor";
 
   return (
-    <main className="min-h-screen bg-background pt-[100px]">
+    <main className="min-h-screen bg-background pt-[var(--header-offset)]">
       {/* Gallery Modal */}
       {galleryOpen && images.length > 0 && (
         <div
@@ -847,7 +803,7 @@ export default function PropertyDetailPage() {
               style={{ transition: "all 0.3s" }}
               onMouseEnter={(e) => { e.currentTarget.style.background = "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))"; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-              onClick={handleDownloadFicha}
+              onClick={() => setFichaDialogOpen(true)}
               aria-label="Descargar ficha técnica"
             >
               {downloadingFicha ? (
@@ -1423,6 +1379,16 @@ export default function PropertyDetailPage() {
         </div>
       )}
 
+      {/* Options asked before generating the PDF. */}
+      <FichaOptionsDialog
+        open={fichaDialogOpen}
+        onOpenChange={setFichaDialogOpen}
+        value={fichaOptions}
+        onConfirm={handleConfirmFicha}
+        loading={downloadingFicha}
+        photoCount={images.length}
+      />
+
       {/* Off-screen layout used by the "Descargar ficha técnica" feature.
           Intentionally excludes any broker / owner info. */}
       <div ref={fichaContainerRef}>
@@ -1432,6 +1398,7 @@ export default function PropertyDetailPage() {
           qrDataUrl={fichaQr}
           publicUrl={typeof window !== "undefined" ? `${window.location.origin}/propiedades/${property.id}` : `/propiedades/${property.id}`}
           generatedAt={new Date()}
+          options={fichaOptions}
         />
       </div>
     </main>

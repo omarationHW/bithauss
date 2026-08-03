@@ -42,8 +42,15 @@ import {
   SheetTrigger,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { createClient } from "@/lib/supabase/client";
 import { logError } from "@/lib/log";
+import {
+  MEXICAN_STATES,
+  toCanonicalState,
+  useColoniaSearch,
+  useMunicipios,
+} from "@/lib/mx-locations";
 import { ShieldBrc } from '@/components/ui/shield-brc'
 
 interface PropertyFromDB {
@@ -191,55 +198,15 @@ function mapProperty(p: PropertyFromDB): MappedProperty {
   };
 }
 
-const propertyTypes = ["Casa", "Departamento", "Terreno", "Oficina", "Local"];
+// Derived from PROPERTY_TYPE_MAP so a new type in the catalog can never be
+// missing from the filter again (they used to be two hand-kept lists).
+const propertyTypes = Array.from(new Set(Object.values(PROPERTY_TYPE_MAP)));
 const bedroomOptions = ["1", "2", "3", "4+"];
-const mexicanStates = [
-  "Aguascalientes", "Baja California", "Baja California Sur", "Campeche",
-  "Chiapas", "Chihuahua", "Ciudad de Mexico", "Coahuila", "Colima",
-  "Durango", "Estado de Mexico", "Guanajuato", "Guerrero", "Hidalgo",
-  "Jalisco", "Michoacan", "Morelos", "Nayarit", "Nuevo Leon", "Oaxaca",
-  "Puebla", "Queretaro", "Quintana Roo", "San Luis Potosi", "Sinaloa",
-  "Sonora", "Tabasco", "Tamaulipas", "Tlaxcala", "Veracruz", "Yucatan",
-  "Zacatecas",
-];
-
-const citiesByState: Record<string, string[]> = {
-  "Aguascalientes": ["Aguascalientes", "Jesús María", "Calvillo"],
-  "Baja California": ["Tijuana", "Mexicali", "Ensenada", "Rosarito"],
-  "Baja California Sur": ["La Paz", "Los Cabos", "Loreto"],
-  "Campeche": ["Campeche", "Ciudad del Carmen", "Champotón"],
-  "Chiapas": ["Tuxtla Gutiérrez", "San Cristóbal", "Tapachula"],
-  "Chihuahua": ["Chihuahua", "Ciudad Juárez", "Delicias"],
-  "Ciudad de Mexico": ["Álvaro Obregón", "Benito Juárez", "Coyoacán", "Cuauhtémoc", "Miguel Hidalgo", "Tlalpan", "Xochimilco"],
-  "Coahuila": ["Saltillo", "Torreón", "Monclova", "Piedras Negras"],
-  "Colima": ["Colima", "Manzanillo", "Tecomán"],
-  "Durango": ["Durango", "Gómez Palacio", "Lerdo"],
-  "Estado de Mexico": ["Toluca", "Naucalpan", "Tlalnepantla", "Huixquilucan", "Metepec", "Atizapán"],
-  "Guanajuato": ["León", "Guanajuato", "Irapuato", "Celaya", "San Miguel de Allende"],
-  "Guerrero": ["Acapulco", "Chilpancingo", "Zihuatanejo", "Taxco"],
-  "Hidalgo": ["Pachuca", "Tulancingo", "Tula"],
-  "Jalisco": ["Guadalajara", "Zapopan", "Tlaquepaque", "Puerto Vallarta", "Tonalá"],
-  "Michoacan": ["Morelia", "Uruapan", "Lázaro Cárdenas", "Zamora"],
-  "Morelos": ["Cuernavaca", "Jiutepec", "Temixco", "Cuautla"],
-  "Nayarit": ["Tepic", "Bahía de Banderas", "Compostela"],
-  "Nuevo Leon": ["Monterrey", "San Pedro Garza García", "San Nicolás", "Apodaca", "Santa Catarina"],
-  "Oaxaca": ["Oaxaca de Juárez", "Salina Cruz", "Huatulco"],
-  "Puebla": ["Puebla", "Cholula", "Atlixco", "Tehuacán"],
-  "Queretaro": ["Querétaro", "San Juan del Río", "Corregidora", "El Marqués"],
-  "Quintana Roo": ["Cancún", "Playa del Carmen", "Tulum", "Chetumal", "Cozumel"],
-  "San Luis Potosi": ["San Luis Potosí", "Ciudad Valles", "Soledad"],
-  "Sinaloa": ["Culiacán", "Mazatlán", "Los Mochis"],
-  "Sonora": ["Hermosillo", "Ciudad Obregón", "Nogales", "Puerto Peñasco"],
-  "Tabasco": ["Villahermosa", "Cárdenas", "Comalcalco"],
-  "Tamaulipas": ["Tampico", "Reynosa", "Matamoros", "Ciudad Victoria"],
-  "Tlaxcala": ["Tlaxcala", "Apizaco", "Huamantla"],
-  "Veracruz": ["Veracruz", "Xalapa", "Coatzacoalcos", "Boca del Río"],
-  "Yucatan": ["Mérida", "Valladolid", "Progreso", "Tizimín"],
-  "Zacatecas": ["Zacatecas", "Fresnillo", "Guadalupe"],
-};
 
 interface FiltersState {
   operationType: "comprar" | "rentar";
+  /** Free-text search coming from the home hero (?q=). */
+  query: string;
   types: string[];
   state: string;
   city: string;
@@ -252,6 +219,7 @@ interface FiltersState {
 
 const initialFilters: FiltersState = {
   operationType: "comprar",
+  query: "",
   types: [],
   state: "",
   city: "",
@@ -262,22 +230,176 @@ const initialFilters: FiltersState = {
   bedrooms: null,
 };
 
+/** A colonia offered in the filter, always tied to its city + state. */
+interface ColoniaSuggestion {
+  colonia: string;
+  city: string;
+  state: string;
+  /** Published listings matching it (0 when it only exists in the catalog). */
+  count: number;
+}
+
 interface FiltersPanelProps {
   filters: FiltersState;
   setFilters: React.Dispatch<React.SetStateAction<FiltersState>>;
   onReset: () => void;
+  /** Current inventory, used to rank and count the location suggestions. */
+  properties: MappedProperty[];
 }
 
-function FiltersPanel({ filters, setFilters, onReset }: FiltersPanelProps) {
+function FiltersPanel({ filters, setFilters, onReset, properties }: FiltersPanelProps) {
   const { operationType, types: selectedTypes, state: selectedState, city: selectedCity, neighborhood, minPrice, maxPrice, brcOnly, bedrooms: selectedBedrooms } = filters;
-  const cities = selectedState ? citiesByState[selectedState] || [] : [];
+
+  const stateNorm = selectedState ? normalize(selectedState) : "";
+  const cityNorm = selectedCity ? normalize(selectedCity) : "";
+
+  // What the user is typing in the colonia box (may differ from the applied
+  // filter until an option is picked).
+  const [coloniaQuery, setColoniaQuery] = useState(neighborhood);
+  const coloniaTerm = coloniaQuery || neighborhood;
+
+  /* ---- Ciudad / municipio options: SEPOMEX catalog + real inventory ---- */
+
+  const { municipios, loading: loadingCities } = useMunicipios(selectedState);
+
+  const cityCounts = useMemo(() => {
+    const counts = new Map<string, { name: string; count: number }>();
+    for (const p of properties) {
+      if (!p.city) continue;
+      if (stateNorm && normalize(p.state) !== stateNorm) continue;
+      const key = normalize(p.city);
+      const entry = counts.get(key);
+      if (entry) entry.count += 1;
+      else counts.set(key, { name: p.city, count: 1 });
+    }
+    return counts;
+  }, [properties, stateNorm]);
+
+  const cityOptions = useMemo<ComboboxOption[]>(() => {
+    const options: ComboboxOption[] = [];
+    const seen = new Set<string>();
+    for (const m of municipios) {
+      const key = normalize(m.municipio);
+      seen.add(key);
+      const inventory = cityCounts.get(key);
+      options.push({
+        value: m.municipio,
+        badge: inventory ? String(inventory.count) : undefined,
+      });
+    }
+    // Cities present in listings but absent from the catalog (legacy data)
+    // must stay reachable, otherwise the filter would hide them.
+    for (const [key, entry] of cityCounts) {
+      if (seen.has(key)) continue;
+      options.push({
+        value: entry.name,
+        hint: "Fuera del catálogo",
+        badge: String(entry.count),
+      });
+    }
+    return options.sort((a, b) => {
+      const byInventory = (b.badge ? 1 : 0) - (a.badge ? 1 : 0);
+      if (byInventory !== 0) return byInventory;
+      return a.value.localeCompare(b.value, "es");
+    });
+  }, [municipios, cityCounts]);
+
+  /* ---- Colonia options, always disambiguated by ciudad + estado ---- */
+
+  const { colonias: catalogColonias, loading: loadingColonias } =
+    useColoniaSearch({
+      estado: selectedState,
+      municipio: selectedCity,
+      q: coloniaTerm,
+      limit: 12,
+    });
+
+  const inventoryColonias = useMemo<ColoniaSuggestion[]>(() => {
+    const term = normalize(coloniaTerm);
+    const found = new Map<string, ColoniaSuggestion>();
+    for (const p of properties) {
+      if (!p.neighborhood) continue;
+      if (stateNorm && normalize(p.state) !== stateNorm) continue;
+      if (cityNorm && normalize(p.city) !== cityNorm) continue;
+      if (term && !normalize(p.neighborhood).includes(term)) continue;
+      const key = `${normalize(p.neighborhood)}|${normalize(p.city)}|${normalize(p.state)}`;
+      const entry = found.get(key);
+      if (entry) entry.count += 1;
+      else
+        found.set(key, {
+          colonia: p.neighborhood,
+          city: p.city,
+          state: p.state,
+          count: 1,
+        });
+    }
+    return [...found.values()].sort(
+      (a, b) => b.count - a.count || a.colonia.localeCompare(b.colonia, "es")
+    );
+  }, [properties, coloniaTerm, stateNorm, cityNorm]);
+
+  const { coloniaOptions, coloniaLookup } = useMemo(() => {
+    const options: ComboboxOption[] = [];
+    const lookup = new Map<string, ColoniaSuggestion>();
+    const add = (item: ColoniaSuggestion) => {
+      // "Polanco — Miguel Hidalgo, Ciudad de México": the hint is what tells
+      // apart the many colonias that share a name across the country.
+      const hint = [item.city, item.state].filter(Boolean).join(", ");
+      const key = `${normalize(item.colonia)}|${normalize(hint)}`;
+      if (lookup.has(key)) return;
+      lookup.set(key, item);
+      options.push({
+        value: item.colonia,
+        hint,
+        badge: item.count > 0 ? String(item.count) : undefined,
+      });
+    };
+    inventoryColonias.forEach(add);
+    catalogColonias.forEach((c) =>
+      add({ colonia: c.colonia, city: c.municipio, state: c.estado, count: 0 })
+    );
+    return { coloniaOptions: options, coloniaLookup: lookup };
+  }, [inventoryColonias, catalogColonias]);
+
+  /** Places where the typed colonia name exists — the "Polanco" problem. */
+  const ambiguousPlaces = useMemo<ColoniaSuggestion[]>(() => {
+    const term = normalize(neighborhood);
+    if (!term) return [];
+    const places = new Map<string, ColoniaSuggestion>();
+    const consider = (item: ColoniaSuggestion) => {
+      if (normalize(item.colonia) !== term) return;
+      const key = `${normalize(item.city)}|${normalize(item.state)}`;
+      const entry = places.get(key);
+      if (!entry || entry.count < item.count) places.set(key, item);
+    };
+    inventoryColonias.forEach(consider);
+    catalogColonias.forEach((c) =>
+      consider({
+        colonia: c.colonia,
+        city: c.municipio,
+        state: c.estado,
+        count: 0,
+      })
+    );
+    return [...places.values()];
+  }, [neighborhood, inventoryColonias, catalogColonias]);
 
   const setOperationType = (op: "comprar" | "rentar") =>
     setFilters((f) => ({ ...f, operationType: op }));
   const setSelectedState = (s: string) =>
-    setFilters((f) => ({ ...f, state: s, city: "" }));
-  const setSelectedCity = (c: string) => setFilters((f) => ({ ...f, city: c }));
+    setFilters((f) => ({ ...f, state: s, city: "", neighborhood: "" }));
+  const setSelectedCity = (c: string) =>
+    setFilters((f) => ({ ...f, city: c, neighborhood: "" }));
   const setNeighborhood = (n: string) => setFilters((f) => ({ ...f, neighborhood: n }));
+
+  /** Apply a suggestion: the colonia AND the place it belongs to. */
+  const applyColonia = (item: ColoniaSuggestion) =>
+    setFilters((f) => ({
+      ...f,
+      neighborhood: item.colonia,
+      city: item.city || f.city,
+      state: toCanonicalState(item.state) ?? item.state ?? f.state,
+    }));
   const setMinPrice = (v: string) => setFilters((f) => ({ ...f, minPrice: v }));
   const setMaxPrice = (v: string) => setFilters((f) => ({ ...f, maxPrice: v }));
   const setBrcOnly = (v: boolean) => setFilters((f) => ({ ...f, brcOnly: v }));
@@ -342,12 +464,12 @@ function FiltersPanel({ filters, setFilters, onReset }: FiltersPanelProps) {
       {/* Estado */}
       <div>
         <Label className="mb-3 block text-sm font-semibold">Estado</Label>
-        <Select value={selectedState} onValueChange={(val) => { setSelectedState(val); setSelectedCity(""); }}>
+        <Select value={selectedState} onValueChange={setSelectedState}>
           <SelectTrigger className="w-full">
             <SelectValue placeholder="Selecciona un estado" />
           </SelectTrigger>
           <SelectContent>
-            {mexicanStates.map((state) => (
+            {MEXICAN_STATES.map((state) => (
               <SelectItem key={state} value={state}>{state}</SelectItem>
             ))}
           </SelectContent>
@@ -356,32 +478,89 @@ function FiltersPanel({ filters, setFilters, onReset }: FiltersPanelProps) {
 
       <Separator />
 
-      {/* Ciudad */}
+      {/* Ciudad / municipio (catálogo SEPOMEX del estado elegido) */}
       <div>
-        <Label className="mb-3 block text-sm font-semibold">Ciudad</Label>
-        <Select value={selectedCity} onValueChange={setSelectedCity} disabled={!selectedState}>
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder="Selecciona una ciudad" />
-          </SelectTrigger>
-          <SelectContent>
-            {cities.map((city) => (
-              <SelectItem key={city} value={city}>{city}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Label htmlFor="filtro-ciudad" className="mb-3 block text-sm font-semibold">
+          Ciudad / Municipio
+        </Label>
+        <Combobox
+          id="filtro-ciudad"
+          value={selectedCity}
+          onChange={setSelectedCity}
+          options={cityOptions}
+          loading={loadingCities}
+          disabled={!selectedState}
+          placeholder={
+            selectedState ? "Busca la ciudad o municipio" : "Elige primero el estado"
+          }
+          emptyMessage="Ninguna coincidencia"
+          inputClassName="text-sm"
+        />
       </div>
 
       <Separator />
 
-      {/* Colonia */}
+      {/* Colonia — acotada por estado/ciudad y siempre desambiguada */}
       <div>
-        <Label className="mb-3 block text-sm font-semibold">Colonia</Label>
-        <Input
-          placeholder="Ej. Polanco, Roma Norte..."
-          className="text-sm"
+        <Label htmlFor="filtro-colonia" className="mb-3 block text-sm font-semibold">
+          Colonia
+        </Label>
+        <Combobox
+          id="filtro-colonia"
           value={neighborhood}
-          onChange={(e) => setNeighborhood(e.target.value)}
+          onChange={(value, option) => {
+            if (!option) {
+              setNeighborhood(value);
+              return;
+            }
+            const match = coloniaLookup.get(
+              `${normalize(value)}|${normalize(option.hint ?? "")}`
+            );
+            if (match) applyColonia(match);
+            else setNeighborhood(value);
+          }}
+          options={coloniaOptions}
+          onQueryChange={setColoniaQuery}
+          filterLocally={false}
+          allowCustomValue
+          loading={loadingColonias}
+          placeholder="Ej. Polanco, Roma Norte..."
+          emptyMessage={
+            selectedState
+              ? "Ninguna colonia coincide"
+              : "Escribe al menos 3 letras"
+          }
+          inputClassName="text-sm"
         />
+        {ambiguousPlaces.length > 1 && !selectedCity && (
+          <div className="mt-2 rounded-lg border border-border/60 bg-muted/40 p-2.5">
+            <p className="text-xs text-muted-foreground">
+              &laquo;{neighborhood}&raquo; existe en {ambiguousPlaces.length}{" "}
+              lugares. Elige uno para acotar:
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {ambiguousPlaces.slice(0, 6).map((place) => (
+                <button
+                  key={`${place.city}-${place.state}`}
+                  type="button"
+                  onClick={() => applyColonia(place)}
+                  className="rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-foreground transition-colors active:bg-muted"
+                >
+                  {[place.city, place.state].filter(Boolean).join(", ")}
+                  {place.count > 0 && (
+                    <span className="ml-1 text-primary">({place.count})</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {!selectedState && !neighborhood && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Puedes buscar solo por colonia: te mostramos a qué ciudad y estado
+            pertenece cada coincidencia.
+          </p>
+        )}
       </div>
 
       <Separator />
@@ -456,36 +635,42 @@ function FiltersPanel({ filters, setFilters, onReset }: FiltersPanelProps) {
   );
 }
 
-const demoProperties: MappedProperty[] = [
-  { id: "demo-1", title: "Casa Moderna en Bosques de las Lomas", address: "Bosques de las Lomas\nCDMX, C.P. 11700", price: "$8,500,000 MXN", priceNumber: 8500000, bedrooms: 4, bathrooms: 3, area: 320, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Casa1.jpg", tag: "Compra", operation: "VENTA", type: "Casa", state: "Ciudad de Mexico", city: "Miguel Hidalgo", neighborhood: "Bosques de las Lomas", latitude: 19.4126, longitude: -99.2491, isNew: true, notary: "Alejandro Ramírez Torres", timeAgo: "Hace 10 Horas", favorite: false, acceptsCrypto: true },
-  { id: "demo-2", title: "Departamento de Lujo en Polanco", address: "Polanco\nCDMX, C.P. 11560", price: "$45,000/mes MXN", priceNumber: 45000, bedrooms: 2, bathrooms: 2, area: 150, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa2.jpg", tag: "Renta", operation: "RENTA", type: "Departamento", state: "Ciudad de Mexico", city: "Miguel Hidalgo", neighborhood: "Polanco", latitude: 19.4322, longitude: -99.1988, isNew: true, notary: "Valeria Montes García", timeAgo: "Hace 1 Día", favorite: true, acceptsCrypto: false },
-  { id: "demo-3", title: "Penthouse con Vista al Mar", address: "Zona Hotelera, Cancún\nQuintana Roo, C.P. 77500", price: "$12,300,000 MXN", priceNumber: 12300000, bedrooms: 3, bathrooms: 3, area: 280, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa3.jpg", tag: "Compra", operation: "VENTA", type: "Departamento", state: "Quintana Roo", city: "Cancún", neighborhood: "Zona Hotelera", latitude: 21.1393, longitude: -86.7711, isNew: false, notary: "Julián Herrera", timeAgo: "Hace 2 semanas", favorite: false, acceptsCrypto: true },
-  { id: "demo-4", title: "Residencia en San Pedro Garza García", address: "San Pedro Garza García\nNuevo León, C.P. 66220", price: "$15,800,000 MXN", priceNumber: 15800000, bedrooms: 5, bathrooms: 4, area: 450, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa4.jpg", tag: "Compra", operation: "VENTA", type: "Casa", state: "Nuevo Leon", city: "San Pedro Garza García", neighborhood: "Del Valle", latitude: 25.6586, longitude: -100.4023, isNew: true, notary: "Camila Torres", timeAgo: "Hace 6 Horas", favorite: false, acceptsCrypto: false },
-  { id: "demo-5", title: "Terreno en Riviera Maya", address: "Playa del Carmen\nQuintana Roo, C.P. 77710", price: "$3,200,000 MXN", priceNumber: 3200000, bedrooms: 0, bathrooms: 0, area: 500, brc: false, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa5.jpg", tag: "Compra", operation: "VENTA", type: "Terreno", state: "Quintana Roo", city: "Playa del Carmen", neighborhood: "Playacar", latitude: 20.6296, longitude: -87.0739, isNew: false, notary: "", timeAgo: "Hace 3 Días", favorite: false, acceptsCrypto: false },
-  { id: "demo-6", title: "Oficina en Santa Fe", address: "Santa Fe\nCDMX, C.P. 05300", price: "$28,000/mes MXN", priceNumber: 28000, bedrooms: 0, bathrooms: 2, area: 120, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa6.jpg", tag: "Renta", operation: "RENTA", type: "Oficina", state: "Ciudad de Mexico", city: "Álvaro Obregón", neighborhood: "Santa Fe", latitude: 19.3597, longitude: -99.2587, isNew: true, notary: "Roberto Juárez", timeAgo: "Hace 4 Horas", favorite: false, acceptsCrypto: false },
-  { id: "demo-7", title: "Casa Colonial en Centro Histórico", address: "Centro Histórico\nCDMX, C.P. 06000", price: "$16,700,000 MXN", priceNumber: 16700000, bedrooms: 5, bathrooms: 4, area: 320, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa7.jpg", tag: "Compra", operation: "VENTA", type: "Casa", state: "Ciudad de Mexico", city: "Cuauhtémoc", neighborhood: "Centro Histórico", latitude: 19.4326, longitude: -99.1332, isNew: false, notary: "María Fernández", timeAgo: "Hace 1 Semana", favorite: false, acceptsCrypto: true },
-  { id: "demo-8", title: "Departamento Nuevo en Condesa", address: "Condesa\nCDMX, C.P. 06140", price: "$5,900,000 MXN", priceNumber: 5900000, bedrooms: 2, bathrooms: 2, area: 95, brc: false, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa8.jpg", tag: "Compra", operation: "VENTA", type: "Departamento", state: "Ciudad de Mexico", city: "Cuauhtémoc", neighborhood: "Condesa", latitude: 19.4128, longitude: -99.1722, isNew: true, notary: "", timeAgo: "Hace 2 Horas", favorite: false, acceptsCrypto: false },
-  { id: "demo-9", title: "Casa con Jardín en Coyoacán", address: "Coyoacán\nCDMX, C.P. 04000", price: "$9,450,000 MXN", priceNumber: 9450000, bedrooms: 3, bathrooms: 3, area: 280, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa9.jpg", tag: "Compra", operation: "VENTA", type: "Casa", state: "Ciudad de Mexico", city: "Coyoacán", neighborhood: "Del Carmen Coyoacán", latitude: 19.3496, longitude: -99.1620, isNew: false, notary: "Carlos Mendoza", timeAgo: "Hace 5 Días", favorite: false, acceptsCrypto: false },
-  { id: "demo-10", title: "Loft Industrial en Roma Norte", address: "Roma Norte\nCDMX, C.P. 06700", price: "$35,000/mes MXN", priceNumber: 35000, bedrooms: 1, bathrooms: 1, area: 85, brc: false, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa10.jpg", tag: "Renta", operation: "RENTA", type: "Departamento", state: "Ciudad de Mexico", city: "Cuauhtémoc", neighborhood: "Roma Norte", latitude: 19.4188, longitude: -99.1606, isNew: true, notary: "", timeAgo: "Hace 3 Horas", favorite: false, acceptsCrypto: false },
-  { id: "demo-11", title: "Villa Frente al Lago en Valle de Bravo", address: "Valle de Bravo\nEstado de México, C.P. 51200", price: "$22,500,000 MXN", priceNumber: 22500000, bedrooms: 6, bathrooms: 5, area: 580, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Casa1.jpg", tag: "Compra", operation: "VENTA", type: "Casa", state: "Estado de Mexico", city: "Valle de Bravo", neighborhood: "Avándaro", latitude: 19.1953, longitude: -100.1311, isNew: false, notary: "Ana Martínez", timeAgo: "Hace 1 Semana", favorite: false, acceptsCrypto: true },
-  { id: "demo-12", title: "Penthouse en Interlomas", address: "Interlomas, Huixquilucan\nEstado de México, C.P. 52787", price: "$7,200,000 MXN", priceNumber: 7200000, bedrooms: 3, bathrooms: 2, area: 180, brc: true, image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/casa2.jpg", tag: "Compra", operation: "VENTA", type: "Departamento", state: "Estado de Mexico", city: "Huixquilucan", neighborhood: "Interlomas", latitude: 19.3973, longitude: -99.2787, isNew: true, notary: "Andrés Castillo", timeAgo: "Hace 2 Horas", favorite: false, acceptsCrypto: false },
-];
-
 function PropiedadesPageInner() {
   const [viewMode, setViewMode] = useState<"lista" | "mapa">("lista");
   const [activeMarker, setActiveMarker] = useState<string | null>(null);
   const [properties, setProperties] = useState<MappedProperty[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   const searchParams = useSearchParams();
   const [filters, setFilters] = useState<FiltersState>(() => ({
     ...initialFilters,
     operationType: searchParams.get("op") === "rentar" ? "rentar" : "comprar",
+    query: searchParams.get("q") ?? "",
+    city: searchParams.get("ciudad") ?? "",
+    types: searchParams.get("tipo") ? [searchParams.get("tipo") as string] : [],
   }));
 
+  // The home hero and the city cards link here with ?op / ?q / ?ciudad / ?tipo.
+  // Those were previously ignored, so every one of those links landed on an
+  // unfiltered list.
   useEffect(() => {
     const op = searchParams.get("op") === "rentar" ? "rentar" : "comprar";
-    setFilters((f) => (f.operationType === op ? f : { ...f, operationType: op }));
+    const q = searchParams.get("q") ?? "";
+    const ciudad = searchParams.get("ciudad") ?? "";
+    const tipo = searchParams.get("tipo");
+    setFilters((f) => {
+      const types = tipo ? [tipo] : f.types;
+      if (
+        f.operationType === op &&
+        f.query === q &&
+        f.city === ciudad &&
+        f.types.join() === types.join()
+      ) {
+        return f;
+      }
+      return { ...f, operationType: op, query: q, city: ciudad, types };
+    });
   }, [searchParams]);
 
   const resetFilters = () => setFilters(initialFilters);
@@ -497,7 +682,16 @@ function PropiedadesPageInner() {
     const stateNorm = filters.state ? normalize(filters.state) : "";
     const cityNorm = filters.city ? normalize(filters.city) : "";
     const neighNorm = filters.neighborhood ? normalize(filters.neighborhood) : "";
+    // Free text matches any of the fields a visitor would plausibly type:
+    // title, colonia, ciudad, estado or address.
+    const queryTerms = normalize(filters.query).split(/\s+/).filter(Boolean);
     return properties.filter((p) => {
+      if (queryTerms.length > 0) {
+        const haystack = normalize(
+          [p.title, p.neighborhood, p.city, p.state, p.address].join(" ")
+        );
+        if (!queryTerms.every((t) => haystack.includes(t))) return false;
+      }
       if (p.operation !== wantedOp) return false;
       if (filters.types.length > 0 && !filters.types.includes(p.type)) return false;
       if (stateNorm && normalize(p.state) !== stateNorm) return false;
@@ -529,14 +723,14 @@ function PropiedadesPageInner() {
         .order("created_at", { ascending: false });
 
       if (error) {
+        // No demo fallback: showing invented listings on a failed query is
+        // worse than showing none — they are not clickable and mislead buyers.
         logError("Error fetching properties:", error);
-        setProperties(demoProperties);
+        setProperties([]);
+        setLoadError(true);
       } else {
-        const dbProperties = (data || []) as PropertyFromDB[];
-        const realMapped = dbProperties.map(mapProperty);
-        // Show only real listings from the DB (demoProperties is kept solely as
-        // a fallback when the query fails — see the error branch above).
-        setProperties(realMapped);
+        setProperties(((data || []) as PropertyFromDB[]).map(mapProperty));
+        setLoadError(false);
       }
       setLoading(false);
     }
@@ -544,7 +738,7 @@ function PropiedadesPageInner() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-background pt-[100px]">
+    <main className="min-h-screen bg-background pt-[var(--header-offset)]">
       {/* Breadcrumb and Title */}
       <div className="border-b bg-muted/30">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -600,7 +794,7 @@ function PropiedadesPageInner() {
                 <SlidersHorizontal className="h-4 w-4 text-primary" />
                 <h2 className="text-base font-semibold">Filtros</h2>
               </div>
-              <FiltersPanel filters={filters} setFilters={setFilters} onReset={resetFilters} />
+              <FiltersPanel filters={filters} setFilters={setFilters} onReset={resetFilters} properties={properties} />
             </div>
           </aside>
 
@@ -622,7 +816,7 @@ function PropiedadesPageInner() {
                       <SlidersHorizontal className="h-4 w-4 text-primary" />
                       Filtros
                     </SheetTitle>
-                    <FiltersPanel filters={filters} setFilters={setFilters} onReset={resetFilters} />
+                    <FiltersPanel filters={filters} setFilters={setFilters} onReset={resetFilters} properties={properties} />
                   </SheetContent>
                 </Sheet>
                 <p className="text-sm text-muted-foreground">
@@ -653,13 +847,20 @@ function PropiedadesPageInner() {
               </div>
             )}
 
-            {/* Empty state */}
+            {/* Empty state — distinguishes "nothing published" from "we could
+                not load anything", which are very different for the visitor. */}
             {!loading && properties.length === 0 && viewMode === "lista" && (
               <div className="flex flex-col items-center justify-center py-20 text-center">
                 <Search className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                <h3 className="text-lg font-semibold mb-1">No se encontraron propiedades</h3>
+                <h3 className="text-lg font-semibold mb-1">
+                  {loadError
+                    ? "No pudimos cargar las propiedades"
+                    : "No se encontraron propiedades"}
+                </h3>
                 <p className="text-muted-foreground text-sm max-w-md">
-                  No hay propiedades publicadas en este momento. Intenta ajustar los filtros o vuelve más tarde.
+                  {loadError
+                    ? "Hubo un problema al conectar con el servidor. Recarga la página para intentarlo de nuevo."
+                    : "No hay propiedades publicadas en este momento. Intenta ajustar los filtros o vuelve más tarde."}
                 </p>
               </div>
             )}

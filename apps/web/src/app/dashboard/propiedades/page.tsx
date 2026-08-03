@@ -15,10 +15,19 @@ import {
   Play,
   MapPin,
   Loader2,
+  History,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "../_context/user-context";
 import { ShieldBrc } from '@/components/ui/shield-brc'
+import { HistorialTimeline } from "@/components/dashboard/historial-timeline";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -47,6 +56,7 @@ interface Property {
   view_count: number;
   featured_image_url: string | null;
   brc_certificate_id: string | null;
+  created_at: string;
 }
 
 const tabs: { label: string; value: TabValue }[] = [
@@ -146,6 +156,8 @@ export default function PropiedadesPage() {
   const [brcFilter, setBrcFilter] = useState<BrcFilter>("todas");
   const [opFilter, setOpFilter] = useState<OpFilter>("todas");
   const [search, setSearch] = useState("");
+  /* Property whose change history is open in the dialog. */
+  const [historyProp, setHistoryProp] = useState<Property | null>(null);
 
   /* ---- Fetch properties ------------------------------------------ */
   const fetchProperties = useCallback(async () => {
@@ -154,7 +166,7 @@ export default function PropiedadesPage() {
     const { data, error } = await supabase
       .from("properties")
       .select(
-        "id, title, address_line, city, state, price, currency, status, brc_status, operation, lead_count, view_count, featured_image_url, brc_certificate_id",
+        "id, title, address_line, city, state, price, currency, status, brc_status, operation, lead_count, view_count, featured_image_url, brc_certificate_id, created_at",
       )
       .eq("owner_id", user.id)
       .neq("status", "ELIMINADO")
@@ -493,7 +505,17 @@ export default function PropiedadesPage() {
                     )}
                   </button>
                   <button
+                    onClick={() => setHistoryProp(prop)}
+                    title="Ver historial de cambios"
+                    aria-label={`Ver historial de cambios de ${prop.title || "la propiedad"}`}
+                    className="flex items-center justify-center rounded-xl border border-gray-200 bg-white p-2 text-gray-500 transition-all duration-300 hover:bg-gray-50 hover:text-gray-800 hover:shadow-sm"
+                  >
+                    <History className="h-3.5 w-3.5" />
+                  </button>
+                  <button
                     onClick={() => handleDelete(prop)}
+                    title="Eliminar propiedad"
+                    aria-label={`Eliminar ${prop.title || "la propiedad"}`}
                     className="flex items-center justify-center rounded-xl border border-red-100 bg-white p-2 text-red-400 transition-all duration-300 hover:bg-red-50 hover:text-red-600"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -516,6 +538,38 @@ export default function PropiedadesPage() {
           ))}
         </div>
       )}
+
+      {/* ============================================================ */}
+      {/*  Change-history dialog                                        */}
+      {/* ============================================================ */}
+      <Dialog
+        open={historyProp !== null}
+        onOpenChange={(open) => {
+          if (!open) setHistoryProp(null);
+        }}
+      >
+        <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto bg-white">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-gray-900">
+              <History className="h-4 w-4 text-gray-400" />
+              Historial de cambios
+            </DialogTitle>
+            <DialogDescription className="text-gray-500">
+              {historyProp?.title || "Propiedad"} — quién hizo cada cambio, cuándo y
+              qué campos se modificaron.
+            </DialogDescription>
+          </DialogHeader>
+
+          {historyProp && (
+            <HistorialTimeline
+              entityType="properties"
+              entityId={historyProp.id}
+              fallbackCreatedAt={historyProp.created_at}
+              className="mt-2"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

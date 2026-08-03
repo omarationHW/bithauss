@@ -17,11 +17,14 @@ import {
   ChevronDown,
   ExternalLink,
   RefreshCw,
+  History,
+  Compass,
 } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { logError } from "@/lib/log";
 import { useUser } from "../_context/user-context";
+import { HistorialTimeline } from "@/components/dashboard/historial-timeline";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -53,6 +56,10 @@ interface Lead {
   dbStatus: DbStatus;
   estado: LeadEstado;
   source: string | null;
+  utmSource: string | null;
+  utmMedium: string | null;
+  utmCampaign: string | null;
+  contactedAt: string | null;
   createdAt: string;
 }
 
@@ -104,6 +111,18 @@ function formatDateEs(iso: string): string {
   });
 }
 
+function formatDateTimeEs(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString("es-MX", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 /* ------------------------------------------------------------------ */
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
@@ -124,11 +143,17 @@ export default function LeadsPage() {
     if (!user) return;
     const supabase = createClient();
 
-    const { data, error } = await supabase
-      .from("leads")
-      .select("*, properties(title)")
-      .eq("owner_id", user.id)
-      .order("created_at", { ascending: false });
+    // Admins see every lead (policy "Admins can view all leads", migration
+    // 004). Filtering by owner_id here would silently cancel that policy out
+    // and leave the admin dashboard empty.
+    let query = supabase.from("leads").select("*, properties(title)");
+    if (user.role !== "ADMIN") {
+      query = query.eq("owner_id", user.id);
+    }
+
+    const { data, error } = await query.order("created_at", {
+      ascending: false,
+    });
 
     if (error) {
       logError("Error fetching leads:", error);
@@ -149,6 +174,10 @@ export default function LeadsPage() {
       dbStatus: row.status as DbStatus,
       estado: STATUS_MAP[row.status as DbStatus] ?? "Nuevo",
       source: row.source as string,
+      utmSource: (row.utm_source as string) ?? null,
+      utmMedium: (row.utm_medium as string) ?? null,
+      utmCampaign: (row.utm_campaign as string) ?? null,
+      contactedAt: (row.contacted_at as string) ?? null,
       createdAt: row.created_at as string,
     }));
 
@@ -173,15 +202,17 @@ export default function LeadsPage() {
     document.addEventListener("visibilitychange", refresh);
 
     const supabase = createClient();
+    const isAdmin = user.role === "ADMIN";
     const channel = supabase
-      .channel(`leads-owner-${user.id}`)
+      .channel(isAdmin ? "leads-all" : `leads-owner-${user.id}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
           table: "leads",
-          filter: `owner_id=eq.${user.id}`,
+          // Admins watch every lead; RLS still decides what they can read.
+          ...(isAdmin ? {} : { filter: `owner_id=eq.${user.id}` }),
         },
         () => fetchLeads()
       )
@@ -206,10 +237,19 @@ export default function LeadsPage() {
   const handleStatusChange = async (lead: Lead, newDbStatus: DbStatus) => {
     setUpdatingStatus(lead.id);
     const supabase = createClient();
+    const now = new Date().toISOString();
+
+    /* Stamp the first contact so the history shows when the lead was
+       actually reached, not only that the status label moved. */
+    const stampContact = newDbStatus === "CONTACTADO" && !lead.contactedAt;
 
     const { error } = await supabase
       .from("leads")
-      .update({ status: newDbStatus, updated_at: new Date().toISOString() })
+      .update({
+        status: newDbStatus,
+        updated_at: now,
+        ...(stampContact ? { contacted_at: now } : {}),
+      })
       .eq("id", lead.id);
 
     if (error) {
@@ -222,6 +262,7 @@ export default function LeadsPage() {
       ...lead,
       dbStatus: newDbStatus,
       estado: STATUS_MAP[newDbStatus],
+      contactedAt: stampContact ? now : lead.contactedAt,
     };
 
     setLeads((prev) => prev.map((l) => (l.id === lead.id ? updated : l)));
@@ -665,12 +706,12 @@ export default function LeadsPage() {
           onClick={() => setSelectedLead(null)}
         >
           <div
-            className="w-full max-w-lg mx-4 rounded-2xl bg-white shadow-2xl animate-fade-in-up overflow-hidden"
+            className="w-full max-w-xl mx-4 max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl animate-fade-in-up"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
             <div
-              className="p-6 text-white"
+              className="sticky top-0 z-10 rounded-t-2xl p-6 text-white"
               style={{
                 background:
                   "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
@@ -839,6 +880,61 @@ export default function LeadsPage() {
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* Origen y seguimiento */}
+              <div className="space-y-2">
+                <h4 className="flex items-center gap-1.5 text-sm font-bold uppercase tracking-wider text-gray-900">
+                  <Compass className="h-3.5 w-3.5 text-gray-400" />
+                  Origen y seguimiento
+                </h4>
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-xl bg-gray-50 p-3 text-xs">
+                  <div>
+                    <dt className="text-gray-400">Fuente</dt>
+                    <dd className="font-medium text-gray-900">
+                      {selectedLead.source ?? "—"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-gray-400">Recibido</dt>
+                    <dd className="font-medium text-gray-900">
+                      {formatDateTimeEs(selectedLead.createdAt)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-gray-400">Contactado</dt>
+                    <dd className="font-medium text-gray-900">
+                      {selectedLead.contactedAt
+                        ? formatDateTimeEs(selectedLead.contactedAt)
+                        : "Sin contactar"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-gray-400">Campaña (UTM)</dt>
+                    <dd className="font-medium text-gray-900">
+                      {[
+                        selectedLead.utmSource,
+                        selectedLead.utmMedium,
+                        selectedLead.utmCampaign,
+                      ]
+                        .filter(Boolean)
+                        .join(" / ") || "—"}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+
+              {/* Historial completo del lead */}
+              <div className="space-y-2">
+                <h4 className="flex items-center gap-1.5 text-sm font-bold uppercase tracking-wider text-gray-900">
+                  <History className="h-3.5 w-3.5 text-gray-400" />
+                  Historial
+                </h4>
+                <HistorialTimeline
+                  entityType="leads"
+                  entityId={selectedLead.id}
+                  fallbackCreatedAt={selectedLead.createdAt}
+                />
               </div>
 
               {/* Actions */}

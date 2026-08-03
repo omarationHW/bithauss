@@ -134,7 +134,7 @@ const VERIFICATIONS = [
 
 function CertificateSkeleton() {
   return (
-    <div className="min-h-screen bg-slate-50 pt-[100px]">
+    <div className="min-h-screen bg-slate-50 pt-[var(--header-offset)]">
       <div className="mx-auto flex max-w-4xl items-center justify-center px-4 py-24">
         <Loader2 className="h-10 w-10 animate-spin text-slate-400" />
       </div>
@@ -301,7 +301,7 @@ export default function CertificadoPage() {
 
   if (!certificate) {
     return (
-      <div className="min-h-screen bg-slate-50 pt-[100px]">
+      <div className="min-h-screen bg-slate-50 pt-[var(--header-offset)]">
         <div className="mx-auto max-w-3xl px-4 py-12">
           <div className="flex flex-col items-center justify-center py-24">
             <AlertCircle className="mb-4 h-16 w-16 text-slate-300" />
@@ -344,7 +344,7 @@ export default function CertificadoPage() {
   const notaryState = certificate.notary_profile?.notary_state ?? null;
 
   return (
-    <div className="min-h-screen bg-slate-50 pt-[100px] pb-16">
+    <div className="min-h-screen bg-slate-50 pt-[var(--header-offset)] pb-16">
       <div className="mx-auto max-w-4xl px-4">
         {/* Back nav */}
         <div className="mb-6">

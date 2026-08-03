@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Search, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -12,7 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const tabs = ["Compra", "Venta", "Renta", "Inversión", "Todos"];
+const tabs = ["Compra", "Venta", "Renta", "Todos"];
 
 const placeholders = [
   "Departamento en Polanco, CDMX",
@@ -33,6 +34,22 @@ export function HeroSection() {
   const [charIdx, setCharIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const [inputValue, setInputValue] = useState("");
+  const [propertyType, setPropertyType] = useState("");
+  const router = useRouter();
+
+  /**
+   * Sends the visitor to the listing with the chosen filters. The tab maps to
+   * the operation (`op`), the select to `tipo` and the free text to `q`.
+   */
+  function runSearch() {
+    const params = new URLSearchParams();
+    if (activeTab === "Renta") params.set("op", "rentar");
+    if (propertyType) params.set("tipo", propertyType);
+    const q = inputValue.trim();
+    if (q) params.set("q", q);
+    const qs = params.toString();
+    router.push(qs ? `/propiedades?${qs}` : "/propiedades");
+  }
 
   useEffect(() => {
     if (inputValue) return; // Stop animation when user types
@@ -67,7 +84,10 @@ export function HeroSection() {
   }, [charIdx, isDeleting, placeholderIdx, inputValue]);
 
   return (
-    <section className="relative min-h-[85vh] flex items-center justify-center overflow-hidden">
+    // pt-[--header-offset] keeps the centered content clear of the fixed
+    // Navbar + PriceTicker, which otherwise sit on top of the headline on
+    // short viewports (tablets in landscape, small laptops).
+    <section className="relative min-h-[85vh] flex items-center justify-center overflow-hidden pt-[var(--header-offset)]">
       {/* Background image */}
       <Image
         src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/header.jpg"
@@ -92,9 +112,9 @@ export function HeroSection() {
       {/* Dark overlay */}
       <div className="absolute inset-0 bg-black/50" />
 
-      <div className="relative z-10 mx-auto w-full max-w-5xl px-4 sm:px-6 lg:px-8 py-20 text-center">
+      <div className="relative z-10 mx-auto w-full max-w-5xl px-4 sm:px-6 lg:px-8 py-12 sm:py-16 lg:py-20 text-center">
         {/* Headline */}
-        <h1 className="text-4xl font-bold tracking-tight text-white sm:text-5xl md:text-6xl lg:text-7xl">
+        <h1 className="text-3xl font-bold tracking-tight text-white sm:text-5xl md:text-6xl lg:text-7xl">
           Compra, Vende y Renta{" "}
           <br className="hidden sm:block" />
           en Bienes Raíces{" "}
@@ -117,7 +137,7 @@ export function HeroSection() {
         </h1>
 
         {/* Tabs */}
-        <div className="mt-10 flex items-center justify-center gap-6 sm:gap-8">
+        <div className="mt-8 sm:mt-10 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 sm:gap-x-8">
           {tabs.map((tab) => (
             <button
               key={tab}
@@ -139,21 +159,28 @@ export function HeroSection() {
 
         {/* Search bar */}
         <div className="mt-6 max-w-3xl mx-auto">
-          <div className="flex items-center rounded-full bg-white overflow-hidden shadow-xl">
-            <Select>
-              <SelectTrigger className="w-[160px] h-14 border-0 rounded-none bg-white text-foreground font-medium pl-5 focus:ring-0 shadow-none">
-                <SelectValue placeholder="Departamento" />
+          {/* Stacks on phones (a 160px select + input + actions do not fit on
+              a 360px screen); single pill from sm: up. */}
+          <div className="flex flex-col sm:flex-row sm:items-center rounded-3xl sm:rounded-full bg-white overflow-hidden shadow-xl divide-y sm:divide-y-0 divide-border/50">
+            {/* Values must match the labels the listing filters on. */}
+            <Select value={propertyType} onValueChange={setPropertyType}>
+              <SelectTrigger className="w-full sm:w-[160px] h-12 sm:h-14 border-0 rounded-none bg-white text-foreground font-medium pl-5 focus:ring-0 shadow-none">
+                <SelectValue placeholder="Tipo" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="departamento">Departamento</SelectItem>
-                <SelectItem value="casa">Casa</SelectItem>
-                <SelectItem value="terreno">Terreno</SelectItem>
-                <SelectItem value="oficina">Oficina</SelectItem>
-                <SelectItem value="local">Local Comercial</SelectItem>
+                <SelectItem value="Departamento">Departamento</SelectItem>
+                <SelectItem value="Casa">Casa</SelectItem>
+                <SelectItem value="Casa en Condominio">Casa en Condominio</SelectItem>
+                <SelectItem value="Terreno">Terreno</SelectItem>
+                <SelectItem value="Oficina">Oficina</SelectItem>
+                <SelectItem value="Local Comercial">Local Comercial</SelectItem>
+                <SelectItem value="Bodega">Bodega</SelectItem>
+                <SelectItem value="Hotel">Hotel</SelectItem>
+                <SelectItem value="Departamento en Hotel">Departamento en Hotel</SelectItem>
               </SelectContent>
             </Select>
 
-            <div className="h-8 w-px bg-border/50" />
+            <div className="hidden sm:block h-8 w-px bg-border/50" />
 
             <div className="relative flex-1">
               <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -162,16 +189,21 @@ export function HeroSection() {
                 type="text"
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") runSearch();
+                }}
                 placeholder={inputValue ? "" : placeholderText || "Buscar..."}
-                className="w-full h-14 pl-10 pr-4 bg-transparent text-foreground placeholder:text-muted-foreground text-sm focus:outline-none"
+                className="w-full h-12 sm:h-14 pl-10 pr-4 bg-transparent text-foreground placeholder:text-muted-foreground text-sm focus:outline-none"
               />
             </div>
 
-            <div className="flex items-center gap-2 pr-3">
-              <div className="h-8 w-8 rounded-full border-2 border-muted-foreground/30 flex items-center justify-center cursor-pointer hover:border-primary transition-colors">
-                <div className="h-3 w-3 rounded-full bg-muted-foreground/30" />
-              </div>
-              <button className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center hover:bg-primary/20 transition-colors">
+            <div className="flex items-center justify-end gap-2 px-3 pb-3 sm:px-0 sm:pb-0 sm:pr-3">
+              <button
+                type="button"
+                onClick={runSearch}
+                aria-label="Buscar propiedades"
+                className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center hover:bg-primary/20 transition-colors"
+              >
                 <Search className="h-5 w-5 text-primary" />
               </button>
             </div>
