@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { logError } from "@/lib/log";
 import { useUser } from "../../_context/user-context";
 import { ShieldBrc } from '@/components/ui/shield-brc'
 import {
@@ -65,9 +66,10 @@ interface Expediente {
 }
 
 interface NotaryProfile {
-  user_id: string;
+  /** FK to profiles.id. The table has no `user_id` column. */
+  profile_id: string;
   notary_number: string | null;
-  state: string | null;
+  notary_state: string | null;
   is_verified: boolean;
   profiles: ProfileInfo;
 }
@@ -107,6 +109,7 @@ export default function AsignacionesPage() {
   const [modalExpedienteId, setModalExpedienteId] = useState<string | null>(null);
   const [notaries, setNotaries] = useState<NotaryProfile[]>([]);
   const [loadingNotaries, setLoadingNotaries] = useState(false);
+  const [notaryError, setNotaryError] = useState<string | null>(null);
   const [assigningNotaryId, setAssigningNotaryId] = useState<string | null>(null);
   const [notarySearch, setNotarySearch] = useState("");
 
@@ -125,6 +128,8 @@ export default function AsignacionesPage() {
          broker:profiles!brc_expedientes_requested_by_fkey(first_name, last_name),
          notary:profiles!brc_expedientes_assigned_notary_id_fkey(first_name, last_name)`
       )
+      // Unsubmitted drafts have nothing to assign yet.
+      .neq("status", "BORRADOR")
       .order("created_at", { ascending: false });
 
     if (!error && data) {
@@ -166,11 +171,21 @@ export default function AsignacionesPage() {
     setLoadingNotaries(true);
     const { data, error } = await supabase
       .from("notary_profiles")
-      .select("user_id, notary_number, state, is_verified, profiles(first_name, last_name)")
+      .select(
+        "profile_id, notary_number, notary_state, is_verified, profiles(first_name, last_name)",
+      )
       .eq("is_verified", true);
 
-    if (!error && data) {
-      setNotaries(data as unknown as NotaryProfile[]);
+    if (error) {
+      // Used to be swallowed: the modal just said "no hay notarios".
+      logError("Error fetching notaries:", error);
+      setNotaryError(
+        "No se pudieron cargar los notarios. Intenta de nuevo o recarga la página.",
+      );
+      setNotaries([]);
+    } else {
+      setNotaryError(null);
+      setNotaries((data ?? []) as unknown as NotaryProfile[]);
     }
     setLoadingNotaries(false);
   }
@@ -178,6 +193,7 @@ export default function AsignacionesPage() {
   function openModal(expedienteId: string) {
     setModalExpedienteId(expedienteId);
     setNotarySearch("");
+    setNotaryError(null);
     fetchNotaries();
   }
 
@@ -204,7 +220,7 @@ export default function AsignacionesPage() {
     });
 
     if (res.ok) {
-      const assignedNotary = notaries.find((n) => n.user_id === notaryUserId);
+      const assignedNotary = notaries.find((n) => n.profile_id === notaryUserId);
       setExpedientes((prev) =>
         prev.map((e) =>
           e.id === modalExpedienteId
@@ -272,7 +288,7 @@ export default function AsignacionesPage() {
       (n) =>
         `${n.profiles?.first_name ?? ""} ${n.profiles?.last_name ?? ""}`.toLowerCase().includes(q) ||
         n.notary_number?.toLowerCase().includes(q) ||
-        n.state?.toLowerCase().includes(q)
+        n.notary_state?.toLowerCase().includes(q)
     );
   }, [notaries, notarySearch]);
 
@@ -661,10 +677,14 @@ export default function AsignacionesPage() {
               ) : filteredNotaries.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12">
                   <ShieldBrc className="h-8 w-8 text-gray-200" />
-                  <p className="mt-2 text-sm text-gray-400">
-                    {notarySearch
-                      ? "No se encontraron notarios con esa busqueda."
-                      : "No hay notarios verificados disponibles."}
+                  <p
+                    className={`mt-2 text-sm ${notaryError ? "text-red-500" : "text-gray-400"}`}
+                  >
+                    {notaryError
+                      ? notaryError
+                      : notarySearch
+                        ? "No se encontraron notarios con esa busqueda."
+                        : "No hay notarios verificados. Verifica al notario en Admin › Notarios para poder asignarlo."}
                   </p>
                 </div>
               ) : (
@@ -675,16 +695,16 @@ export default function AsignacionesPage() {
                       notary.profiles?.first_name && notary.profiles?.last_name
                         ? `${notary.profiles.first_name[0]}${notary.profiles.last_name[0]}`.toUpperCase()
                         : name.slice(0, 2).toUpperCase();
-                    const isAssigning = assigningNotaryId === notary.user_id;
+                    const isAssigning = assigningNotaryId === notary.profile_id;
 
                     // Check if this notary is currently assigned to the modal expediente
                     const currentExp = expedientes.find((e) => e.id === modalExpedienteId);
-                    const isCurrentNotary = currentExp?.assigned_notary_id === notary.user_id;
+                    const isCurrentNotary = currentExp?.assigned_notary_id === notary.profile_id;
 
                     return (
                       <button
-                        key={notary.user_id}
-                        onClick={() => handleAssignNotary(notary.user_id)}
+                        key={notary.profile_id}
+                        onClick={() => handleAssignNotary(notary.profile_id)}
                         disabled={isAssigning || isCurrentNotary}
                         className={`flex w-full items-center gap-4 rounded-xl border p-4 text-left transition-all duration-200 ${
                           isCurrentNotary
@@ -709,10 +729,10 @@ export default function AsignacionesPage() {
                                 No. {notary.notary_number}
                               </span>
                             )}
-                            {notary.state && (
+                            {notary.notary_state && (
                               <span className="flex items-center gap-1">
                                 <MapPin className="h-3 w-3" />
-                                {notary.state}
+                                {notary.notary_state}
                               </span>
                             )}
                           </div>

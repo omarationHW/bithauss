@@ -44,6 +44,8 @@ interface BrcDocument {
   file_name: string;
   status: string;
   rejection_reason: string | null;
+  /** What the notary asks the owner to do about a rejected document. */
+  owner_instruction: string | null;
   reviewed_at: string | null;
   ocr_valid: boolean | null;
   ocr_confidence: string | null;
@@ -213,6 +215,7 @@ export default function ExpedientesPage() {
             file_name,
             status,
             rejection_reason,
+            owner_instruction,
             reviewed_at,
             ocr_valid,
             ocr_confidence,
@@ -220,6 +223,9 @@ export default function ExpedientesPage() {
           )
         `
         )
+        // Drafts are not requests yet — they live in the property's own
+        // "Solicitar certificación" screen until the owner submits them.
+        .neq("status", "BORRADOR")
         .order("created_at", { ascending: false });
 
       if (user!.role === "NOTARIO") {
@@ -918,49 +924,88 @@ export default function ExpedientesPage() {
                   <div className="space-y-2">
                     {selectedExp.brc_documents.length > 0 ? (
                       selectedExp.brc_documents.map((doc) => {
+                        // Three states, not two: a rejected document used to
+                        // fall into the amber "pendiente" bucket, so the owner
+                        // never saw that the notary had turned it down — nor
+                        // what to do about it.
                         const completado =
                           doc.status === "APROBADO" || doc.status === "VALIDADO";
+                        const rechazado = doc.status === "RECHAZADO";
                         const docName =
                           doc.brc_document_types?.name ?? doc.file_name;
+                        const tone = completado
+                          ? {
+                              box: "bg-emerald-50",
+                              icon: "bg-emerald-100",
+                              badge: "bg-emerald-100 text-emerald-700",
+                              label: "Completado",
+                              caption: "Documento recibido y validado",
+                            }
+                          : rechazado
+                            ? {
+                                box: "bg-red-50",
+                                icon: "bg-red-100",
+                                badge: "bg-red-100 text-red-700",
+                                label: "Rechazado",
+                                caption: "Debes subir este documento de nuevo",
+                              }
+                            : {
+                                box: "bg-amber-50",
+                                icon: "bg-amber-100",
+                                badge: "bg-amber-100 text-amber-700",
+                                label: "Pendiente",
+                                caption: "Pendiente de validacion",
+                              };
                         return (
                           <div
                             key={doc.id}
-                            className={`flex items-center justify-between rounded-xl p-3 transition-colors ${
-                              completado ? "bg-emerald-50" : "bg-amber-50"
-                            }`}
+                            className={`rounded-xl p-3 transition-colors ${tone.box}`}
                           >
-                            <div className="flex items-center gap-3">
-                              <div
-                                className={`h-8 w-8 rounded-lg flex items-center justify-center ${
-                                  completado ? "bg-emerald-100" : "bg-amber-100"
-                                }`}
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-3">
+                                <div
+                                  className={`h-8 w-8 rounded-lg flex items-center justify-center ${tone.icon}`}
+                                >
+                                  {completado ? (
+                                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                                  ) : rechazado ? (
+                                    <XCircle className="h-4 w-4 text-red-600" />
+                                  ) : (
+                                    <AlertCircle className="h-4 w-4 text-amber-600" />
+                                  )}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium text-gray-900">
+                                    {docName}
+                                  </p>
+                                  <p className="text-xs text-gray-500">
+                                    {tone.caption}
+                                  </p>
+                                </div>
+                              </div>
+                              <span
+                                className={`shrink-0 text-xs font-semibold px-2.5 py-1 rounded-lg ${tone.badge}`}
                               >
-                                {completado ? (
-                                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                                ) : (
-                                  <AlertCircle className="h-4 w-4 text-amber-600" />
+                                {tone.label}
+                              </span>
+                            </div>
+
+                            {rechazado && (doc.rejection_reason || doc.owner_instruction) && (
+                              <div className="mt-2 space-y-1 rounded-lg border border-red-200 bg-white/70 px-3 py-2">
+                                {doc.rejection_reason && (
+                                  <p className="text-xs text-red-700">
+                                    <span className="font-semibold">Motivo: </span>
+                                    {doc.rejection_reason}
+                                  </p>
+                                )}
+                                {doc.owner_instruction && (
+                                  <p className="text-xs text-gray-700">
+                                    <span className="font-semibold">Qué hacer: </span>
+                                    {doc.owner_instruction}
+                                  </p>
                                 )}
                               </div>
-                              <div>
-                                <p className="text-sm font-medium text-gray-900">
-                                  {docName}
-                                </p>
-                                <p className="text-xs text-gray-500">
-                                  {completado
-                                    ? "Documento recibido y validado"
-                                    : "Pendiente de validacion"}
-                                </p>
-                              </div>
-                            </div>
-                            <span
-                              className={`text-xs font-semibold px-2.5 py-1 rounded-lg ${
-                                completado
-                                  ? "bg-emerald-100 text-emerald-700"
-                                  : "bg-amber-100 text-amber-700"
-                              }`}
-                            >
-                              {completado ? "Completado" : "Pendiente"}
-                            </span>
+                            )}
                           </div>
                         );
                       })
@@ -982,15 +1027,22 @@ export default function ExpedientesPage() {
                   >
                     Cerrar
                   </button>
-                  <button
-                    className="flex-1 rounded-xl py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90"
+                  {/* Was a dead button with no onClick. The detail screen is
+                      where documents are reviewed and corrected. */}
+                  <Link
+                    href={`/dashboard/expedientes/${selectedExp.id}`}
+                    className="flex flex-1 items-center justify-center rounded-xl py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90"
                     style={{
                       background:
                         "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
                     }}
                   >
-                    Subir documentos
-                  </button>
+                    {selectedExp.brc_documents.some(
+                      (d) => d.status === "RECHAZADO",
+                    )
+                      ? "Corregir documentos"
+                      : "Ver expediente"}
+                  </Link>
                 </div>
               </div>
             </div>

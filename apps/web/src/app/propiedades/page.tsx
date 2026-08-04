@@ -113,7 +113,9 @@ const PROPERTY_TYPE_MAP: Record<string, string> = {
   LOCAL: "Local",
   BODEGA: "Bodega",
   HOTEL: "Hotel",
-  DEPARTAMENTO_HOTEL: "Departamento en Hotel",
+  EDIFICIO: "Edificio",
+  NAVE_INDUSTRIAL: "Nave Industrial",
+  CASA_USO_SUELO: "Casa con Uso de Suelo",
 };
 
 function normalize(s: string): string {

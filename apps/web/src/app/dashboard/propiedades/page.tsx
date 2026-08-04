@@ -8,7 +8,8 @@ import {
   Search,
   Pencil,
   Pause,
-  Trash2,
+  Archive,
+  ArchiveRestore,
   Eye,
   Users,
   Building2,
@@ -33,9 +34,15 @@ import {
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
-type DbStatus = "PUBLICADO" | "BORRADOR" | "PAUSADO" | "ELIMINADO";
+type DbStatus =
+  | "PUBLICADO"
+  | "BORRADOR"
+  | "PAUSADO"
+  | "ARCHIVADO"
+  /** Legacy soft delete. Nothing sets it any more — see migration 015. */
+  | "ELIMINADO";
 type BrcStatus = "CERTIFICADO" | "EN_REVISION" | "NO_SOLICITADO" | null;
-type TabValue = "todas" | "PUBLICADO" | "BORRADOR" | "PAUSADO";
+type TabValue = "todas" | "PUBLICADO" | "BORRADOR" | "PAUSADO" | "ARCHIVADO";
 
 type OperationType = "VENTA" | "RENTA" | "TRASPASO";
 type BrcFilter = "todas" | "CERTIFICADO" | "EN_REVISION" | "NO_SOLICITADO";
@@ -64,6 +71,7 @@ const tabs: { label: string; value: TabValue }[] = [
   { label: "Publicadas", value: "PUBLICADO" },
   { label: "Borradores", value: "BORRADOR" },
   { label: "Pausadas", value: "PAUSADO" },
+  { label: "Archivadas", value: "ARCHIVADO" },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -102,6 +110,10 @@ function estadoBadge(status: DbStatus) {
     PAUSADO: {
       classes: "bg-amber-50 text-amber-600 border-amber-200",
       label: "Pausado",
+    },
+    ARCHIVADO: {
+      classes: "bg-slate-100 text-slate-600 border-slate-300",
+      label: "Archivada",
     },
     ELIMINADO: {
       classes: "bg-red-50 text-red-600 border-red-200",
@@ -169,6 +181,8 @@ export default function PropiedadesPage() {
         "id, title, address_line, city, state, price, currency, status, brc_status, operation, lead_count, view_count, featured_image_url, brc_certificate_id, created_at",
       )
       .eq("owner_id", user.id)
+      // Archived listings are still the owner's, so they stay in the list
+      // (under their own tab). Only the legacy ELIMINADO rows are hidden.
       .neq("status", "ELIMINADO")
       .order("created_at", { ascending: false });
 
@@ -199,22 +213,38 @@ export default function PropiedadesPage() {
     }
   }
 
-  /* ---- Soft-delete ----------------------------------------------- */
-  async function handleDelete(prop: Property) {
+  /* ---- Archive / restore ------------------------------------------ */
+  /**
+   * Listings are never destroyed. Archiving takes one off the market and out
+   * of the way; it stays in "Archivadas" and can be restored at any time.
+   */
+  async function handleArchive(prop: Property) {
     const confirmed = window.confirm(
-      `¿Estás seguro de que deseas eliminar "${prop.title}"? Esta acción no se puede deshacer.`,
+      `¿Archivar "${prop.title}"? Dejará de mostrarse públicamente y podrás restaurarla cuando quieras desde la pestaña "Archivadas".`,
     );
     if (!confirmed) return;
+    await setStatus(prop, "ARCHIVADO");
+  }
 
+  /** Restores to BORRADOR: coming back should never republish by surprise. */
+  async function handleRestore(prop: Property) {
+    await setStatus(prop, "BORRADOR");
+  }
+
+  async function setStatus(prop: Property, status: DbStatus) {
     const supabase = createClient();
     const { error } = await supabase
       .from("properties")
-      .update({ status: "ELIMINADO" })
+      .update({ status })
       .eq("id", prop.id);
 
-    if (!error) {
-      setProperties((prev) => prev.filter((p) => p.id !== prop.id));
+    if (error) {
+      window.alert(`No se pudo actualizar la propiedad: ${error.message}`);
+      return;
     }
+    setProperties((prev) =>
+      prev.map((p) => (p.id === prop.id ? { ...p, status } : p)),
+    );
   }
 
   /* ---- Filter ---------------------------------------------------- */
@@ -488,22 +518,24 @@ export default function PropiedadesPage() {
                     <Pencil className="h-3.5 w-3.5" />
                     Editar
                   </Link>
-                  <button
-                    onClick={() => handleTogglePause(prop)}
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-all duration-300 hover:bg-gray-50 hover:shadow-sm"
-                  >
-                    {prop.status === "PAUSADO" ? (
-                      <>
-                        <Play className="h-3.5 w-3.5" />
-                        Publicar
-                      </>
-                    ) : (
-                      <>
-                        <Pause className="h-3.5 w-3.5" />
-                        Pausar
-                      </>
-                    )}
-                  </button>
+                  {prop.status !== "ARCHIVADO" && (
+                    <button
+                      onClick={() => handleTogglePause(prop)}
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-all duration-300 hover:bg-gray-50 hover:shadow-sm"
+                    >
+                      {prop.status === "PAUSADO" ? (
+                        <>
+                          <Play className="h-3.5 w-3.5" />
+                          Publicar
+                        </>
+                      ) : (
+                        <>
+                          <Pause className="h-3.5 w-3.5" />
+                          Pausar
+                        </>
+                      )}
+                    </button>
+                  )}
                   <button
                     onClick={() => setHistoryProp(prop)}
                     title="Ver historial de cambios"
@@ -512,14 +544,24 @@ export default function PropiedadesPage() {
                   >
                     <History className="h-3.5 w-3.5" />
                   </button>
-                  <button
-                    onClick={() => handleDelete(prop)}
-                    title="Eliminar propiedad"
-                    aria-label={`Eliminar ${prop.title || "la propiedad"}`}
-                    className="flex items-center justify-center rounded-xl border border-red-100 bg-white p-2 text-red-400 transition-all duration-300 hover:bg-red-50 hover:text-red-600"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  {prop.status === "ARCHIVADO" ? (
+                    <button
+                      onClick={() => handleRestore(prop)}
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-700 transition-all duration-300 hover:bg-emerald-50 hover:shadow-sm"
+                    >
+                      <ArchiveRestore className="h-3.5 w-3.5" />
+                      Restaurar
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleArchive(prop)}
+                      title="Archivar propiedad"
+                      aria-label={`Archivar ${prop.title || "la propiedad"}`}
+                      className="flex items-center justify-center rounded-xl border border-gray-200 bg-white p-2 text-gray-500 transition-all duration-300 hover:bg-gray-50 hover:text-gray-800 hover:shadow-sm"
+                    >
+                      <Archive className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
 
                 {/* Certificate-oficio link, only for certified properties */}

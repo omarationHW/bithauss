@@ -62,13 +62,15 @@ import {
 const PROPERTY_TYPES = [
   { value: "CASA", label: "Casa" },
   { value: "CASA_CONDOMINIO", label: "Casa en Condominio" },
+  { value: "CASA_USO_SUELO", label: "Casa con Uso de Suelo" },
   { value: "DEPARTAMENTO", label: "Departamento" },
   { value: "TERRENO", label: "Terreno" },
   { value: "OFICINA", label: "Oficina" },
   { value: "LOCAL_COMERCIAL", label: "Local Comercial" },
   { value: "BODEGA", label: "Bodega" },
+  { value: "NAVE_INDUSTRIAL", label: "Nave Industrial" },
   { value: "HOTEL", label: "Hotel" },
-  { value: "DEPARTAMENTO_HOTEL", label: "Departamento en Hotel" },
+  { value: "EDIFICIO", label: "Edificio" },
   { value: "OTRO", label: "Otro" },
 ] as const;
 
@@ -333,14 +335,15 @@ export default function EditarPropiedadPage() {
   const [brcStatus, setBrcStatus] = useState<string>("NO_SOLICITADO");
 
   // Conditional fields per property type (CASA_CONDOMINIO behaves like a
-  // house, DEPARTAMENTO_HOTEL like an apartment, HOTEL has its own set).
+  // house; HOTEL and EDIFICIO are whole-building assets with their own set).
   const {
     isCasa,
     isDepto,
-    isHotel,
+    isBuilding,
     isResidential,
     showMaintenanceFee,
     showFloorNumber,
+    unitCountLabel,
   } = getPropertyTypeFlags(form.tipo_propiedad);
   const hasSale =
     form.tipo_operacion === "VENTA" ||
@@ -1357,8 +1360,8 @@ export default function EditarPropiedadPage() {
             </div>
           )}
 
-          {/* HOTEL (whole property) */}
-          {isHotel && (
+          {/* Whole-building assets: HOTEL and EDIFICIO */}
+          {isBuilding && (
             <div className="grid grid-cols-2 gap-5 lg:grid-cols-3">
               <div>
                 <Label className="mb-1.5 block text-gray-700">
@@ -1389,7 +1392,9 @@ export default function EditarPropiedadPage() {
               </div>
               <div>
                 {/* Stored in `bedrooms` to keep the DB schema unchanged */}
-                <Label className="mb-1.5 block text-gray-700">Habitaciones</Label>
+                <Label className="mb-1.5 block text-gray-700">
+                  {unitCountLabel}
+                </Label>
                 <Input
                   type="number"
                   placeholder="0"
@@ -1436,7 +1441,7 @@ export default function EditarPropiedadPage() {
           )}
 
           {/* Fallback for the remaining types (terreno, local, bodega...) */}
-          {!isCasa && !isDepto && !isHotel && (
+          {!isCasa && !isDepto && !isBuilding && (
             <div className="grid grid-cols-2 gap-5 lg:grid-cols-3">
               <div>
                 <Label className="mb-1.5 block text-gray-700">Área total (m²)</Label>

@@ -7,14 +7,14 @@ describe("BrcExclusionNotice", () => {
     render(<BrcExclusionNotice />);
     expect(screen.getByText(/Importante/i)).toBeInTheDocument();
     expect(
-      screen.getByText(/no verifica terrenos ni remates hipotecarios/i),
+      screen.getByText(/no verifica terrenos ni remates/i),
     ).toBeInTheDocument();
   });
 
   it("renders the compact variant with shorter copy", () => {
     render(<BrcExclusionNotice variant="compact" />);
     expect(
-      screen.getByText(/No verificamos terrenos ni remates hipotecarios/i),
+      screen.getByText(/No verificamos terrenos ni remates/i),
     ).toBeInTheDocument();
   });
 

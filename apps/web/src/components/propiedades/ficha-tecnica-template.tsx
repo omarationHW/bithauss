@@ -157,6 +157,8 @@ function typeLabel(t: string): string {
     HOTEL: "Hotel",
     DEPARTAMENTO_HOTEL: "Departamento en hotel",
     EDIFICIO: "Edificio",
+    NAVE_INDUSTRIAL: "Nave industrial",
+    CASA_USO_SUELO: "Casa con uso de suelo",
     QUINTA: "Quinta",
   };
   return map[t] ?? t;

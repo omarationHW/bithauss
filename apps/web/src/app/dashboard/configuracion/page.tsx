@@ -407,10 +407,15 @@ export default function ConfiguracionPage() {
 
     try {
       setReprocessMsg("Buscando fotos…");
+      // Deleted listings are soft-deleted (status = 'ELIMINADO') and keep their
+      // property_media rows, so without this filter the run burned through
+      // photos of listings the owner already removed — and then named those
+      // dead listings in the "omitidas" report, which is just confusing.
       const { data: props, error: propsErr } = await supabase
         .from("properties")
         .select("id, title")
-        .eq("owner_id", user.id);
+        .eq("owner_id", user.id)
+        .neq("status", "ELIMINADO");
       if (propsErr) throw propsErr;
 
       const propIds = (props ?? []).map((p) => p.id as string);

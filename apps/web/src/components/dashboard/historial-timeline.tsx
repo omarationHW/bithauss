@@ -22,6 +22,8 @@ import {
   Plus,
   RefreshCw,
   Trash2,
+  Archive,
+  ArchiveRestore,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { logError } from "@/lib/log";
@@ -32,7 +34,13 @@ import { logError } from "@/lib/log";
 
 export type HistorialEntity = "properties" | "leads";
 
-type AuditAction = "CREATED" | "UPDATED" | "STATUS_CHANGED" | "DELETED";
+type AuditAction =
+  | "CREATED"
+  | "UPDATED"
+  | "STATUS_CHANGED"
+  | "ARCHIVED"
+  | "RESTORED"
+  | "DELETED";
 
 type JsonValue = string | number | boolean | null | JsonValue[] | { [k: string]: JsonValue };
 
@@ -126,6 +134,7 @@ const VALUE_LABELS: Record<string, string> = {
   PUBLICADO: "Publicado",
   PAUSADO: "Pausado",
   VENDIDO: "Vendido",
+  ARCHIVADO: "Archivada",
   ELIMINADO: "Eliminado",
   /* lead_status */
   NUEVO: "Nuevo",
@@ -147,7 +156,9 @@ const VALUE_LABELS: Record<string, string> = {
   CASA: "Casa",
   CASA_CONDOMINIO: "Casa en condominio",
   DEPARTAMENTO: "Departamento",
-  DEPARTAMENTO_HOTEL: "Departamento en hotel",
+  EDIFICIO: "Edificio",
+  NAVE_INDUSTRIAL: "Nave industrial",
+  CASA_USO_SUELO: "Casa con uso de suelo",
   HOTEL: "Hotel",
   TERRENO: "Terreno",
   OFICINA: "Oficina",
@@ -221,6 +232,18 @@ const ACTION_META: Record<
     dot: "bg-amber-500",
     badge: "bg-amber-50 text-amber-600 border-amber-200",
     label: { properties: "Cambio de estado", leads: "Cambio de estado" },
+  },
+  ARCHIVED: {
+    icon: Archive,
+    dot: "bg-slate-500",
+    badge: "bg-slate-100 text-slate-600 border-slate-300",
+    label: { properties: "Propiedad archivada", leads: "Lead archivado" },
+  },
+  RESTORED: {
+    icon: ArchiveRestore,
+    dot: "bg-emerald-500",
+    badge: "bg-emerald-50 text-emerald-600 border-emerald-200",
+    label: { properties: "Propiedad restaurada", leads: "Lead restaurado" },
   },
   DELETED: {
     icon: Trash2,

@@ -11,9 +11,11 @@ import {
   CheckCircle2,
   AlertCircle,
   X,
+  Save,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { logError } from "@/lib/log";
+import { isDocumentRequired } from "@/lib/brc-documents";
 import { useUser } from "@/app/dashboard/_context/user-context";
 import { ShieldBrc } from '@/components/ui/shield-brc'
 import { BrcExclusionNotice } from '@/components/ui/brc-exclusion-notice'
@@ -31,6 +33,8 @@ interface Property {
   price: number;
   currency: string;
   brc_status: string;
+  type: string | null;
+  operation: string | null;
 }
 
 interface BrcTariff {
@@ -42,11 +46,19 @@ interface BrcTariff {
   currency: string;
 }
 
+/** A document already stored in the draft expediente. */
+interface SavedDoc {
+  id: string;
+  file_name: string;
+  file_url: string;
+}
+
 interface BrcDocumentType {
   id: string;
   name: string;
   description: string | null;
   is_required: boolean;
+  allows_multiple: boolean;
   sort_order: number;
 }
 
@@ -76,13 +88,21 @@ export default function SolicitarBrcPage() {
   const [property, setProperty] = useState<Property | null>(null);
   const [tariff, setTariff] = useState<BrcTariff | null>(null);
   const [documentTypes, setDocumentTypes] = useState<BrcDocumentType[]>([]);
-  const [files, setFiles] = useState<Record<string, File | null>>({});
+  /** Files picked but not yet uploaded, per document type. Requirements
+   *  flagged `allows_multiple` can hold several (one ID per co-owner). */
+  const [files, setFiles] = useState<Record<string, File[]>>({});
   const [validatingDocId, setValidatingDocId] = useState<string | null>(null);
   const [ocrResults, setOcrResults] = useState<Record<string, { valid: boolean; confidence: string; message: string; detectedType: string; extractedData: Record<string, unknown>; standaloneChecks?: Array<{ rule: string; label: string; status: string; message: string }> }>>({});
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Draft expediente for this property, created on first save. */
+  const [draftId, setDraftId] = useState<string | null>(null);
+  /** Documents already persisted in the draft, keyed by document_type_id. */
+  const [savedDocs, setSavedDocs] = useState<Record<string, SavedDoc[]>>({});
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
 
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
@@ -95,7 +115,7 @@ export default function SolicitarBrcPage() {
         // Fetch property
         const { data: prop, error: propError } = await supabase
           .from("properties")
-          .select("id, title, address_line, city, state, price, currency, brc_status")
+          .select("id, title, address_line, city, state, price, currency, brc_status, type, operation")
           .eq("id", id)
           .single();
 
@@ -129,6 +149,38 @@ export default function SolicitarBrcPage() {
           .order("sort_order", { ascending: true });
 
         if (docTypes) setDocumentTypes(docTypes);
+
+        // Resume an unsent request, if any. Documents already uploaded show
+        // as saved so the owner only has to add what is still missing.
+        const { data: draft } = await supabase
+          .from("brc_expedientes")
+          .select("id, notes")
+          .eq("property_id", id)
+          .eq("status", "BORRADOR")
+          .maybeSingle();
+
+        if (draft) {
+          setDraftId(draft.id as string);
+          if (draft.notes) setNotes(draft.notes as string);
+
+          const { data: docs } = await supabase
+            .from("brc_documents")
+            .select("id, document_type_id, file_name, file_url")
+            .eq("expediente_id", draft.id);
+
+          if (docs) {
+            const grouped: Record<string, SavedDoc[]> = {};
+            for (const d of docs) {
+              const key = d.document_type_id as string;
+              (grouped[key] ??= []).push({
+                id: d.id as string,
+                file_name: d.file_name as string,
+                file_url: d.file_url as string,
+              });
+            }
+            setSavedDocs(grouped);
+          }
+        }
       } catch {
         setError("Error al cargar los datos. Intenta de nuevo.");
       } finally {
@@ -140,9 +192,21 @@ export default function SolicitarBrcPage() {
   }, [id]);
 
   /* ---- File handlers with OCR validation ---- */
+
+  /** Appends for multi-file requirements, replaces for single-file ones. */
+  function addFile(docTypeId: string, file: File, multiple: boolean) {
+    setFiles((prev) => ({
+      ...prev,
+      [docTypeId]: multiple ? [...(prev[docTypeId] ?? []), file] : [file],
+    }));
+  }
+
   async function handleFileChange(docTypeId: string, file: File | null) {
+    const docType = documentTypes.find((dt) => dt.id === docTypeId);
+    const multiple = !!docType?.allows_multiple;
+
     if (!file) {
-      setFiles((prev) => ({ ...prev, [docTypeId]: null }));
+      setFiles((prev) => ({ ...prev, [docTypeId]: [] }));
       setOcrResults((prev) => {
         const next = { ...prev };
         delete next[docTypeId];
@@ -151,10 +215,8 @@ export default function SolicitarBrcPage() {
       return;
     }
 
-    // Find document type name for OCR
-    const docType = documentTypes.find((dt) => dt.id === docTypeId);
     if (!docType) {
-      setFiles((prev) => ({ ...prev, [docTypeId]: file }));
+      addFile(docTypeId, file, multiple);
       return;
     }
 
@@ -180,7 +242,7 @@ export default function SolicitarBrcPage() {
 
       if (!res.ok) {
         // If OCR service is unavailable, accept file with warning
-        setFiles((prev) => ({ ...prev, [docTypeId]: file }));
+        addFile(docTypeId, file, multiple);
         setOcrResults((prev) => ({
           ...prev,
           [docTypeId]: {
@@ -197,7 +259,7 @@ export default function SolicitarBrcPage() {
       const result = await res.json();
 
       if (result.valid) {
-        setFiles((prev) => ({ ...prev, [docTypeId]: file }));
+        addFile(docTypeId, file, multiple);
         setOcrResults((prev) => ({ ...prev, [docTypeId]: result }));
       } else {
         // Document rejected — clear file
@@ -208,7 +270,7 @@ export default function SolicitarBrcPage() {
       }
     } catch {
       // On network error, accept file
-      setFiles((prev) => ({ ...prev, [docTypeId]: file }));
+      addFile(docTypeId, file, multiple);
       setOcrResults((prev) => ({
         ...prev,
         [docTypeId]: {
@@ -224,8 +286,11 @@ export default function SolicitarBrcPage() {
     }
   }
 
-  function removeFile(docTypeId: string) {
-    setFiles((prev) => ({ ...prev, [docTypeId]: null }));
+  function removeFile(docTypeId: string, index: number) {
+    setFiles((prev) => ({
+      ...prev,
+      [docTypeId]: (prev[docTypeId] ?? []).filter((_, i) => i !== index),
+    }));
     setOcrResults((prev) => {
       const next = { ...prev };
       delete next[docTypeId];
@@ -235,17 +300,162 @@ export default function SolicitarBrcPage() {
     if (input) input.value = "";
   }
 
+  /* ---- Draft persistence ---- */
+
+  /** Creates the draft expediente on first use and returns its id. */
+  async function ensureDraft(supabase: ReturnType<typeof createClient>) {
+    if (draftId) return draftId;
+    if (!property || !user) throw new Error("Faltan datos de la propiedad.");
+
+    const { data, error: expError } = await supabase
+      .from("brc_expedientes")
+      .insert({
+        property_id: property.id,
+        requested_by: user.id,
+        tariff_id: tariff?.id ?? null,
+        notes: notes.trim() || null,
+        status: "BORRADOR",
+      })
+      .select("id")
+      .single();
+
+    if (expError || !data) {
+      throw new Error(expError?.message ?? "No se pudo crear el borrador.");
+    }
+    setDraftId(data.id as string);
+    return data.id as string;
+  }
+
+  /**
+   * Uploads every file picked but not yet stored, and persists the notes.
+   * Returns the draft id so `handleSubmit` can reuse the same work.
+   */
+  async function persistProgress(
+    supabase: ReturnType<typeof createClient>,
+  ): Promise<string> {
+    const expedienteId = await ensureDraft(supabase);
+
+    await supabase
+      .from("brc_expedientes")
+      .update({ notes: notes.trim() || null })
+      .eq("id", expedienteId);
+
+    const pending = Object.entries(files).flatMap(([docTypeId, list]) =>
+      (list ?? []).map((file) => [docTypeId, file] as const),
+    );
+
+    for (const [docTypeId, file] of pending) {
+      const docType = documentTypes.find((dt) => dt.id === docTypeId);
+      const filePath = `${expedienteId}/${docTypeId}/${file.name}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("brc-documents")
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) {
+        logError("Upload error:", uploadError);
+        throw new Error(`No se pudo subir "${file.name}": ${uploadError.message}`);
+      }
+
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("brc-documents").getPublicUrl(filePath);
+
+      // Single-file requirements replace what was there; multi-file ones
+      // (e.g. one ID per co-owner) accumulate.
+      if (!docType?.allows_multiple) {
+        for (const previous of savedDocs[docTypeId] ?? []) {
+          await supabase.from("brc_documents").delete().eq("id", previous.id);
+        }
+      }
+
+      const ocr = ocrResults[docTypeId];
+      const standaloneChecks =
+        Array.isArray(ocr?.standaloneChecks) && ocr.standaloneChecks.length > 0
+          ? ocr.standaloneChecks.map((c) => ({
+              label: c.label,
+              passed: c.status === "pass",
+              detail: c.message,
+            }))
+          : null;
+
+      const { data: inserted, error: docError } = await supabase
+        .from("brc_documents")
+        .insert({
+          expediente_id: expedienteId,
+          document_type_id: docTypeId,
+          file_url: publicUrl,
+          file_name: file.name,
+          file_size: file.size,
+          mime_type: file.type,
+          status: "PENDIENTE",
+          uploaded_by: user!.id,
+          ocr_detected_type: ocr?.detectedType ?? null,
+          ocr_confidence: ocr?.confidence ?? null,
+          ocr_valid: ocr?.valid ?? null,
+          ocr_extracted_data: ocr?.extractedData ?? null,
+          ocr_validated_at: ocr ? new Date().toISOString() : null,
+          ocr_standalone_checks: standaloneChecks,
+        })
+        .select("id, file_name, file_url")
+        .single();
+
+      if (docError || !inserted) {
+        throw new Error(docError?.message ?? "No se pudo guardar el documento.");
+      }
+
+      const savedDoc: SavedDoc = {
+        id: inserted.id as string,
+        file_name: inserted.file_name as string,
+        file_url: inserted.file_url as string,
+      };
+      setSavedDocs((prev) => ({
+        ...prev,
+        [docTypeId]: docType?.allows_multiple
+          ? [...(prev[docTypeId] ?? []), savedDoc]
+          : [savedDoc],
+      }));
+      // Already persisted — drop it from the pending picks.
+      setFiles((prev) => ({ ...prev, [docTypeId]: [] }));
+    }
+
+    return expedienteId;
+  }
+
+  async function handleSaveDraft() {
+    if (!property || !user) return;
+    setSavingDraft(true);
+    setError(null);
+    try {
+      await persistProgress(createClient());
+      setSavedAt(new Date());
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "No se pudo guardar el progreso.",
+      );
+    } finally {
+      setSavingDraft(false);
+    }
+  }
+
   /* ---- Submit ---- */
   async function handleSubmit() {
     if (!property || !user) return;
 
-    // Validate required documents
+    // Validate required documents. Some are only required for certain
+    // property types/operations — see lib/brc-documents. A document already
+    // saved in the draft counts as provided.
     const missingRequired = documentTypes
-      .filter((dt) => dt.is_required && !files[dt.id])
+      .filter(
+        (dt) =>
+          isDocumentRequired(dt, property) &&
+          (files[dt.id]?.length ?? 0) === 0 &&
+          (savedDocs[dt.id]?.length ?? 0) === 0,
+      )
       .map((dt) => dt.name);
 
     if (missingRequired.length > 0) {
-      setError(`Faltan documentos requeridos: ${missingRequired.join(", ")}`);
+      setError(`Faltan documentos obligatorios: ${missingRequired.join(", ")}`);
       return;
     }
 
@@ -255,82 +465,29 @@ export default function SolicitarBrcPage() {
     try {
       const supabase = createClient();
 
-      const fullNotes = notes.trim() || null;
+      // Persist anything still pending, then hand the expediente over for
+      // review. Doing it in this order means a failure mid-upload leaves a
+      // usable draft instead of a half-submitted request.
+      const expedienteId = await persistProgress(supabase);
 
-      // 1. Create expediente
-      const { data: expediente, error: expError } = await supabase
+      const { error: submitError } = await supabase
         .from("brc_expedientes")
-        .insert({
-          property_id: property.id,
-          requested_by: user.id,
-          tariff_id: tariff?.id ?? null,
-          notes: fullNotes,
+        .update({
           status: "EN_REVISION",
+          tariff_id: tariff?.id ?? null,
+          notes: notes.trim() || null,
         })
-        .select("id")
-        .single();
+        .eq("id", expedienteId);
 
-      if (expError || !expediente) {
-        throw new Error(expError?.message ?? "Error al crear el expediente.");
+      if (submitError) {
+        throw new Error(submitError.message);
       }
 
-      // 2. Update property brc_status
       await supabase
         .from("properties")
         .update({ brc_status: "EN_REVISION" })
         .eq("id", property.id);
 
-      // 3. Upload documents and create records
-      const fileEntries = Object.entries(files).filter(
-        (entry): entry is [string, File] => entry[1] !== null
-      );
-
-      for (const [docTypeId, file] of fileEntries) {
-        const filePath = `${expediente.id}/${docTypeId}/${file.name}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from("brc-documents")
-          .upload(filePath, file);
-
-        if (uploadError) {
-          logError("Upload error:", uploadError);
-          continue;
-        }
-
-        const {
-          data: { publicUrl },
-        } = supabase.storage.from("brc-documents").getPublicUrl(filePath);
-
-        const ocr = ocrResults[docTypeId];
-        // Normalize OCR standalone checks (CURP format, INE vigencia, boleta age, etc.)
-        // from { rule, label, status, message } to { label, passed, detail }.
-        const standaloneChecks =
-          Array.isArray(ocr?.standaloneChecks) && ocr.standaloneChecks.length > 0
-            ? ocr.standaloneChecks.map((c) => ({
-                label: c.label,
-                passed: c.status === "pass",
-                detail: c.message,
-              }))
-            : null;
-        await supabase.from("brc_documents").insert({
-          expediente_id: expediente.id,
-          document_type_id: docTypeId,
-          file_url: publicUrl,
-          file_name: file.name,
-          file_size: file.size,
-          mime_type: file.type,
-          status: "PENDIENTE",
-          uploaded_by: user.id,
-          ocr_detected_type: ocr?.detectedType ?? null,
-          ocr_confidence: ocr?.confidence ?? null,
-          ocr_valid: ocr?.valid ?? null,
-          ocr_extracted_data: ocr?.extractedData ?? null,
-          ocr_validated_at: ocr ? new Date().toISOString() : null,
-          ocr_standalone_checks: standaloneChecks,
-        });
-      }
-
-      // 4. Redirect to expedientes
       router.push("/dashboard/expedientes");
     } catch (err: unknown) {
       const message =
@@ -500,7 +657,7 @@ export default function SolicitarBrcPage() {
           className="text-lg font-bold text-gray-900 mb-1"
           style={{ fontFamily: "Barlow, Inter, sans-serif" }}
         >
-          Documentos Requeridos
+          Documentos
         </h3>
         <p className="text-sm text-gray-500 mb-6">
           Sube los documentos necesarios para la certificacion. Los formatos aceptados son PDF, JPG y PNG.
@@ -508,8 +665,11 @@ export default function SolicitarBrcPage() {
 
         <div className="space-y-4">
           {documentTypes.map((dt) => {
-            const file = files[dt.id];
-            const isConditional = !dt.is_required;
+            const picked = files[dt.id] ?? [];
+            const saved = savedDocs[dt.id] ?? [];
+            const total = picked.length + saved.length;
+            const required = property ? isDocumentRequired(dt, property) : dt.is_required;
+            const isConditional = !required;
             const isValidating = validatingDocId === dt.id;
             const ocrResult = ocrResults[dt.id];
             const ocrRejected = ocrResult && !ocrResult.valid;
@@ -531,13 +691,19 @@ export default function SolicitarBrcPage() {
                       <p className="font-semibold text-gray-900 text-sm">
                         {dt.name}
                       </p>
-                      {dt.is_required ? (
+                      {required ? (
                         <span className="inline-flex items-center rounded-md bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-600 border border-red-100">
-                          Requerido
+                          Obligatorio
                         </span>
                       ) : (
                         <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-600 border border-amber-100">
-                          Condicional
+                          Opcional
+                        </span>
+                      )}
+                      {saved.length > 0 && (
+                        <span className="inline-flex items-center gap-1 rounded-md border border-emerald-100 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-600">
+                          <CheckCircle2 className="h-3 w-3" />
+                          Guardado
                         </span>
                       )}
                     </div>
@@ -551,24 +717,16 @@ export default function SolicitarBrcPage() {
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       Validando documento...
                     </div>
-                  ) : file ? (
-                    <div className="flex items-center gap-2 shrink-0">
-                      <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700">
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        <span className="max-w-[140px] truncate">{file.name}</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removeFile(dt.id)}
-                        className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 text-gray-400 transition-colors hover:bg-gray-50 hover:text-gray-600"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
                   ) : (
-                    <label className={`inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-semibold text-gray-700 transition-all duration-200 hover:bg-gray-50 hover:shadow-sm ${isValidating ? "pointer-events-none opacity-50" : ""}`}>
+                    <label
+                      className={`inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-semibold text-gray-700 transition-all duration-200 hover:bg-gray-50 hover:shadow-sm`}
+                    >
                       <Upload className="h-3.5 w-3.5" />
-                      Subir archivo
+                      {total === 0
+                        ? "Subir archivo"
+                        : dt.allows_multiple
+                          ? "Agregar otro"
+                          : "Reemplazar"}
                       <input
                         ref={(el) => {
                           fileInputRefs.current[dt.id] = el;
@@ -576,13 +734,52 @@ export default function SolicitarBrcPage() {
                         type="file"
                         className="hidden"
                         accept=".pdf,.jpg,.jpeg,.png"
-                        onChange={(e) =>
-                          handleFileChange(dt.id, e.target.files?.[0] ?? null)
-                        }
+                        onChange={(e) => {
+                          handleFileChange(dt.id, e.target.files?.[0] ?? null);
+                          e.target.value = "";
+                        }}
                       />
                     </label>
                   )}
                 </div>
+
+                {/* Files attached to this requirement */}
+                {total > 0 && (
+                  <ul className="mt-3 space-y-1.5">
+                    {saved.map((doc) => (
+                      <li
+                        key={doc.id}
+                        className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700"
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{doc.file_name}</span>
+                        <span className="ml-auto shrink-0 text-[10px] font-semibold uppercase tracking-wide text-emerald-500">
+                          Guardado
+                        </span>
+                      </li>
+                    ))}
+                    {picked.map((f, idx) => (
+                      <li
+                        key={`${f.name}-${idx}`}
+                        className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700"
+                      >
+                        <FileText className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                        <span className="truncate">{f.name}</span>
+                        <span className="ml-auto shrink-0 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                          Sin guardar
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeFile(dt.id, idx)}
+                          aria-label={`Quitar ${f.name}`}
+                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-400 transition-colors hover:bg-white hover:text-gray-600"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
 
                 {/* OCR Validation Result */}
                 {ocrResult && (
@@ -693,16 +890,43 @@ export default function SolicitarBrcPage() {
       {/* ============================================================ */}
       {/*  Submit Button                                                */}
       {/* ============================================================ */}
-      <div className="flex justify-end gap-3">
+      <div className="flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-end">
+        {savedAt && (
+          <p className="mr-auto text-xs font-medium text-emerald-600">
+            Progreso guardado a las{" "}
+            {savedAt.toLocaleTimeString("es-MX", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+            . Puedes cerrar y continuar después.
+          </p>
+        )}
         <Link
           href={`/dashboard/propiedades/${id}`}
-          className="inline-flex items-center rounded-xl border border-gray-200 bg-white px-6 py-3 text-sm font-semibold text-gray-700 transition-all duration-300 hover:bg-gray-50"
+          className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-6 py-3 text-sm font-semibold text-gray-700 transition-all duration-300 hover:bg-gray-50"
         >
           Cancelar
         </Link>
         <button
+          onClick={handleSaveDraft}
+          disabled={savingDraft || submitting}
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-6 py-3 text-sm font-semibold text-gray-700 shadow-sm transition-all duration-300 hover:bg-gray-50 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {savingDraft ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Guardando...
+            </>
+          ) : (
+            <>
+              <Save className="h-4 w-4" />
+              Guardar progreso
+            </>
+          )}
+        </button>
+        <button
           onClick={handleSubmit}
-          disabled={submitting}
+          disabled={submitting || savingDraft}
           className="inline-flex items-center gap-2 rounded-xl px-8 py-3 text-sm font-semibold text-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0"
           style={{
             background:

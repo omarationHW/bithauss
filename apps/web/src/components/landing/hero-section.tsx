@@ -176,7 +176,9 @@ export function HeroSection() {
                 <SelectItem value="Local Comercial">Local Comercial</SelectItem>
                 <SelectItem value="Bodega">Bodega</SelectItem>
                 <SelectItem value="Hotel">Hotel</SelectItem>
-                <SelectItem value="Departamento en Hotel">Departamento en Hotel</SelectItem>
+                <SelectItem value="Edificio">Edificio</SelectItem>
+                <SelectItem value="Nave Industrial">Nave Industrial</SelectItem>
+                <SelectItem value="Casa con Uso de Suelo">Casa con Uso de Suelo</SelectItem>
               </SelectContent>
             </Select>
 

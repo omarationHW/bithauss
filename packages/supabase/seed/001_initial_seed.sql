@@ -73,8 +73,8 @@ insert into brc_document_types (name, description, is_required, sort_order) valu
 ),
 (
   'Constancia de Uso de Suelo autorizado del Inmueble',
-  'Documento oficial que acredita el uso de suelo permitido para el inmueble.',
-  true,
+  'Sólo para compra/venta de casa con uso de suelo u oficinas.',
+  false,
   6
 ),
 (
@@ -91,14 +91,14 @@ insert into brc_document_types (name, description, is_required, sort_order) valu
 ),
 (
   'Identificación del Propietario',
-  'INE o Pasaporte vigentes. En caso de Copropietarios, identificación de cada uno.',
+  'INE o Pasaporte vigentes. En caso de copropietarios, sube la identificación de cada uno.',
   true,
   9
 ),
 (
   'Acta de Matrimonio del Propietario',
-  'Acta de matrimonio del propietario.',
-  true,
+  'Sólo si el propietario está casado.',
+  false,
   10
 ),
 (

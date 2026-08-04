@@ -5,6 +5,9 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
+import { getSignedDocumentUrl } from "@/lib/private-storage";
+import { runOcrValidation, ocrColumns } from "@/lib/ocr-validate";
+import { isDocumentRequired } from "@/lib/brc-documents";
 import { useUser } from "@/app/dashboard/_context/user-context";
 import { ShieldBrc } from '@/components/ui/shield-brc'
 import { OcrDocumentReview, type OcrStandaloneCheck } from '@/components/brc/ocr-document-review'
@@ -52,6 +55,8 @@ interface Property {
   zip_code: string | null;
   price: number;
   currency: string;
+  type: string | null;
+  operation: string | null;
   bedrooms: number | null;
   bathrooms: number | null;
   area_built: number | null;
@@ -240,10 +245,16 @@ export default function ExpedienteDetailPage() {
   const [certObservations, setCertObservations] = useState("");
   const [certPdfFile, setCertPdfFile] = useState<File | null>(null);
   const [certSubmitting, setCertSubmitting] = useState(false);
+  /** Document whose signed URL is being minted. */
+  const [openingDocId, setOpeningDocId] = useState<string | null>(null);
+  /** Document type whose corrected file is being uploaded. */
+  const [reuploadingTypeId, setReuploadingTypeId] = useState<string | null>(null);
   const [rejectExpedienteConfirm, setRejectExpedienteConfirm] = useState(false);
   const [certificateId, setCertificateId] = useState<string | null>(null);
 
   const isNotario = user?.role === "NOTARIO";
+  /** The owner who filed the request: the only one who can fix documents. */
+  const isRequester = !!user && expediente?.requested_by === user.id;
   const supabase = useMemo(() => createClient(), []);
 
   /* ---------------------------------------------------------------- */
@@ -277,7 +288,7 @@ export default function ExpedienteDetailPage() {
     // 2. Property with media
     const { data: propData } = await supabase
       .from("properties")
-      .select("id, title, description, address_line, city, state, zip_code, price, currency, bedrooms, bathrooms, area_built, parking_spaces, owner_id, featured_image_url, property_media ( id, url, media_type, sort_order )")
+      .select("id, title, description, address_line, city, state, zip_code, price, currency, type, operation, bedrooms, bathrooms, area_built, parking_spaces, owner_id, featured_image_url, property_media ( id, url, media_type, sort_order )")
       .eq("id", expData.property_id)
       .maybeSingle();
 
@@ -480,6 +491,91 @@ export default function ExpedienteDetailPage() {
   /*  Certificate issuance                                             */
   /* ---------------------------------------------------------------- */
 
+  /** Documents can only be fixed while the expediente is still open. */
+  const canFixDocuments =
+    !!expediente &&
+    expediente.status !== "CERTIFICADO" &&
+    expediente.status !== "RECHAZADO";
+
+  /**
+   * Uploads a corrected file for a rejected requirement. A NEW row is created
+   * so the rejection and its reason stay in the record; the table shows the
+   * latest version.
+   */
+  async function handleReupload(documentTypeId: string, file: File) {
+    if (!expediente || !user) return;
+    setReuploadingTypeId(documentTypeId);
+    try {
+      // Same OCR pass the original upload gets, so the notary reviews the
+      // corrected file with its analysis instead of a bare PDF.
+      const docTypeName =
+        allDocumentTypes.find((dt) => dt.id === documentTypeId)?.name ?? "";
+      const ocr = await runOcrValidation(file, docTypeName);
+
+      const path = `${expediente.id}/${documentTypeId}/${Date.now()}-${file.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from("brc-documents")
+        .upload(path, file, { upsert: true });
+      if (uploadError) throw new Error(uploadError.message);
+
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("brc-documents").getPublicUrl(path);
+
+      const { error: insertError } = await supabase.from("brc_documents").insert({
+        expediente_id: expediente.id,
+        document_type_id: documentTypeId,
+        file_url: publicUrl,
+        file_name: file.name,
+        file_size: file.size,
+        mime_type: file.type,
+        status: "PENDIENTE",
+        uploaded_by: user.id,
+        ...ocrColumns(ocr),
+      });
+      if (insertError) throw new Error(insertError.message);
+
+      // Back to the reviewers' court.
+      if (expediente.status === "DOCUMENTACION_PENDIENTE") {
+        await supabase
+          .from("brc_expedientes")
+          .update({ status: "EN_REVISION" })
+          .eq("id", expediente.id);
+      }
+
+      await fetchData();
+    } catch (err) {
+      window.alert(
+        err instanceof Error
+          ? `No se pudo subir el documento: ${err.message}`
+          : "No se pudo subir el documento.",
+      );
+    } finally {
+      setReuploadingTypeId(null);
+    }
+  }
+
+  /**
+   * `brc-documents` is a private bucket, so the stored `file_url` (built with
+   * getPublicUrl) cannot be opened directly. Mint a short-lived signed URL on
+   * click instead — storage RLS still decides who gets one.
+   */
+  async function openDocument(docId: string, fileUrl: string) {
+    setOpeningDocId(docId);
+    try {
+      const signed = await getSignedDocumentUrl(supabase, fileUrl);
+      if (!signed) {
+        window.alert(
+          "No se pudo abrir el documento. Puede que el archivo ya no exista o que no tengas acceso.",
+        );
+        return;
+      }
+      window.open(signed, "_blank", "noopener,noreferrer");
+    } finally {
+      setOpeningDocId(null);
+    }
+  }
+
   async function handleIssueCertificate() {
     if (!expediente || !property) return;
     setCertSubmitting(true);
@@ -526,18 +622,64 @@ export default function ExpedienteDetailPage() {
   /*  Derived state                                                    */
   /* ---------------------------------------------------------------- */
 
-  const allRequiredValidated = useMemo(() => {
-    const required = documents.filter((d) => d.brc_document_types?.is_required);
-    if (required.length === 0) return false;
-    return required.every((d) => d.status === "VALIDADO" || d.status === "APROBADO");
-  }, [documents]);
-
   const tableRows = useMemo(() => {
     return allDocumentTypes.map((dt) => {
-      const doc = documents.find((d) => d.document_type_id === dt.id) ?? null;
-      return { docType: dt, doc };
+      // A correction adds a new row instead of overwriting, so the rejected
+      // version stays in the record — show the most recent one.
+      const matches = documents
+        .filter((d) => d.document_type_id === dt.id)
+        .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""));
+      return { docType: dt, doc: matches[0] ?? null };
     });
   }, [allDocumentTypes, documents]);
+
+  /**
+   * Certification is gated on the REQUIRED document types, judged by the most
+   * recent version of each.
+   *
+   * The old check looked at uploaded rows instead of types, which broke twice:
+   * a rejected document that was later corrected kept its old RECHAZADO row in
+   * the list and blocked certification forever, and a required type that was
+   * never uploaded at all did not block anything because it had no row to
+   * inspect. Optional documents are ignored — that is what optional means.
+   */
+  const allRequiredValidated = useMemo(() => {
+    const forProperty = {
+      type: property?.type ?? null,
+      operation: property?.operation ?? null,
+    };
+    const requiredRows = tableRows.filter(({ docType }) =>
+      isDocumentRequired(
+        { name: docType.name, is_required: !!docType.is_required },
+        forProperty,
+      ),
+    );
+    if (requiredRows.length === 0) return false;
+    return requiredRows.every(
+      ({ doc }) =>
+        doc && (doc.status === "VALIDADO" || doc.status === "APROBADO"),
+    );
+  }, [tableRows, property]);
+
+  /** Names of the required documents still standing between here and the
+   *  certificate — so the notary is told what is missing, not just that
+   *  something is. */
+  const pendingRequiredNames = useMemo(() => {
+    const forProperty = {
+      type: property?.type ?? null,
+      operation: property?.operation ?? null,
+    };
+    return tableRows
+      .filter(({ docType, doc }) => {
+        const required = isDocumentRequired(
+          { name: docType.name, is_required: !!docType.is_required },
+          forProperty,
+        );
+        if (!required) return false;
+        return !doc || (doc.status !== "VALIDADO" && doc.status !== "APROBADO");
+      })
+      .map(({ docType }) => docType.name);
+  }, [tableRows, property]);
 
   const notaryDisplayName = user?.fullName ?? "Notario";
 
@@ -984,9 +1126,24 @@ export default function ExpedienteDetailPage() {
                   </div>
                 </button>
                 {!allRequiredValidated && (
-                  <p className="text-center text-[11px] text-gray-400">
-                    Todos los documentos requeridos deben estar validados para emitir el certificado.
-                  </p>
+                  <div className="text-center text-[11px] text-gray-400">
+                    <p>
+                      Faltan documentos obligatorios por validar
+                      {pendingRequiredNames.length > 0 ? ":" : "."}
+                    </p>
+                    {pendingRequiredNames.length > 0 && (
+                      <ul className="mt-1 space-y-0.5 text-left">
+                        {pendingRequiredNames.map((name) => (
+                          <li key={name} className="text-amber-600">
+                            · {name}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <p className="mt-1">
+                      Los documentos opcionales no bloquean la certificación.
+                    </p>
+                  </div>
                 )}
 
                 {!rejectExpedienteConfirm ? (
@@ -1094,15 +1251,19 @@ export default function ExpedienteDetailPage() {
                             <span className="text-[10px] text-amber-600 leading-tight block">{docType.description}</span>
                           )}
                           {hasFile && doc.file_url && (
-                            <a
-                              href={doc.file_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="mt-1 flex items-center gap-1 text-[10px] text-blue-500 hover:text-blue-700 hover:underline"
+                            <button
+                              type="button"
+                              onClick={() => openDocument(doc.id, doc.file_url!)}
+                              disabled={openingDocId === doc.id}
+                              className="mt-1 flex items-center gap-1 text-[10px] text-blue-500 hover:text-blue-700 hover:underline disabled:opacity-60"
                             >
-                              <Download className="h-3 w-3" />
+                              {openingDocId === doc.id ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Download className="h-3 w-3" />
+                              )}
                               {doc.file_name}
-                            </a>
+                            </button>
                           )}
                           {hasFile && (
                             <OcrDocumentReview
@@ -1153,9 +1314,32 @@ export default function ExpedienteDetailPage() {
                             APROBADO
                           </span>
                         ) : isRejected ? (
-                          <span className="inline-flex items-center rounded-md bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-600 border border-red-200">
-                            RECHAZADO
-                          </span>
+                          <div className="flex flex-col gap-1">
+                            <span className="inline-flex items-center rounded-md bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-600 border border-red-200">
+                              RECHAZADO
+                            </span>
+                            {isRequester && canFixDocuments && (
+                              <label className="flex cursor-pointer items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-600 transition-all hover:bg-blue-100">
+                                {reuploadingTypeId === docType.id ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Upload className="h-3 w-3" />
+                                )}
+                                Volver a subir
+                                <input
+                                  type="file"
+                                  accept=".pdf,.jpg,.jpeg,.png"
+                                  className="hidden"
+                                  disabled={reuploadingTypeId !== null}
+                                  onChange={(e) => {
+                                    const f = e.target.files?.[0];
+                                    e.target.value = "";
+                                    if (f) handleReupload(docType.id, f);
+                                  }}
+                                />
+                              </label>
+                            )}
+                          </div>
                         ) : hasFile && isNotario && doc.status !== "VALIDADO" ? (
                           <div className="flex flex-col gap-1">
                             <button

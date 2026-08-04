@@ -23,7 +23,9 @@ export enum PropertyType {
   LOCAL_COMERCIAL = 'LOCAL_COMERCIAL',
   BODEGA = 'BODEGA',
   HOTEL = 'HOTEL',
-  DEPARTAMENTO_HOTEL = 'DEPARTAMENTO_HOTEL',
+  EDIFICIO = 'EDIFICIO',
+  NAVE_INDUSTRIAL = 'NAVE_INDUSTRIAL',
+  CASA_USO_SUELO = 'CASA_USO_SUELO',
   OTRO = 'OTRO',
 }
 
@@ -39,6 +41,8 @@ export enum PropertyStatus {
   PUBLICADO = 'PUBLICADO',
   PAUSADO = 'PAUSADO',
   VENDIDO = 'VENDIDO',
+  ARCHIVADO = 'ARCHIVADO',
+  /** Legacy soft delete — retired in favour of ARCHIVADO (migration 015). */
   ELIMINADO = 'ELIMINADO',
 }
 

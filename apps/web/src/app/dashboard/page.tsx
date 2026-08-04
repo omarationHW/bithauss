@@ -394,7 +394,7 @@ function useDashboardData(userId: string | undefined, role: string) {
       (async () => {
         const { count: totalUsers } = await supabase.from("profiles").select("id", { count: "exact", head: true });
         const { count: totalProps } = await supabase.from("properties").select("id", { count: "exact", head: true }).eq("status", "PUBLICADO");
-        const { count: activeExps } = await supabase.from("brc_expedientes").select("id", { count: "exact", head: true }).not("status", "in", "(CERTIFICADO,RECHAZADO)");
+        const { count: activeExps } = await supabase.from("brc_expedientes").select("id", { count: "exact", head: true }).not("status", "in", "(CERTIFICADO,RECHAZADO,BORRADOR)");
         const { count: pendingNotaries } = await supabase.from("notary_profiles").select("id", { count: "exact", head: true }).eq("is_verified", false);
 
         // Recent leads (no owner filter — admin RLS reads platform-wide if allowed,

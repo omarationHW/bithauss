@@ -1,6 +1,32 @@
 import { z } from 'zod';
 
 /**
+ * Every value of the `property_type` enum that the product offers.
+ *
+ * Single source of truth on purpose: this list used to be written out twice in
+ * this file, and each new type (Casa en Condominio, Hotel, Edificio…) had to be
+ * added in both places — which is exactly how types ended up accepted by one
+ * schema and rejected by the other.
+ *
+ * DEPARTAMENTO_HOTEL still exists in the database enum (Postgres cannot drop
+ * enum values) but was retired from the catalogue and is deliberately absent.
+ */
+export const PROPERTY_TYPES = [
+  'CASA',
+  'CASA_CONDOMINIO',
+  'CASA_USO_SUELO',
+  'DEPARTAMENTO',
+  'TERRENO',
+  'OFICINA',
+  'LOCAL_COMERCIAL',
+  'BODEGA',
+  'NAVE_INDUSTRIAL',
+  'HOTEL',
+  'EDIFICIO',
+  'OTRO',
+] as const;
+
+/**
  * Schema for creating a property listing.
  */
 export const createPropertySchema = z.object({
@@ -14,18 +40,7 @@ export const createPropertySchema = z.object({
     .max(5000, 'La descripción no puede exceder 5000 caracteres')
     .nullable()
     .optional(),
-  type: z.enum([
-    'CASA',
-    'CASA_CONDOMINIO',
-    'DEPARTAMENTO',
-    'TERRENO',
-    'OFICINA',
-    'LOCAL_COMERCIAL',
-    'BODEGA',
-    'HOTEL',
-    'DEPARTAMENTO_HOTEL',
-    'OTRO',
-  ]),
+  type: z.enum(PROPERTY_TYPES),
   operation: z.enum(['VENTA', 'RENTA', 'VENTA_RENTA', 'TRASPASO']),
 
   // Pricing — `price` keeps the legacy single value (fallback). For
@@ -127,22 +142,11 @@ export const updatePropertySchema = createPropertySchema.partial();
 export const propertySearchSchema = z.object({
   q: z.string().optional(),
   type: z
-    .enum([
-      'CASA',
-      'CASA_CONDOMINIO',
-      'DEPARTAMENTO',
-      'TERRENO',
-      'OFICINA',
-      'LOCAL_COMERCIAL',
-      'BODEGA',
-      'HOTEL',
-      'DEPARTAMENTO_HOTEL',
-      'OTRO',
-    ])
+    .enum(PROPERTY_TYPES)
     .optional(),
   operation: z.enum(['VENTA', 'RENTA', 'VENTA_RENTA', 'TRASPASO']).optional(),
   status: z
-    .enum(['BORRADOR', 'PUBLICADO', 'PAUSADO', 'VENDIDO', 'ELIMINADO'])
+    .enum(['BORRADOR', 'PUBLICADO', 'PAUSADO', 'VENDIDO', 'ARCHIVADO', 'ELIMINADO'])
     .optional(),
   city: z.string().optional(),
   state: z.string().optional(),

@@ -18,7 +18,7 @@ export function BrcExclusionNotice({ className, variant = "default" }: BrcExclus
       >
         <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
         <span>
-          <strong className="font-bold">Importante:</strong> No verificamos terrenos ni remates hipotecarios.
+          <strong className="font-bold">Importante:</strong> No verificamos terrenos ni remates.
         </span>
       </div>
     )
@@ -38,7 +38,7 @@ export function BrcExclusionNotice({ className, variant = "default" }: BrcExclus
           Importante
         </p>
         <p className="text-sm leading-relaxed text-amber-900">
-          BitHauss <strong>no verifica terrenos ni remates hipotecarios</strong>. La certificación BRC aplica únicamente a propiedades edificadas.
+          BitHauss <strong>no verifica terrenos ni remates</strong>. La certificación BRC aplica únicamente a propiedades edificadas.
         </p>
       </div>
     </div>

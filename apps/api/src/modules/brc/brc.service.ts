@@ -153,6 +153,20 @@ export class BrcService {
       metadata: { document_id: documentId, reason: dto.reason },
     });
 
+    // Move the expediente to "documentación pendiente": the ball is now in the
+    // owner's court. Without this it kept reading "En revisión" while actually
+    // waiting on them, and nothing in the UI said so.
+    if (expediente.status !== 'DOCUMENTACION_PENDIENTE') {
+      await supabase
+        .from('brc_expedientes')
+        .update({ status: 'DOCUMENTACION_PENDIENTE' })
+        .eq('id', doc.expediente_id);
+      await supabase
+        .from('properties')
+        .update({ brc_status: 'DOCUMENTACION_PENDIENTE' })
+        .eq('id', expediente.property_id);
+    }
+
     const docName = (doc.brc_document_types as { name?: string } | null)?.name ?? 'Documento';
     await this.insertNotification(
       expediente.requested_by,
