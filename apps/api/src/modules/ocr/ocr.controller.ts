@@ -11,8 +11,17 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import { MagicBytesValidator } from '../../common/validators/magic-bytes.validator';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { OcrService, EscrituraCrossCheckInput } from './ocr.service';
 
+/**
+ * BH-14: these endpoints bill BitHauss per call (Azure Document Intelligence +
+ * Azure OpenAI). Being merely authenticated used to be enough, so anyone with
+ * a throwaway address could sustain 10 analyses a minute — ~14 400 a day — on
+ * our account. No privilege is gained; only a bill. Restricting to the roles
+ * that actually upload documents removes the anonymous-signup path to it.
+ */
+@Roles('VENDEDOR', 'BROKER', 'INMOBILIARIA', 'NOTARIO', 'OPERADOR_BRC', 'ADMIN')
 @Controller('ocr')
 export class OcrController {
   constructor(private readonly ocrService: OcrService) {}

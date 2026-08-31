@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -16,6 +16,13 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { logError } from "@/lib/log";
 import { isDocumentRequired } from "@/lib/brc-documents";
+import {
+  bestMembershipTier,
+  calculateBrcPrice,
+  membershipDiscountFor,
+  type BrcPriceBreakdown,
+} from "@/lib/brc-pricing";
+import { BrcPriceSummary } from "./brc-price-summary";
 import { useUser } from "@/app/dashboard/_context/user-context";
 import { ShieldBrc } from '@/components/ui/shield-brc'
 import { BrcExclusionNotice } from '@/components/ui/brc-exclusion-notice'
@@ -31,6 +38,8 @@ interface Property {
   city: string;
   state: string;
   price: number;
+  /** Sale price added in the v2 property model; wins over `price` for pricing. */
+  price_sale: number | null;
   currency: string;
   brc_status: string;
   type: string | null;
@@ -79,6 +88,25 @@ function formatCurrency(amount: number, currency: string = "MXN") {
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
 
+/** One `subscriptions` row as the tier lookup selects it. */
+interface SubscriptionTierRow {
+  tier?: string | null;
+  membership_plans?: { tier?: string | null } | { tier?: string | null }[] | null;
+}
+
+/**
+ * Tier of one subscription: the denormalised column (migración 029) first,
+ * the embedded plan as the fallback. PostgREST returns a many-to-one embed as
+ * an object but as an array when it cannot prove the cardinality, so both
+ * shapes are accepted.
+ */
+function subscriptionTier(row: SubscriptionTierRow): string | null {
+  if (row.tier) return row.tier;
+  const plan = row.membership_plans;
+  const embedded = Array.isArray(plan) ? plan[0]?.tier : plan?.tier;
+  return embedded ?? null;
+}
+
 export default function SolicitarBrcPage() {
   const params = useParams();
   const router = useRouter();
@@ -103,6 +131,10 @@ export default function SolicitarBrcPage() {
   /** Documents already persisted in the draft, keyed by document_type_id. */
   const [savedDocs, setSavedDocs] = useState<Record<string, SavedDoc[]>>({});
   const [savedAt, setSavedAt] = useState<Date | null>(null);
+  /** Active membership tier of the requester; drives the BRC discount.
+   *  Read straight from the subscription so this screen stays decoupled from
+   *  the membership module's own catalogue/UI. */
+  const [membershipTier, setMembershipTier] = useState<string | null>(null);
 
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
@@ -115,7 +147,9 @@ export default function SolicitarBrcPage() {
         // Fetch property
         const { data: prop, error: propError } = await supabase
           .from("properties")
-          .select("id, title, address_line, city, state, price, currency, brc_status, type, operation")
+          .select(
+            "id, title, address_line, city, state, price, price_sale, currency, brc_status, type, operation",
+          )
           .eq("id", id)
           .single();
 
@@ -128,16 +162,22 @@ export default function SolicitarBrcPage() {
         setProperty(prop);
 
         // Fetch matching tariff
+        // The tariff row is still needed for `brc_expedientes.tariff_id`, but
+        // the price the user sees is computed by `calculateBrcPrice` from the
+        // official 2026 table, not read from the database.
+        const priceForTariff = prop.price_sale ?? prop.price ?? 0;
         const { data: tariffs } = await supabase
           .from("brc_tariffs")
           .select("*")
-          .lte("price_min", prop.price)
+          .eq("is_active", true)
+          .lte("price_min", priceForTariff)
           .order("price_min", { ascending: false });
 
         if (tariffs && tariffs.length > 0) {
           // Find the tariff where price_max >= property price OR price_max is null
           const matched = tariffs.find(
-            (t: BrcTariff) => t.price_max === null || t.price_max >= prop.price
+            (t: BrcTariff) =>
+              t.price_max === null || t.price_max >= priceForTariff,
           );
           if (matched) setTariff(matched);
         }
@@ -190,6 +230,66 @@ export default function SolicitarBrcPage() {
 
     fetchData();
   }, [id]);
+
+  /* ---- Active membership tier (drives the BRC discount) ---- */
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+
+    async function fetchMembership(profileId: string) {
+      try {
+        const supabase = createClient();
+        // The plan tier is read through the `plan_id` embed (one plan per
+        // subscription, even though migración 028 turned the catalogue into
+        // 6 niveles x 4 planes), with the denormalised `subscriptions.tier`
+        // of migración 029 taking precedence when present.
+        //
+        // EVERY active subscription is read, not just the first: A6 lets a
+        // PLATINO client stack extra memberships, and `.limit(1)` would have
+        // shown them the discount of an arbitrary one — often the cheap
+        // stacked add-on. A missing/failed subscription must never block the
+        // request flow: no tier simply means no discount.
+        const { data } = await supabase
+          .from("subscriptions")
+          .select("status, tier, membership_plans(tier)")
+          .eq("profile_id", profileId)
+          .eq("status", "ACTIVA")
+          .limit(20);
+
+        if (cancelled || !data) return;
+        setMembershipTier(bestMembershipTier(data.map(subscriptionTier)));
+      } catch {
+        // Silent: pricing falls back to the undiscounted tariff.
+      }
+    }
+
+    fetchMembership(user.id);
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  /* ---- Price breakdown ---- */
+  /** Recomputed only when the inputs change; the server recomputes it again
+   *  before charging, so this is display-only. */
+  const breakdown: BrcPriceBreakdown | null = useMemo(() => {
+    if (!property) return null;
+    return calculateBrcPrice({
+      price: property.price,
+      price_sale: property.price_sale,
+      currency: property.currency,
+      membershipDiscountPct: membershipDiscountFor(membershipTier),
+    });
+  }, [property, membershipTier]);
+
+  /**
+   * Stripe is considered configured when the publishable key is present at
+   * build time. Without it the pay button degrades instead of sending the
+   * user into a checkout that cannot exist.
+   */
+  const stripeConfigured = Boolean(
+    process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+  );
 
   /* ---- File handlers with OCR validation ---- */
 
@@ -438,6 +538,40 @@ export default function SolicitarBrcPage() {
     }
   }
 
+  /**
+   * Asks the API for a Stripe Checkout session for this expediente and
+   * returns its URL. Returns null when checkout is unavailable so the caller
+   * can still land the user on a saved expediente instead of losing the work.
+   */
+  async function startCheckout(
+    supabase: ReturnType<typeof createClient>,
+    expedienteId: string,
+  ): Promise<string | null> {
+    if (!stripeConfigured) return null;
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "";
+      const res = await fetch(`${apiBase}/api/v1/payments/brc/checkout`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.access_token
+            ? { Authorization: `Bearer ${session.access_token}` }
+            : {}),
+        },
+        // Only identifiers travel — the price is server-side only.
+        body: JSON.stringify({ expediente_id: expedienteId }),
+      });
+      if (!res.ok) return null;
+      const json = (await res.json()) as { url?: string };
+      return json.url ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   /* ---- Submit ---- */
   async function handleSubmit() {
     if (!property || !user) return;
@@ -487,6 +621,15 @@ export default function SolicitarBrcPage() {
         .from("properties")
         .update({ brc_status: "EN_REVISION" })
         .eq("id", property.id);
+
+      // Hand the payment over to the API. The amount is NEVER sent from the
+      // browser: the server recomputes it from the property value, so a
+      // tampered client cannot lower the price.
+      const checkoutUrl = await startCheckout(supabase, expedienteId);
+      if (checkoutUrl) {
+        window.location.href = checkoutUrl;
+        return;
+      }
 
       router.push("/dashboard/expedientes");
     } catch (err: unknown) {
@@ -614,40 +757,6 @@ export default function SolicitarBrcPage() {
           </div>
         </div>
       </div>
-
-      {/* ============================================================ */}
-      {/*  Tariff Card                                                  */}
-      {/* ============================================================ */}
-      {tariff && (
-        <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-          <h3
-            className="text-lg font-bold text-gray-900 mb-4"
-            style={{ fontFamily: "Barlow, Inter, sans-serif" }}
-          >
-            Tarifa de Certificacion
-          </h3>
-          <div className="flex items-center justify-between rounded-xl bg-gray-50 p-4">
-            <div>
-              <p className="font-semibold text-gray-900">{tariff.name}</p>
-              <p className="text-sm text-gray-500">
-                Propiedades de {formatCurrency(tariff.price_min, tariff.currency)}
-                {tariff.price_max
-                  ? ` a ${formatCurrency(tariff.price_max, tariff.currency)}`
-                  : " en adelante"}
-              </p>
-            </div>
-            <div className="text-right">
-              <p
-                className="text-2xl font-bold"
-                style={{ color: "hsl(221 83% 53%)" }}
-              >
-                {formatCurrency(tariff.tariff_amount, tariff.currency)}
-              </p>
-              <p className="text-xs text-gray-400">+ IVA</p>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ============================================================ */}
       {/*  Documents Upload                                             */}
@@ -888,7 +997,23 @@ export default function SolicitarBrcPage() {
       )}
 
       {/* ============================================================ */}
-      {/*  Submit Button                                                */}
+      {/*  Price breakdown + payment                                    */}
+      {/* ============================================================ */}
+      {breakdown && (
+        <BrcPriceSummary
+          breakdown={breakdown}
+          propertyValue={property.price_sale ?? property.price ?? 0}
+          propertyCurrency={property.currency}
+          membershipTier={membershipTier}
+          stripeConfigured={stripeConfigured}
+          submitting={submitting}
+          disabled={savingDraft}
+          onPay={handleSubmit}
+        />
+      )}
+
+      {/* ============================================================ */}
+      {/*  Secondary actions                                            */}
       {/* ============================================================ */}
       <div className="flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-end">
         {savedAt && (
@@ -921,27 +1046,6 @@ export default function SolicitarBrcPage() {
             <>
               <Save className="h-4 w-4" />
               Guardar progreso
-            </>
-          )}
-        </button>
-        <button
-          onClick={handleSubmit}
-          disabled={submitting || savingDraft}
-          className="inline-flex items-center gap-2 rounded-xl px-8 py-3 text-sm font-semibold text-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0"
-          style={{
-            background:
-              "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
-          }}
-        >
-          {submitting ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Procesando...
-            </>
-          ) : (
-            <>
-              <ShieldBrc className="h-4 w-4" />
-              Solicitar Certificacion
             </>
           )}
         </button>

@@ -11,9 +11,11 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import {
   BrcService,
   RejectDocumentDto,
-  CertifyExpedienteDto,
   RejectExpedienteDto,
   OcrCorrectionDto,
+  CertificateTrackingDto,
+  IssueNotarialCertificateDto,
+  IssueBrcDto,
 } from './brc.service';
 
 @Controller('brc')
@@ -49,14 +51,43 @@ export class BrcController {
     return this.brcService.updateOcrCorrection(id, userId, dto);
   }
 
-  @Roles('NOTARIO', 'ADMIN')
-  @Post('expedientes/:id/certify')
-  certifyExpediente(
+  /** Certificates the notary collects from RPP / Predial / Agua / otros. */
+  @Roles('NOTARIO', 'ADMIN', 'OPERADOR_BRC')
+  @Patch('documents/:id/certificate-tracking')
+  updateCertificateTracking(
     @Param('id', new ParseUUIDPipe()) id: string,
     @CurrentUser('id') userId: string,
-    @Body() dto: CertifyExpedienteDto,
+    @Body() dto: CertificateTrackingDto,
   ) {
-    return this.brcService.certifyExpediente(id, userId, dto);
+    return this.brcService.updateCertificateTracking(id, userId, dto);
+  }
+
+  /**
+   * Step A — the NOTARY uploads the Certificado Notarial. The service further
+   * restricts this to the notary actually assigned to the expediente.
+   */
+  @Roles('NOTARIO', 'ADMIN')
+  @Post('expedientes/:id/notarial-certificate')
+  issueNotarialCertificate(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: IssueNotarialCertificateDto,
+  ) {
+    return this.brcService.issueNotarialCertificate(id, userId, dto);
+  }
+
+  /**
+   * Step B — BITHAUSS issues the BRC from that certificate. Deliberately NOT
+   * open to NOTARIO: the platform grants the seal, not the reviewing party.
+   */
+  @Roles('ADMIN', 'OPERADOR_BRC')
+  @Post('expedientes/:id/issue-brc')
+  issueBrc(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: IssueBrcDto,
+  ) {
+    return this.brcService.issueBrc(id, userId, dto);
   }
 
   @Roles('NOTARIO', 'ADMIN', 'OPERADOR_BRC')

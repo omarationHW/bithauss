@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { logError } from "@/lib/log";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -75,7 +76,14 @@ async function fetchTicker(): Promise<TickerItem[]> {
   return items;
 }
 
-export async function GET() {
+// BH-10: the 60 s cache already absorbs most abuse, but a burst during a cold
+// cache still fans out to CoinGecko and Frankfurter once per request.
+const RATE_LIMIT = { limit: 60, windowMs: 60_000 } as const;
+
+export async function GET(req: Request) {
+  const limited = enforceRateLimit(req, "ticker", RATE_LIMIT);
+  if (limited) return limited;
+
   if (cache && Date.now() - cache.ts < TTL_MS) {
     return NextResponse.json({ items: cache.items, cached: true });
   }

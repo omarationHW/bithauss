@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -26,7 +26,24 @@ import {
 } from "@/lib/watermark";
 import { logError } from "@/lib/log";
 import { getPropertyTypeFlags } from "@/lib/property-types";
+import {
+  isFieldVisible,
+  isFieldRequired,
+  type PropertyFieldError,
+} from "@/lib/property-fields";
 import { useUser } from "../../_context/user-context";
+import {
+  PropertyFieldsSection,
+  AmenitiesAnsweredField,
+  EMPTY_PROPERTY_FIELD_VALUES,
+  clearHiddenFieldValues,
+  clearHiddenAmenities,
+  validatePropertyFieldValues,
+  propertyFieldValuesToDb,
+  focusFirstInvalidField,
+  type PropertyFieldValues,
+  type SectionFieldKey,
+} from "@/components/propiedades/property-fields-section";
 import {
   PhotoManager,
   MAX_PROPERTY_IMAGES,
@@ -34,6 +51,12 @@ import {
   promoteToFront,
   type PhotoItem,
 } from "@/components/propiedades/photo-manager";
+import {
+  VideoManager,
+  hasPendingVideoUploads,
+  type PropertyVideoDraft,
+} from "@/components/propiedades/video-manager";
+import { uploadPropertyVideo } from "@/lib/video-upload";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -71,14 +94,21 @@ const PROPERTY_TYPES = [
   { value: "OTRO", label: "Otro" },
 ] as const;
 
+/**
+ * TRASPASO is gone: the client asked to drop it as an operation ("en la parte
+ * para dar de alta una propiedad sugiero eliminar la opción de Traspaso"). It
+ * became the matrix row "¿Aplica traspaso?" on Local Comercial instead. The
+ * value survives in the Postgres enum for historical rows — see
+ * LEGACY_PROPERTY_OPERATIONS in @bithauss/validators.
+ */
 const OPERATION_TYPES = [
   { value: "VENTA", label: "Venta" },
   { value: "RENTA", label: "Renta" },
   { value: "VENTA_RENTA", label: "Venta y Renta" },
-  { value: "TRASPASO", label: "Traspaso" },
 ] as const;
 
-const CURRENCIES = ["MXN", "USD", "EUR"] as const;
+/** Matrix row "Moneda: Pesos / USD" — EUR was never accepted by the validator. */
+const CURRENCIES = ["MXN", "USD"] as const;
 const CRYPTOS = [
   { id: "BTC", label: "Bitcoin (BTC)" },
   { id: "ETH", label: "Ethereum (ETH)" },
@@ -115,17 +145,23 @@ const COMMON_AREAS = [
   "Pet friendly",
 ] as const;
 
+/**
+ * Extra private features that the client's matrix does not cover.
+ *
+ * "Terraza" used to live here as a plain checkbox; it is a matrix row now
+ * ("forzar a responder") and is rendered as a Sí/No control by
+ * <PropertyFieldsSection>. Keeping it in both places would mean two controls
+ * writing `has_terrace`.
+ */
 type PrivateFeatureKey =
   | "has_service_room"
   | "has_storage"
-  | "has_terrace"
   | "has_laundry_room"
   | "has_integrated_kitchen";
 
 const PRIVATE_FEATURES: { key: PrivateFeatureKey; label: string }[] = [
   { key: "has_service_room", label: "Cuarto de servicio" },
   { key: "has_storage", label: "Bodega" },
-  { key: "has_terrace", label: "Terraza" },
   { key: "has_laundry_room", label: "Cuarto de lavado" },
   { key: "has_integrated_kitchen", label: "Cocina integral" },
 ];
@@ -172,18 +208,14 @@ interface FormData {
   acepta_crypto: boolean;
   cryptos_aceptadas: string[];
   show_price: boolean;
-  area_total: string;
-  area_construida: string;
-  recamaras: string;
-  banos: string;
-  medios_banos: string;
-  estacionamientos: string;
-  niveles: string;
-  piso: string;
-  cuota_mantenimiento: string;
+  /**
+   * The conditional rows of the client's matrix. One object instead of nine
+   * loose strings so switching property type can clear exactly the fields
+   * that stopped applying.
+   */
+  fields: PropertyFieldValues;
   has_service_room: boolean;
   has_storage: boolean;
-  has_terrace: boolean;
   has_laundry_room: boolean;
   has_integrated_kitchen: boolean;
   direccion: string;
@@ -193,6 +225,8 @@ interface FormData {
   codigo_postal: string;
   show_address: boolean;
   amenidades: string[];
+  /** Matrix row "Amenidades" is "forzar a responder": confirm the selection. */
+  amenidades_confirmadas: boolean;
 }
 
 const initialFormData: FormData = {
@@ -206,18 +240,9 @@ const initialFormData: FormData = {
   acepta_crypto: false,
   cryptos_aceptadas: [],
   show_price: true,
-  area_total: "",
-  area_construida: "",
-  recamaras: "",
-  banos: "",
-  medios_banos: "",
-  estacionamientos: "",
-  niveles: "",
-  piso: "",
-  cuota_mantenimiento: "",
+  fields: EMPTY_PROPERTY_FIELD_VALUES,
   has_service_room: false,
   has_storage: false,
-  has_terrace: false,
   has_laundry_room: false,
   has_integrated_kitchen: false,
   direccion: "",
@@ -227,6 +252,7 @@ const initialFormData: FormData = {
   codigo_postal: "",
   show_address: true,
   amenidades: [],
+  amenidades_confirmadas: false,
 };
 
 /* ------------------------------------------------------------------ */
@@ -311,6 +337,9 @@ export default function NuevaPropiedadPage() {
   // Single ordered list so the preview grid can never drift out of sync with
   // the files that get uploaded. Index 0 is the principal/cover photo.
   const [images, setImages] = useState<NewImage[]>([]);
+  // Video is not a per-type matrix field, so it keeps its own state and never
+  // touches `form.fields`.
+  const [videos, setVideos] = useState<PropertyVideoDraft[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -323,28 +352,86 @@ export default function NuevaPropiedadPage() {
     loadWatermarkConfig().then(setWatermark);
   }, []);
 
-  // Conditional fields per property type (CASA_CONDOMINIO behaves like a
-  // house; HOTEL and EDIFICIO are whole-building assets with their own set).
-  const {
-    isCasa,
-    isDepto,
-    isBuilding,
-    isResidential,
-    showMaintenanceFee,
-    showFloorNumber,
-    unitCountLabel,
-  } = getPropertyTypeFlags(form.tipo_propiedad);
+  /* ---- Video ---- */
+
+  /**
+   * Storage prefix for videos uploaded from THIS form.
+   *
+   * The property row does not exist yet when the upload starts — and it must
+   * start immediately, because a 200 MB file cannot be uploaded silently
+   * during submit. The object still lands under the uploader's own uid, which
+   * is what the Storage policy authorises, so the missing property id costs us
+   * nothing in terms of access control.
+   */
+  const videoDraftKeyRef = useRef<string>(
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? `draft-${crypto.randomUUID()}`
+      : `draft-${Date.now()}`
+  );
+
+  const startVideoUpload = useCallback(
+    (file: File, onProgress: (percent: number) => void, contentType?: string) => {
+      const { promise, abort } = uploadPropertyVideo({
+        userId: user?.id ?? "",
+        propertyKey: videoDraftKeyRef.current,
+        file,
+        onProgress,
+        contentType,
+      });
+      return { promise, abort };
+    },
+    [user?.id]
+  );
+
+  // Which conditional fields appear comes from the client's matrix; this only
+  // covers the blocks the matrix does not model (extra private features).
+  const { isResidential } = getPropertyTypeFlags(form.tipo_propiedad);
+  const showAmenities = isFieldVisible("amenities", form.tipo_propiedad);
   const hasSale =
-    form.tipo_operacion === "VENTA" ||
-    form.tipo_operacion === "VENTA_RENTA" ||
-    form.tipo_operacion === "TRASPASO";
+    form.tipo_operacion === "VENTA" || form.tipo_operacion === "VENTA_RENTA";
   const hasRent =
     form.tipo_operacion === "RENTA" || form.tipo_operacion === "VENTA_RENTA";
+
+  /** Per-field validation errors from the matrix, shown next to each control. */
+  const [fieldErrors, setFieldErrors] = useState<PropertyFieldError[]>([]);
+  const errorFor = (field: string) =>
+    fieldErrors.find((e) => e.field === field)?.message;
 
   /* ---- Field helpers ---- */
 
   function updateField<K extends keyof FormData>(key: K, value: FormData[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function updateMatrixField<K extends SectionFieldKey>(
+    key: K,
+    value: PropertyFieldValues[K]
+  ) {
+    setForm((prev) => ({ ...prev, fields: { ...prev.fields, [key]: value } }));
+    setFieldErrors((prev) => prev.filter((e) => e.field !== key));
+  }
+
+  /**
+   * Changing the property type re-derives the visible fields AND drops the
+   * values that stopped applying — a listing switched from Casa to Terreno
+   * must not keep the recámaras and "Amueblado: Sí" captured for the house.
+   */
+  function handleTypeChange(nextType: string) {
+    setForm((prev) => {
+      const amenities = clearHiddenAmenities(
+        nextType,
+        prev.amenidades,
+        prev.amenidades_confirmadas
+      );
+      return {
+        ...prev,
+        tipo_propiedad: nextType,
+        fields: clearHiddenFieldValues(nextType, prev.fields),
+        amenidades: amenities.amenities,
+        amenidades_confirmadas: amenities.amenitiesAnswered,
+      };
+    });
+    setFieldErrors([]);
   }
 
   /* ---- Location (SEPOMEX catalog) ---- */
@@ -491,39 +578,61 @@ export default function NuevaPropiedadPage() {
 
   /* ---- Validate ---- */
 
-  function validate(): string | null {
-    if (!form.titulo.trim()) return "El título es obligatorio.";
-    if (!form.tipo_propiedad) return "Selecciona el tipo de inmueble.";
-    if (!form.tipo_operacion) return "Selecciona el tipo de operación.";
-    if (!form.descripcion.trim()) return "La descripción es obligatoria.";
+  /**
+   * Validates the whole form. Per-type rules come from the client's matrix
+   * (PROPERTY_FIELD_MATRIX) so alta, edición and the API cannot disagree.
+   */
+  function validate(): { message: string | null; focused: boolean } {
+    // Saving mid-upload would persist a media row whose URL is still empty.
+    if (hasPendingVideoUploads(videos)) {
+      return {
+        message: "Espera a que termine de subirse el video antes de guardar.",
+        focused: false,
+      };
+    }
+    if (!form.titulo.trim()) return { message: "El título es obligatorio.", focused: false };
+    if (!form.tipo_propiedad)
+      return { message: "Selecciona el tipo de inmueble.", focused: false };
+    if (!form.tipo_operacion)
+      return { message: "Selecciona el tipo de operación.", focused: false };
+    if (!form.descripcion.trim())
+      return { message: "La descripción es obligatoria.", focused: false };
 
     if (hasSale && (!form.precio_venta || Number(form.precio_venta) <= 0)) {
-      return "Ingresa un precio de venta válido.";
+      return { message: "Ingresa un precio de venta válido.", focused: false };
     }
     if (hasRent && (!form.precio_renta || Number(form.precio_renta) <= 0)) {
-      return "Ingresa un precio de renta válido.";
+      return { message: "Ingresa un precio de renta válido.", focused: false };
     }
 
-    if (isCasa) {
-      if (!form.area_total || Number(form.area_total) <= 0) {
-        return "Ingresa los m² de terreno.";
+    // The matrix only knows "there must be a price"; the operation decides
+    // which bucket holds it, so feed it the amount that applies.
+    const matrixErrors = validatePropertyFieldValues(
+      form.tipo_propiedad,
+      form.fields,
+      {
+        price: hasSale ? form.precio_venta : form.precio_renta,
+        currency: form.moneda,
+        amenities: form.amenidades,
+        amenitiesAnswered: form.amenidades_confirmadas,
       }
-      if (!form.area_construida || Number(form.area_construida) <= 0) {
-        return "Ingresa los m² de construcción.";
-      }
-    }
-    if (isDepto) {
-      if (!form.area_construida || Number(form.area_construida) <= 0) {
-        return "Ingresa el área construida.";
-      }
+    );
+    // price/currency are captured by the "Precio" card, already checked above.
+    const conditional = matrixErrors.filter(
+      (e) => e.field !== "price" && e.field !== "currency"
+    );
+    setFieldErrors(conditional);
+    if (conditional.length > 0) {
+      focusFirstInvalidField(conditional);
+      return { message: conditional[0]!.message, focused: true };
     }
 
     // Location must exist in the SEPOMEX catalog (estado -> municipio ->
     // colonia), with free text allowed only for an explicit "Otra" colonia.
     const locationError = validateLocation(locationValue, locationStatus);
-    if (locationError) return locationError;
+    if (locationError) return { message: locationError, focused: false };
 
-    return null;
+    return { message: null, focused: false };
   }
 
   /* ---- Submit ---- */
@@ -532,10 +641,12 @@ export default function NuevaPropiedadPage() {
     setError(null);
     setSuccess(null);
 
-    const validationError = validate();
+    const { message: validationError, focused } = validate();
     if (validationError) {
       setError(validationError);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      // When the matrix already moved focus to the offending control, jumping
+      // back to the top would undo it.
+      if (!focused) window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
 
@@ -601,20 +712,11 @@ export default function NuevaPropiedadPage() {
           currency: form.moneda,
           accepts_crypto: form.acepta_crypto,
           show_price: form.show_price,
-          area_total: asNum(form.area_total),
-          area_built: asNum(form.area_construida),
-          bedrooms: asNum(form.recamaras),
-          bathrooms: asNum(form.banos),
-          half_bathrooms: asNum(form.medios_banos),
-          parking_spaces: asNum(form.estacionamientos),
-          floors: asNum(form.niveles),
-          floor_number: showFloorNumber ? asNum(form.piso) : null,
-          maintenance_fee: showMaintenanceFee
-            ? asNum(form.cuota_mantenimiento)
-            : null,
+          // Every conditional column at once, with the ones the matrix hides
+          // for this type written as explicit nulls.
+          ...propertyFieldValuesToDb(form.tipo_propiedad, form.fields),
           has_service_room: form.has_service_room,
           has_storage: form.has_storage,
-          has_terrace: form.has_terrace,
           has_laundry_room: form.has_laundry_room,
           has_integrated_kitchen: form.has_integrated_kitchen,
           address_line: form.direccion || null,
@@ -626,6 +728,7 @@ export default function NuevaPropiedadPage() {
           longitude,
           show_address: form.show_address,
           amenities: form.amenidades,
+          amenities_answered: form.amenidades_confirmadas,
           status: status === "publicado" ? "PUBLICADO" : "BORRADOR",
           published_at: status === "publicado" ? new Date().toISOString() : null,
         })
@@ -659,6 +762,32 @@ export default function NuevaPropiedadPage() {
           .insert(mediaInserts);
 
         if (mediaError) logError("Error saving media:", mediaError);
+      }
+
+      // Video rows share `property_media`, so their sort_order continues after
+      // the photos and the ficha can keep reading one ordered set.
+      if (property) {
+        const videoInserts = videos
+          .filter((video) => video.status === "ready" && video.url)
+          .map((video, idx) => ({
+            property_id: property.id,
+            url: video.url,
+            media_type: "VIDEO",
+            provider: video.provider,
+            external_id: video.externalId,
+            thumbnail_url: video.thumbnailUrl,
+            alt_text: video.title,
+            sort_order: images.length + idx,
+            is_primary: idx === 0,
+          }));
+
+        if (videoInserts.length > 0) {
+          const { error: videoError } = await supabase
+            .from("property_media")
+            .insert(videoInserts);
+
+          if (videoError) logError("Error saving video media:", videoError);
+        }
       }
 
       setSuccess(
@@ -740,7 +869,7 @@ export default function NuevaPropiedadPage() {
               </Label>
               <Select
                 value={form.tipo_propiedad}
-                onValueChange={(v) => updateField("tipo_propiedad", v)}
+                onValueChange={handleTypeChange}
               >
                 <SelectTrigger className="rounded-xl">
                   <SelectValue placeholder="Seleccionar tipo" />
@@ -911,350 +1040,19 @@ export default function NuevaPropiedadPage() {
       </SectionCard>
 
       {/* ============================================================ */}
-      {/*  Características (conditional on type)                        */}
+      {/*  Características — derivadas de la matriz del cliente          */}
       {/* ============================================================ */}
       {form.tipo_propiedad && (
-        <SectionCard title="Características">
-          {/* CASA */}
-          {isCasa && (
-            <div className="grid grid-cols-2 gap-5 lg:grid-cols-3">
-              <div>
-                <Label className="mb-1.5 block text-gray-700">
-                  m² de terreno <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  min={0}
-                  value={form.area_total}
-                  onChange={(e) => updateField("area_total", e.target.value)}
-                  className="rounded-xl"
-                />
-              </div>
-              <div>
-                <Label className="mb-1.5 block text-gray-700">
-                  m² de construcción <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  min={0}
-                  value={form.area_construida}
-                  onChange={(e) => updateField("area_construida", e.target.value)}
-                  className="rounded-xl"
-                />
-              </div>
-              <div>
-                <Label className="mb-1.5 block text-gray-700">Recámaras</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  min={0}
-                  value={form.recamaras}
-                  onChange={(e) => updateField("recamaras", e.target.value)}
-                  className="rounded-xl"
-                />
-              </div>
-              <div>
-                <Label className="mb-1.5 block text-gray-700">Baños completos</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  min={0}
-                  value={form.banos}
-                  onChange={(e) => updateField("banos", e.target.value)}
-                  className="rounded-xl"
-                />
-              </div>
-              <div>
-                <Label className="mb-1.5 block text-gray-700">Medios baños</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  min={0}
-                  value={form.medios_banos}
-                  onChange={(e) => updateField("medios_banos", e.target.value)}
-                  className="rounded-xl"
-                />
-              </div>
-              <div>
-                <Label className="mb-1.5 block text-gray-700">Estacionamientos</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  min={0}
-                  value={form.estacionamientos}
-                  onChange={(e) => updateField("estacionamientos", e.target.value)}
-                  className="rounded-xl"
-                />
-              </div>
-              <div>
-                <Label className="mb-1.5 block text-gray-700">Niveles</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  min={0}
-                  value={form.niveles}
-                  onChange={(e) => updateField("niveles", e.target.value)}
-                  className="rounded-xl"
-                />
-              </div>
-              {/* En condominio la cuota de mantenimiento siempre aplica */}
-              {showMaintenanceFee && (
-                <div>
-                  <Label className="mb-1.5 block text-gray-700">
-                    Cuota de mantenimiento (MXN){" "}
-                    <span className="text-xs font-normal text-gray-400">(opcional)</span>
-                  </Label>
-                  <Input
-                    type="number"
-                    placeholder="0"
-                    min={0}
-                    value={form.cuota_mantenimiento}
-                    onChange={(e) =>
-                      updateField("cuota_mantenimiento", e.target.value)
-                    }
-                    className="rounded-xl"
-                  />
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* DEPARTAMENTO */}
-          {isDepto && (
-            <div className="grid grid-cols-2 gap-5 lg:grid-cols-3">
-              <div>
-                <Label className="mb-1.5 block text-gray-700">
-                  Área construida (m²) <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  min={0}
-                  value={form.area_construida}
-                  onChange={(e) => updateField("area_construida", e.target.value)}
-                  className="rounded-xl"
-                />
-              </div>
-              <div>
-                <Label className="mb-1.5 block text-gray-700">
-                  Área total (m²){" "}
-                  <span className="text-xs font-normal text-gray-400">(opcional)</span>
-                </Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  min={0}
-                  value={form.area_total}
-                  onChange={(e) => updateField("area_total", e.target.value)}
-                  className="rounded-xl"
-                />
-              </div>
-              <div>
-                <Label className="mb-1.5 block text-gray-700">Recámaras</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  min={0}
-                  value={form.recamaras}
-                  onChange={(e) => updateField("recamaras", e.target.value)}
-                  className="rounded-xl"
-                />
-              </div>
-              <div>
-                <Label className="mb-1.5 block text-gray-700">Baños completos</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  min={0}
-                  value={form.banos}
-                  onChange={(e) => updateField("banos", e.target.value)}
-                  className="rounded-xl"
-                />
-              </div>
-              <div>
-                <Label className="mb-1.5 block text-gray-700">Medios baños</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  min={0}
-                  value={form.medios_banos}
-                  onChange={(e) => updateField("medios_banos", e.target.value)}
-                  className="rounded-xl"
-                />
-              </div>
-              <div>
-                <Label className="mb-1.5 block text-gray-700">Estacionamientos</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  min={0}
-                  value={form.estacionamientos}
-                  onChange={(e) => updateField("estacionamientos", e.target.value)}
-                  className="rounded-xl"
-                />
-              </div>
-              <div>
-                <Label className="mb-1.5 block text-gray-700">Niveles del depto</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  min={0}
-                  value={form.niveles}
-                  onChange={(e) => updateField("niveles", e.target.value)}
-                  className="rounded-xl"
-                />
-              </div>
-              <div>
-                <Label className="mb-1.5 block text-gray-700">
-                  Piso en el que está{" "}
-                  <span className="text-xs font-normal text-gray-400">(opcional)</span>
-                </Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  min={0}
-                  value={form.piso}
-                  onChange={(e) => updateField("piso", e.target.value)}
-                  className="rounded-xl"
-                />
-              </div>
-              <div>
-                <Label className="mb-1.5 block text-gray-700">
-                  Cuota de mantenimiento (MXN){" "}
-                  <span className="text-xs font-normal text-gray-400">(opcional)</span>
-                </Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  min={0}
-                  value={form.cuota_mantenimiento}
-                  onChange={(e) => updateField("cuota_mantenimiento", e.target.value)}
-                  className="rounded-xl"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Whole-building assets: HOTEL and EDIFICIO */}
-          {isBuilding && (
-            <div className="grid grid-cols-2 gap-5 lg:grid-cols-3">
-              <div>
-                <Label className="mb-1.5 block text-gray-700">
-                  m² de terreno{" "}
-                  <span className="text-xs font-normal text-gray-400">(opcional)</span>
-                </Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  min={0}
-                  value={form.area_total}
-                  onChange={(e) => updateField("area_total", e.target.value)}
-                  className="rounded-xl"
-                />
-              </div>
-              <div>
-                <Label className="mb-1.5 block text-gray-700">
-                  m² de construcción
-                </Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  min={0}
-                  value={form.area_construida}
-                  onChange={(e) => updateField("area_construida", e.target.value)}
-                  className="rounded-xl"
-                />
-              </div>
-              <div>
-                {/* Stored in `bedrooms` to keep the DB schema unchanged */}
-                <Label className="mb-1.5 block text-gray-700">
-                  {unitCountLabel}
-                </Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  min={0}
-                  value={form.recamaras}
-                  onChange={(e) => updateField("recamaras", e.target.value)}
-                  className="rounded-xl"
-                />
-              </div>
-              <div>
-                <Label className="mb-1.5 block text-gray-700">Baños completos</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  min={0}
-                  value={form.banos}
-                  onChange={(e) => updateField("banos", e.target.value)}
-                  className="rounded-xl"
-                />
-              </div>
-              <div>
-                <Label className="mb-1.5 block text-gray-700">Niveles</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  min={0}
-                  value={form.niveles}
-                  onChange={(e) => updateField("niveles", e.target.value)}
-                  className="rounded-xl"
-                />
-              </div>
-              <div>
-                <Label className="mb-1.5 block text-gray-700">Estacionamientos</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  min={0}
-                  value={form.estacionamientos}
-                  onChange={(e) => updateField("estacionamientos", e.target.value)}
-                  className="rounded-xl"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Fallback for the remaining types (terreno, local, bodega...) */}
-          {!isCasa && !isDepto && !isBuilding && (
-            <div className="grid grid-cols-2 gap-5 lg:grid-cols-3">
-              <div>
-                <Label className="mb-1.5 block text-gray-700">Área total (m²)</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  min={0}
-                  value={form.area_total}
-                  onChange={(e) => updateField("area_total", e.target.value)}
-                  className="rounded-xl"
-                />
-              </div>
-              <div>
-                <Label className="mb-1.5 block text-gray-700">Área construida (m²)</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  min={0}
-                  value={form.area_construida}
-                  onChange={(e) => updateField("area_construida", e.target.value)}
-                  className="rounded-xl"
-                />
-              </div>
-              <div>
-                <Label className="mb-1.5 block text-gray-700">Estacionamientos</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  min={0}
-                  value={form.estacionamientos}
-                  onChange={(e) => updateField("estacionamientos", e.target.value)}
-                  className="rounded-xl"
-                />
-              </div>
-            </div>
-          )}
+        <SectionCard
+          title="Características"
+          subtitle="Los campos cambian según el tipo de inmueble. Los marcados con * son obligatorios."
+        >
+          <PropertyFieldsSection
+            type={form.tipo_propiedad}
+            values={form.fields}
+            onChange={updateMatrixField}
+            errors={fieldErrors}
+          />
         </SectionCard>
       )}
 
@@ -1266,7 +1064,7 @@ export default function NuevaPropiedadPage() {
           title="Características del inmueble"
           subtitle="Espacios privados del inmueble (no son áreas comunes del edificio)."
         >
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {PRIVATE_FEATURES.map(({ key, label }) => {
               const checked = form[key];
               return (
@@ -1353,7 +1151,10 @@ export default function NuevaPropiedadPage() {
 
       {/* ============================================================ */}
       {/*  Amenidades / Áreas comunes                                   */}
+      {/*  Conditional: the matrix only asks for amenities on the       */}
+      {/*  residential types.                                           */}
       {/* ============================================================ */}
+      {showAmenities && (
       <SectionCard
         title="Amenidades / Áreas comunes"
         subtitle="Áreas y servicios compartidos del edificio o fraccionamiento."
@@ -1398,7 +1199,19 @@ export default function NuevaPropiedadPage() {
             );
           })}
         </div>
+
+        <AmenitiesAnsweredField
+          answered={form.amenidades_confirmadas}
+          onChange={(v) => {
+            updateField("amenidades_confirmadas", v);
+            setFieldErrors((prev) => prev.filter((e) => e.field !== "amenities"));
+          }}
+          selectedCount={form.amenidades.length}
+          required={isFieldRequired("amenities", form.tipo_propiedad)}
+          error={errorFor("amenities")}
+        />
       </SectionCard>
+      )}
 
       {/* ============================================================ */}
       {/*  Imágenes                                                     */}
@@ -1412,6 +1225,22 @@ export default function NuevaPropiedadPage() {
           onSetPrincipal={(idx) =>
             setImages((prev) => promoteToFront(prev, idx))
           }
+        />
+      </SectionCard>
+
+      {/* ============================================================ */}
+      {/*  Video                                                        */}
+      {/*  Not a per-type matrix field: its state lives outside         */}
+      {/*  `form.fields` on purpose.                                    */}
+      {/* ============================================================ */}
+      <SectionCard
+        title="Video"
+        subtitle="Opcional. Sube el recorrido de la propiedad o pega la liga de YouTube o Vimeo."
+      >
+        <VideoManager
+          items={videos}
+          onChange={setVideos}
+          startUpload={user?.id ? startVideoUpload : undefined}
         />
       </SectionCard>
 

@@ -10,6 +10,10 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     bodyParser: true,
+    // The Stripe webhook verifies an HMAC over the exact bytes Stripe sent.
+    // Re-serialising the parsed JSON changes those bytes (key order, spacing),
+    // so the signature would never match — keep the raw buffer around.
+    rawBody: true,
   });
   const logger = new Logger('Bootstrap');
 

@@ -29,11 +29,20 @@ export enum PropertyType {
   OTRO = 'OTRO',
 }
 
+/**
+ * How a listing is offered.
+ *
+ * TRASPASO was retired as an operation: a "traspaso" is an attribute of a
+ * commercial unit (the tenant sells the remaining lease + fit-out), not a way
+ * of transacting the property itself, so it now lives on the listing as
+ * `applies_traspaso` for LOCAL_COMERCIAL. The value stays in the Postgres enum
+ * (values cannot be dropped) and legacy rows keep rendering — see
+ * `LEGACY_PROPERTY_OPERATIONS` in @bithauss/validators.
+ */
 export enum PropertyOperation {
   VENTA = 'VENTA',
   RENTA = 'RENTA',
   VENTA_RENTA = 'VENTA_RENTA',
-  TRASPASO = 'TRASPASO',
 }
 
 export enum PropertyStatus {
@@ -54,6 +63,12 @@ export enum BrcStatus {
   EN_REVISION = 'EN_REVISION',
   DOCUMENTACION_PENDIENTE = 'DOCUMENTACION_PENDIENTE',
   VALIDACION_NOTARIAL = 'VALIDACION_NOTARIAL',
+  /**
+   * The notary uploaded their Certificado Notarial: the expediente is sound.
+   * That document is the legal basis for the BRC, but it is *not* the BRC —
+   * BitHauss issues, tokenises and stamps the BRC from it.
+   */
+  PENDIENTE_EMISION_BRC = 'PENDIENTE_EMISION_BRC',
   RECHAZADO = 'RECHAZADO',
   CERTIFICADO = 'CERTIFICADO',
 }
@@ -87,13 +102,38 @@ export enum LeadSource {
 // ──────────────────────────────────────────────
 // Memberships & Billing
 // ──────────────────────────────────────────────
+/**
+ * The six BitHauss membership tiers (Módulo Membresías 2026 V1).
+ *
+ * BASICO / PRO / PREMIUM were the MVP placeholder tiers; they remain in the
+ * Postgres enum for historical subscriptions but are no longer sold.
+ */
 export enum MembershipTier {
-  BASICO = 'BASICO',
-  PRO = 'PRO',
-  PREMIUM = 'PREMIUM',
+  START = 'START',
+  GROW = 'GROW',
+  BLUE = 'BLUE',
+  GOLD = 'GOLD',
+  BLACK = 'BLACK',
+  PLATINO = 'PLATINO',
+}
+
+/**
+ * Contract length. ANUAL_ANTICIPADO is the discounted annual price paid in a
+ * single instalment ("precio especial - pago total al contratar"); the other
+ * three are billed monthly by direct debit for their duration.
+ */
+export enum MembershipPeriod {
+  TRIMESTRAL = 'TRIMESTRAL',
+  SEMESTRAL = 'SEMESTRAL',
+  ANUAL = 'ANUAL',
+  ANUAL_ANTICIPADO = 'ANUAL_ANTICIPADO',
 }
 
 export enum SubscriptionStatus {
+  /** 7-day free trial (A2): card on file, not yet charged. */
+  PRUEBA = 'PRUEBA',
+  /** Checkout started, payment not confirmed yet (A5 double verification). */
+  PENDIENTE_PAGO = 'PENDIENTE_PAGO',
   ACTIVA = 'ACTIVA',
   SUSPENDIDA = 'SUSPENDIDA',
   CANCELADA = 'CANCELADA',

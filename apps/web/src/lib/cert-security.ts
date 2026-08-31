@@ -7,6 +7,33 @@
  *   - E1: deterministic geometric variations per folio
  *   - F1: steganographic watermark from seeded RNG
  *   - F2: zero-width binary marks embedded in critical fields
+ *
+ * SECURITY — what the QR is and is not
+ * ------------------------------------
+ * This file used to build the QR as `bithauss.com/verify?p=<base64 payload>`
+ * with `sig: "[PENDIENTE-FIRMA-PKI]"` inside. Two problems, both fatal:
+ *
+ *   1. The payload was self-asserted and UNSIGNED, so anyone could base64 a
+ *      JSON of their own and print a QR that "verified" a BRC that was never
+ *      issued.
+ *   2. `/verify?p=` does not exist. The real endpoint is
+ *      `apps/web/src/app/api/verify/[id]/route.ts`, keyed by certificate id,
+ *      and the human-readable page is `/certificado/<id>`. A printed QR
+ *      pointed nowhere.
+ *
+ * The QR now carries only a POINTER to the authoritative destination: nothing
+ * in it is trusted, verification is a server lookup against
+ * `brc_certificates`. For cases where a payload really must travel inside a
+ * code (offline validation, future PKI), `signPayload` /
+ * `verifyPayloadSignature` below implement HMAC-SHA256 over a canonical
+ * serialisation with a constant-time comparison, and REQUIRE an explicit
+ * server-side secret — there is deliberately no hardcoded fallback.
+ *
+ * Path to real PKI: replace the HMAC with an asymmetric signature (Ed25519 /
+ * ECDSA P-256) produced by a server-held private key, publish the public key
+ * at a well-known URL and add `kid` to the payload so keys can be rotated.
+ * The payload shape below is already the one to sign; only the primitive and
+ * the key material change.
  */
 
 export interface CertData {
@@ -30,7 +57,12 @@ export interface SecurityArtifacts {
   timestamp: string;
   seed: number;
   payload: SignablePayload;
-  encodedPayload: string;
+  /**
+   * What to encode in the QR: the authoritative verification URL, or `null`
+   * when the caller did not supply one (the caller then falls back to its own
+   * link). It is NEVER a self-asserted payload — see the note at the top.
+   */
+  encodedPayload: string | null;
 }
 
 export interface SignablePayload {
@@ -42,8 +74,8 @@ export interface SignablePayload {
   hash: string;
   iat: string;
   exp: string;
+  /** Authoritative verification URL, resolved server-side. */
   verify: string;
-  sig: string;
 }
 
 /** Web-Crypto-backed SHA-256 returning hex string. */
@@ -118,12 +150,20 @@ export function buildStegoWatermarkSvg(seed: number): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none" style="width:100%;height:100%">${dots.join("")}</svg>`;
 }
 
-/** Build the signable payload that gets base64-url-encoded into the QR. */
+/**
+ * Build the payload describing the certificate.
+ *
+ * Note what is gone: the `sig: "[PENDIENTE-FIRMA-PKI]"` field. A placeholder
+ * where a signature belongs is worse than no field at all — it reads as
+ * "signed" to anyone glancing at the JSON. Sign it with `signPayload` when a
+ * signature is actually required.
+ */
 export function buildSignablePayload(
   data: CertData,
   hash: string,
   checksum: number,
   timestamp: string,
+  verifyUrl?: string,
 ): SignablePayload {
   return {
     iss: "bithauss.brc",
@@ -134,9 +174,89 @@ export function buildSignablePayload(
     hash: hash.slice(0, 32),
     iat: timestamp,
     exp: "90d",
-    verify: `https://bithauss.com/verify/${data.folio}`,
-    sig: "[PENDIENTE-FIRMA-PKI]",
+    verify: verifyUrl ?? "",
   };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Signing                                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Deterministic serialisation (sorted keys, recursive) so a payload always
+ * signs to the same bytes. Mirrors `canonical()` in the verification route.
+ */
+export function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return "[" + value.map(canonicalJson).join(",") + "]";
+  const obj = value as Record<string, unknown>;
+  return (
+    "{" +
+    Object.keys(obj)
+      .sort()
+      .map((k) => JSON.stringify(k) + ":" + canonicalJson(obj[k]))
+      .join(",") +
+    "}"
+  );
+}
+
+/**
+ * HMAC-SHA256 over the canonical payload, hex-encoded.
+ *
+ * The secret MUST come from the server environment (BRC_VERIFY_SECRET). There
+ * is no default on purpose: a hardcoded fallback is the same as no signature
+ * at all, because the "secret" ships in the bundle.
+ */
+export async function signPayload(
+  payload: unknown,
+  secret: string,
+): Promise<string> {
+  if (!secret || secret.trim().length === 0) {
+    throw new Error(
+      "Falta el secreto de firma del certificado (BRC_VERIFY_SECRET).",
+    );
+  }
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(canonicalJson(payload)),
+  );
+  return Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/**
+ * Constant-time comparison of two hex strings.
+ *
+ * A plain `===` on a signature leaks, byte by byte, how much of a forged
+ * signature was right — enough to reconstruct it with repeated requests.
+ */
+export function timingSafeEqualHex(a: string, b: string): boolean {
+  if (typeof a !== "string" || typeof b !== "string") return false;
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
+/** True when `signature` is a valid HMAC of `payload` under `secret`. */
+export async function verifyPayloadSignature(
+  payload: unknown,
+  signature: string,
+  secret: string,
+): Promise<boolean> {
+  const expected = await signPayload(payload, secret);
+  return timingSafeEqualHex(expected, signature);
 }
 
 /** Base64-url encode (no padding). */
@@ -147,20 +267,48 @@ export function base64UrlEncode(input: string): string {
     .replace(/=/g, "");
 }
 
-/** Build the URL embedded in the QR with the signed payload. */
-export function buildQrUrl(payload: SignablePayload): string {
-  const encoded = base64UrlEncode(JSON.stringify(payload));
-  return `https://bithauss.com/verify?p=${encoded}`;
+/**
+ * Destination for the printed QR: the certificate's public page, which reads
+ * from `brc_certificates` through `/api/verify/<id>`. Keyed by the
+ * certificate id — the folio is not a route anywhere.
+ */
+export function buildVerificationUrl(origin: string, certificateId: string): string {
+  const base = origin.replace(/\/+$/, "");
+  return `${base}/certificado/${certificateId}`;
+}
+
+export interface ComputeSecurityOptions {
+  /**
+   * Authoritative verification URL (see `buildVerificationUrl`). Omit it and
+   * `encodedPayload` comes back null so the caller falls back to its own link
+   * rather than encoding an unverifiable blob.
+   */
+  verifyUrl?: string;
 }
 
 /** Full security engine: returns every derived artifact for the certificate. */
-export async function computeSecurity(data: CertData): Promise<SecurityArtifacts> {
+export async function computeSecurity(
+  data: CertData,
+  options: ComputeSecurityOptions = {},
+): Promise<SecurityArtifacts> {
   const checksum = luhnChecksum(data.folio + data.serie);
   const fullContent = JSON.stringify(data) + "|" + new Date().toDateString();
   const hash = await sha256(fullContent);
   const timestamp = new Date().toISOString();
   const seed = seedFromHash(hash);
-  const payload = buildSignablePayload(data, hash, checksum, timestamp);
-  const encodedPayload = buildQrUrl(payload);
-  return { hash, checksum, timestamp, seed, payload, encodedPayload };
+  const payload = buildSignablePayload(
+    data,
+    hash,
+    checksum,
+    timestamp,
+    options.verifyUrl,
+  );
+  return {
+    hash,
+    checksum,
+    timestamp,
+    seed,
+    payload,
+    encodedPayload: options.verifyUrl ?? null,
+  };
 }

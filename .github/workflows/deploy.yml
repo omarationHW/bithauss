@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
 
+# BH-18: without this block GITHUB_TOKEN inherits the org default, which is
+# usually write-all. Deploy needs to read the repo and nothing else.
+permissions:
+  contents: read
+
 jobs:
   deploy-web:
     name: Deploy Web
@@ -34,6 +39,24 @@ jobs:
           mkdir -p apps/web/.next/standalone/apps/web/public
           cp -r apps/web/public/* apps/web/.next/standalone/apps/web/public/ 2>/dev/null || true
 
+      # BH-02: these two were missing in production. Their absence did not
+      # crash anything — it made every BRC certificate answer NO_ENCONTRADO.
+      # Fail the deploy here instead of shipping a silently broken release.
+      - name: Verify required web secrets are present
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BRC_VERIFY_SECRET: ${{ secrets.BRC_VERIFY_SECRET }}
+        run: |
+          missing=""
+          [ -n "$SUPABASE_SERVICE_ROLE_KEY" ] || missing="$missing SUPABASE_SERVICE_ROLE_KEY"
+          [ -n "$BRC_VERIFY_SECRET" ] || missing="$missing BRC_VERIFY_SECRET"
+          if [ -n "$missing" ]; then
+            echo "::error::Faltan secretos de GitHub para bithauss-web:$missing"
+            echo "Genera BRC_VERIFY_SECRET con: openssl rand -hex 32"
+            echo "Ver docs/SECURITY.md, seccion 4.1."
+            exit 1
+          fi
+
       - uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
@@ -49,6 +72,12 @@ jobs:
               NEXT_PUBLIC_SUPABASE_URL="${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}" \
               NEXT_PUBLIC_SUPABASE_ANON_KEY="${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" \
               NEXT_PUBLIC_API_URL="https://bithauss-api.azurewebsites.net" \
+              API_URL="https://bithauss-api.azurewebsites.net" \
+              SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+              BRC_VERIFY_SECRET="${{ secrets.BRC_VERIFY_SECRET }}" \
+              SENTRY_DSN="${{ secrets.SENTRY_DSN }}" \
+              NEXT_PUBLIC_SENTRY_DSN="${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}" \
+              RATE_LIMIT_PROXY_DEPTH="${{ vars.RATE_LIMIT_PROXY_DEPTH || '1' }}" \
             --output none
 
       - name: Configure startup
@@ -108,6 +137,9 @@ jobs:
               AZURE_OPENAI_ENDPOINT="${{ secrets.AZURE_OPENAI_ENDPOINT }}" \
               AZURE_OPENAI_KEY="${{ secrets.AZURE_OPENAI_KEY }}" \
               AZURE_OPENAI_DEPLOYMENT="${{ secrets.AZURE_OPENAI_DEPLOYMENT }}" \
+              STRIPE_SECRET_KEY="${{ secrets.STRIPE_SECRET_KEY }}" \
+              STRIPE_WEBHOOK_SECRET="${{ secrets.STRIPE_WEBHOOK_SECRET }}" \
+              SENTRY_DSN="${{ secrets.SENTRY_DSN }}" \
             --output none
 
       - name: Configure startup

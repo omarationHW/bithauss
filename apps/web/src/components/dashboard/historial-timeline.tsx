@@ -147,7 +147,9 @@ const VALUE_LABELS: Record<string, string> = {
   CAMPANA: "Campaña",
   REFERIDO: "Referido",
   DIRECTO: "Directo",
-  /* property_operation */
+  /* property_operation — TRASPASO is retired (see LEGACY_PROPERTY_OPERATIONS
+     in @bithauss/validators): no longer selectable, but the audit trail of an
+     older listing still references it and must stay readable. */
   VENTA: "Venta",
   RENTA: "Renta",
   TRASPASO: "Traspaso",
@@ -165,11 +167,15 @@ const VALUE_LABELS: Record<string, string> = {
   LOCAL_COMERCIAL: "Local comercial",
   BODEGA: "Bodega",
   OTRO: "Otro",
-  /* brc_status */
+  /* brc_status — el enum completo: 001 + 018 (BORRADOR) + 024
+     (PENDIENTE_EMISION_BRC). Un valor sin etiqueta se imprime crudo en la
+     bitácora ("PENDIENTE_EMISION_BRC"), que es justo lo que este mapa evita. */
   NO_SOLICITADO: "No solicitado",
+  /* BORRADOR ya está arriba (property_status) y comparte etiqueta. */
   EN_REVISION: "En revisión",
   DOCUMENTACION_PENDIENTE: "Documentación pendiente",
   VALIDACION_NOTARIAL: "Validación notarial",
+  PENDIENTE_EMISION_BRC: "Pendiente de emisión del BRC",
   RECHAZADO: "Rechazado",
   CERTIFICADO: "Certificado",
   /* user_role (actor) */

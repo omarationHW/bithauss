@@ -52,6 +52,18 @@ export class HttpExceptionFilter implements ExceptionFilter {
       errorResponse.method = request.method;
     }
 
+    // Machine-readable code (e.g. ACCOUNT_DISABLED) so the client can react
+    // to *why* it was denied instead of string-matching a Spanish message.
+    // Only forwarded for client errors — 5xx stay opaque in production.
+    if (
+      typeof exceptionResponse === 'object' &&
+      exceptionResponse !== null &&
+      typeof (exceptionResponse as { code?: unknown }).code === 'string' &&
+      status < HttpStatus.INTERNAL_SERVER_ERROR
+    ) {
+      errorResponse.code = (exceptionResponse as { code: string }).code;
+    }
+
     // Log server errors at error level, client errors at warn level.
     // Forward 5xx to Sentry when DSN is configured.
     if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {

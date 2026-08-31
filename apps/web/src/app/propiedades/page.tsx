@@ -89,7 +89,12 @@ interface MappedProperty {
   brc: boolean;
   image: string;
   tag: string;
-  operation: "VENTA" | "RENTA";
+  /**
+   * Raw `properties.operation`, kept as-is so the filter can reason about
+   * VENTA_RENTA (listed for both) and about retired values such as TRASPASO,
+   * which historical rows still carry.
+   */
+  operation: string;
   type: string;
   state: string;
   city: string;
@@ -171,8 +176,22 @@ function buildAddress(p: PropertyFromDB): string {
   return [line1, line2].filter(Boolean).join("\n");
 }
 
+/**
+ * Does a stored operation satisfy the visitor's Compra / Renta choice?
+ *
+ * VENTA_RENTA is offered as both, so it has to match either side — it used to
+ * be lumped in with VENTA and never appeared under Renta. TRASPASO is a
+ * retired operation that only historical rows carry; it was priced as a sale,
+ * so it answers to Compra rather than disappearing from the site entirely.
+ */
+function matchesOperation(operation: string, wanted: "comprar" | "rentar"): boolean {
+  const op = (operation || "").toUpperCase();
+  if (op === "VENTA_RENTA") return true;
+  return wanted === "rentar" ? op === "RENTA" : op !== "RENTA";
+}
+
 function mapProperty(p: PropertyFromDB): MappedProperty {
-  const op: "VENTA" | "RENTA" = p.operation === "RENTA" ? "RENTA" : "VENTA";
+  const op = (p.operation || "VENTA").toUpperCase();
   return {
     id: p.id,
     title: p.title || "Sin título",
@@ -184,7 +203,7 @@ function mapProperty(p: PropertyFromDB): MappedProperty {
     area: p.area_total || 0,
     brc: p.brc_status === "CERTIFICADO",
     image: p.featured_image_url || "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Casa1.jpg",
-    tag: op === "RENTA" ? "Renta" : "Compra",
+    tag: op === "VENTA_RENTA" ? "Compra o Renta" : op === "RENTA" ? "Renta" : "Compra",
     operation: op,
     type: p.type ? (PROPERTY_TYPE_MAP[p.type.toUpperCase()] ?? p.type) : "",
     state: p.state || "",
@@ -678,7 +697,7 @@ function PropiedadesPageInner() {
   const resetFilters = () => setFilters(initialFilters);
 
   const filteredProperties = useMemo(() => {
-    const wantedOp = filters.operationType === "rentar" ? "RENTA" : "VENTA";
+    const wantedOp = filters.operationType;
     const min = filters.minPrice ? Number(filters.minPrice) : null;
     const max = filters.maxPrice ? Number(filters.maxPrice) : null;
     const stateNorm = filters.state ? normalize(filters.state) : "";
@@ -694,7 +713,7 @@ function PropiedadesPageInner() {
         );
         if (!queryTerms.every((t) => haystack.includes(t))) return false;
       }
-      if (p.operation !== wantedOp) return false;
+      if (!matchesOperation(p.operation, wantedOp)) return false;
       if (filters.types.length > 0 && !filters.types.includes(p.type)) return false;
       if (stateNorm && normalize(p.state) !== stateNorm) return false;
       if (cityNorm && normalize(p.city) !== cityNorm) return false;

@@ -2,3 +2,4 @@
 export * from './constants';
 export * from './roles';
 export * from './mexico-states';
+export * from './membership-plans';

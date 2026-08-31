@@ -22,6 +22,10 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "@/app/dashboard/_context/user-context";
+import {
+  BRC_STATUS_BADGE_STYLES,
+  BRC_STATUS_SHORT_LABELS,
+} from "@/lib/brc-notarial";
 import { ShieldBrc } from '@/components/ui/shield-brc'
 
 /* ------------------------------------------------------------------ */
@@ -80,21 +84,10 @@ interface Expediente {
 /*  Status mapping                                                     */
 /* ------------------------------------------------------------------ */
 
-const STATUS_LABELS: Record<string, string> = {
-  EN_REVISION: "En Revision",
-  DOCUMENTACION_PENDIENTE: "Documentacion Pendiente",
-  VALIDACION_NOTARIAL: "Validacion Notarial",
-  CERTIFICADO: "Certificado",
-  RECHAZADO: "Rechazado",
-};
-
-const STATUS_BADGE_STYLES: Record<string, string> = {
-  EN_REVISION: "bg-blue-50 text-blue-600 border border-blue-200",
-  DOCUMENTACION_PENDIENTE: "bg-amber-50 text-amber-600 border border-amber-200",
-  VALIDACION_NOTARIAL: "bg-purple-50 text-purple-600 border border-purple-200",
-  CERTIFICADO: "bg-emerald-50 text-emerald-600 border border-emerald-200",
-  RECHAZADO: "bg-red-50 text-red-600 border border-red-200",
-};
+/* Shared with the detail screen and the admin console so the new
+   PENDIENTE_EMISION_BRC state reads the same everywhere. */
+const STATUS_LABELS = BRC_STATUS_SHORT_LABELS;
+const STATUS_BADGE_STYLES = BRC_STATUS_BADGE_STYLES;
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -125,6 +118,8 @@ function getProgressFromDocs(docs: BrcDocument[]) {
 function getStatusProgress(status: string, docProgress: number) {
   if (status === "CERTIFICADO") return 100;
   if (status === "RECHAZADO") return docProgress;
+  // The notary signed off; only BitHauss's issuance is left.
+  if (status === "PENDIENTE_EMISION_BRC") return Math.max(docProgress, 90);
   if (status === "VALIDACION_NOTARIAL") return Math.max(docProgress, 80);
   if (status === "EN_REVISION") return Math.max(docProgress, 30);
   return docProgress;
@@ -259,7 +254,10 @@ export default function ExpedientesPage() {
       value: String(
         expedientes.filter(
           (e) =>
-            e.status === "EN_REVISION" || e.status === "DOCUMENTACION_PENDIENTE"
+            e.status === "EN_REVISION" ||
+            e.status === "DOCUMENTACION_PENDIENTE" ||
+            e.status === "VALIDACION_NOTARIAL" ||
+            e.status === "PENDIENTE_EMISION_BRC"
         ).length
       ),
       icon: Clock,

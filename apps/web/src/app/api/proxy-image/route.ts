@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -24,7 +25,15 @@ function allowedHosts(): Set<string> {
   return hosts;
 }
 
+// BH-10: the host allowlist keeps this from being an open proxy, but an
+// unthrottled proxy still lets anyone use BitHauss' egress bandwidth to
+// hammer our own CDN.
+const RATE_LIMIT = { limit: 120, windowMs: 60_000 } as const;
+
 export async function GET(req: NextRequest) {
+  const limited = enforceRateLimit(req, "proxy-image", RATE_LIMIT);
+  if (limited) return limited;
+
   const target = req.nextUrl.searchParams.get("url");
   if (!target) {
     return NextResponse.json({ error: "Missing url" }, { status: 400 });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { logError } from "@/lib/log";
 import { buildQueryVariants } from "./variants";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,7 +48,16 @@ async function geocode(query: string): Promise<GeocodeResult | null> {
   };
 }
 
+// BH-10: /api/geocode proxies Nominatim, whose fair-use policy is enforced by
+// banning the caller's IP. An unthrottled loop here takes address lookup down
+// for every user of the platform, so the limit protects an upstream we do not
+// control.
+const RATE_LIMIT = { limit: 30, windowMs: 60_000 } as const;
+
 export async function GET(req: Request) {
+  const limited = enforceRateLimit(req, "geocode", RATE_LIMIT);
+  if (limited) return limited;
+
   const { searchParams } = new URL(req.url);
   const q = searchParams.get("q")?.trim();
   if (!q) {

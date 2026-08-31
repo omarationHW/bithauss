@@ -7,10 +7,23 @@ import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { getSignedDocumentUrl } from "@/lib/private-storage";
 import { runOcrValidation, ocrColumns } from "@/lib/ocr-validate";
-import { isDocumentRequired } from "@/lib/brc-documents";
 import { useUser } from "@/app/dashboard/_context/user-context";
 import { ShieldBrc } from '@/components/ui/shield-brc'
-import { OcrDocumentReview, type OcrStandaloneCheck } from '@/components/brc/ocr-document-review'
+import { type OcrStandaloneCheck } from '@/components/brc/ocr-document-review'
+import {
+  ExpedienteDocumentsTable,
+  type CertTrackingPatch,
+  type ExpedienteTableRow,
+} from "@/components/brc/expediente-documents-table";
+import {
+  BRC_STATUS,
+  BRC_STATUS_BADGE_STYLES,
+  BRC_STATUS_LABELS,
+  BRC_STATUS_STEPS,
+  areRequiredDocumentsValidated,
+  getBrcProgressStep,
+  missingRequiredDocuments,
+} from "@/lib/brc-notarial";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -32,6 +45,7 @@ import {
   X,
   Upload,
   Award,
+  Stamp,
 } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
@@ -90,7 +104,15 @@ interface BrcDocument {
   owner_instruction: string | null;
   reviewed_at: string | null;
   reviewed_by: string | null;
+  /** Persisted at review time — never the name of whoever is looking now. */
+  reviewer_name: string | null;
   created_at: string;
+  /* Certificates the notary collects from RPP / Predial / Agua / otros. */
+  cert_requested_at: string | null;
+  cert_received_at: string | null;
+  cert_result: string | null;
+  cert_requirement: string | null;
+  notary_legal_opinion: string | null;
   brc_document_types: BrcDocumentTypeNested | null;
   ocr_detected_type: string | null;
   ocr_confidence: string | null;
@@ -117,6 +139,18 @@ interface OwnerProfile {
   role?: string | null;
 }
 
+/**
+ * The Certificado Notarial: the notary's statement that the file is sound.
+ * BitHauss issues the BRC from it — this is not the BRC.
+ */
+interface NotarialCertificate {
+  id: string;
+  file_url: string;
+  file_name: string;
+  observations: string | null;
+  issued_at: string;
+}
+
 interface Expediente {
   id: string;
   property_id: string;
@@ -133,28 +167,12 @@ interface Expediente {
 /*  Status config                                                      */
 /* ------------------------------------------------------------------ */
 
-const STATUS_LABELS: Record<string, string> = {
-  EN_REVISION: "En Revision",
-  DOCUMENTACION_PENDIENTE: "Documentacion Pendiente",
-  VALIDACION_NOTARIAL: "Validacion Notarial",
-  CERTIFICADO: "Certificado",
-  RECHAZADO: "Rechazado",
-};
-
-const STATUS_BADGE_STYLES: Record<string, string> = {
-  EN_REVISION: "bg-blue-50 text-blue-600 border border-blue-200",
-  DOCUMENTACION_PENDIENTE: "bg-amber-50 text-amber-600 border border-amber-200",
-  VALIDACION_NOTARIAL: "bg-purple-50 text-purple-600 border border-purple-200",
-  CERTIFICADO: "bg-emerald-50 text-emerald-600 border border-emerald-200",
-  RECHAZADO: "bg-red-50 text-red-600 border border-red-200",
-};
-
-const STATUS_STEPS = [
-  { key: "EN_REVISION", label: "En Revision" },
-  { key: "DOCUMENTACION_PENDIENTE", label: "Documentacion" },
-  { key: "VALIDACION_NOTARIAL", label: "Validacion" },
-  { key: "CERTIFICADO", label: "Certificado" },
-];
+/* Labels, badge styles and the stepper now live in @/lib/brc-notarial so the
+   list, the detail screen and the admin console cannot disagree about what
+   PENDIENTE_EMISION_BRC means. */
+const STATUS_LABELS = BRC_STATUS_LABELS;
+const STATUS_BADGE_STYLES = BRC_STATUS_BADGE_STYLES;
+const STATUS_STEPS = BRC_STATUS_STEPS;
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -197,17 +215,7 @@ function formatCurrency(amount: number, currency: string = "MXN") {
   }).format(amount);
 }
 
-function getProgressStep(status: string) {
-  const idx = STATUS_STEPS.findIndex((s) => s.key === status);
-  if (status === "RECHAZADO") return -1;
-  return idx >= 0 ? idx : 0;
-}
-
-function generateCertificateNumber() {
-  const year = new Date().getFullYear();
-  const seq = String(Math.floor(Math.random() * 999999) + 1).padStart(6, "0");
-  return `BRC-${year}-${seq}`;
-}
+const getProgressStep = getBrcProgressStep;
 
 /* ------------------------------------------------------------------ */
 /*  Skeleton loaders                                                   */
@@ -236,15 +244,16 @@ export default function ExpedienteDetailPage() {
   const [newNote, setNewNote] = useState("");
   const [submittingNote, setSubmittingNote] = useState(false);
   const [allDocumentTypes, setAllDocumentTypes] = useState<BrcDocumentTypeFull[]>([]);
-  const [rejectingDocId, setRejectingDocId] = useState<string | null>(null);
-  const [rejectReason, setRejectReason] = useState("");
-  const [rejectInstruction, setRejectInstruction] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showCertModal, setShowCertModal] = useState(false);
-  const [certNumber] = useState(() => generateCertificateNumber());
   const [certObservations, setCertObservations] = useState("");
   const [certPdfFile, setCertPdfFile] = useState<File | null>(null);
   const [certSubmitting, setCertSubmitting] = useState(false);
+  const [certError, setCertError] = useState<string | null>(null);
+  /** The Certificado Notarial in force, when the notary already issued it. */
+  const [notarialCert, setNotarialCert] = useState<NotarialCertificate | null>(null);
+  /** Document whose "certificados recabados" block is being saved. */
+  const [savingTrackingDocId, setSavingTrackingDocId] = useState<string | null>(null);
   /** Document whose signed URL is being minted. */
   const [openingDocId, setOpeningDocId] = useState<string | null>(null);
   /** Document type whose corrected file is being uploaded. */
@@ -310,7 +319,7 @@ export default function ExpedienteDetailPage() {
     // 4. Documents
     const { data: docsData } = await supabase
       .from("brc_documents")
-      .select("id, document_type_id, file_name, file_url, file_size, status, rejection_reason, owner_instruction, reviewed_at, reviewed_by, created_at, ocr_detected_type, ocr_confidence, ocr_valid, ocr_extracted_data, ocr_corrected_data, ocr_standalone_checks, ocr_validated_at, brc_document_types ( name, is_required )")
+      .select("id, document_type_id, file_name, file_url, file_size, status, rejection_reason, owner_instruction, reviewed_at, reviewed_by, reviewer_name, created_at, cert_requested_at, cert_received_at, cert_result, cert_requirement, notary_legal_opinion, ocr_detected_type, ocr_confidence, ocr_valid, ocr_extracted_data, ocr_corrected_data, ocr_standalone_checks, ocr_validated_at, brc_document_types ( name, is_required )")
       .eq("expediente_id", expedienteId)
       .order("created_at", { ascending: true });
 
@@ -333,7 +342,18 @@ export default function ExpedienteDetailPage() {
 
     if (logsData) setLogs(logsData as ExpedienteLog[]);
 
-    // 6. Certificate (if status is CERTIFICADO)
+    // 6. Certificado Notarial in force (basis for the BRC). Fetched for every
+    //    status: once issued it stays part of the record.
+    const { data: notarialData } = await supabase
+      .from("brc_notarial_certificates")
+      .select("id, file_url, file_name, observations, issued_at")
+      .eq("expediente_id", expedienteId)
+      .is("superseded_at", null)
+      .maybeSingle();
+
+    setNotarialCert((notarialData as NotarialCertificate | null) ?? null);
+
+    // 7. BRC certificate (only BitHauss can have issued it)
     if (expData.status === "CERTIFICADO") {
       const { data: certData } = await supabase
         .from("brc_certificates")
@@ -368,9 +388,26 @@ export default function ExpedienteDetailPage() {
     });
 
     if (res.ok) {
-      const now = new Date().toISOString();
+      // The API decides (and persists) the reviewer name; echo it back rather
+      // than rendering whoever happens to be logged in.
+      const payload = (await res.json().catch(() => null)) as
+        | { reviewed_at?: string; reviewer_name?: string | null }
+        | null;
+      const now = payload?.reviewed_at ?? new Date().toISOString();
       setDocuments((prev) =>
-        prev.map((d) => (d.id === docId ? { ...d, status: "VALIDADO", rejection_reason: null, owner_instruction: null, reviewed_by: user!.id, reviewed_at: now } : d))
+        prev.map((d) =>
+          d.id === docId
+            ? {
+                ...d,
+                status: "VALIDADO",
+                rejection_reason: null,
+                owner_instruction: null,
+                reviewed_by: user!.id,
+                reviewer_name: payload?.reviewer_name ?? user?.fullName ?? null,
+                reviewed_at: now,
+              }
+            : d,
+        ),
       );
       const { data: logsData } = await supabase
         .from("brc_expediente_logs")
@@ -382,8 +419,11 @@ export default function ExpedienteDetailPage() {
     setActionLoading(null);
   }
 
-  async function handleRejectDoc(docId: string) {
-    if (!rejectReason.trim()) return;
+  async function handleRejectDoc(
+    docId: string,
+    payload: { reason: string; owner_instruction?: string },
+  ) {
+    if (!payload.reason.trim()) return;
     setActionLoading(docId);
     const { data: { session } } = await supabase.auth.getSession();
     const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -394,17 +434,28 @@ export default function ExpedienteDetailPage() {
         ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
       },
       body: JSON.stringify({
-        reason: rejectReason.trim(),
-        owner_instruction: rejectInstruction.trim() || undefined,
+        reason: payload.reason.trim(),
+        owner_instruction: payload.owner_instruction?.trim() || undefined,
       }),
     });
 
     if (res.ok) {
-      const now = new Date().toISOString();
+      const result = (await res.json().catch(() => null)) as
+        | { reviewed_at?: string; reviewer_name?: string | null }
+        | null;
+      const now = result?.reviewed_at ?? new Date().toISOString();
       setDocuments((prev) =>
         prev.map((d) =>
           d.id === docId
-            ? { ...d, status: "RECHAZADO", rejection_reason: rejectReason.trim(), owner_instruction: rejectInstruction.trim() || null, reviewed_by: user!.id, reviewed_at: now }
+            ? {
+                ...d,
+                status: "RECHAZADO",
+                rejection_reason: payload.reason.trim(),
+                owner_instruction: payload.owner_instruction?.trim() || null,
+                reviewed_by: user!.id,
+                reviewer_name: result?.reviewer_name ?? user?.fullName ?? null,
+                reviewed_at: now,
+              }
             : d
         )
       );
@@ -416,10 +467,40 @@ export default function ExpedienteDetailPage() {
       if (logsData) setLogs(logsData as ExpedienteLog[]);
     }
 
-    setRejectingDocId(null);
-    setRejectReason("");
-    setRejectInstruction("");
     setActionLoading(null);
+  }
+
+  /** Saves the "certificados recabados por notaría" block of one requirement. */
+  async function handleSaveCertTracking(docId: string, patch: CertTrackingPatch) {
+    setSavingTrackingDocId(docId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "";
+      const res = await fetch(
+        `${apiBase}/api/v1/brc/documents/${docId}/certificate-tracking`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            ...(session?.access_token
+              ? { Authorization: `Bearer ${session.access_token}` }
+              : {}),
+          },
+          body: JSON.stringify(patch),
+        },
+      );
+
+      if (!res.ok) {
+        window.alert("No se pudieron guardar los certificados recabados.");
+        return;
+      }
+
+      setDocuments((prev) =>
+        prev.map((d) => (d.id === docId ? { ...d, ...patch } : d)),
+      );
+    } finally {
+      setSavingTrackingDocId(null);
+    }
   }
 
   /** Apply an OCR correction to local state after a successful PATCH. */
@@ -576,53 +657,94 @@ export default function ExpedienteDetailPage() {
     }
   }
 
-  async function handleIssueCertificate() {
+  /**
+   * Step A: the notary uploads the CERTIFICADO NOTARIAL. This does not issue
+   * the BRC — BitHauss does that from this document — so the expediente lands
+   * on PENDIENTE_EMISION_BRC and the seal stays off until then.
+   */
+  async function handleIssueNotarialCertificate() {
     if (!expediente || !property) return;
-    setCertSubmitting(true);
-
-    let pdfUrl: string | null = null;
-
-    // Upload PDF if provided (storage write remains client-side; signed by storage RLS)
-    if (certPdfFile) {
-      const fileName = `certificates/${expedienteId}/${certPdfFile.name}`;
-      const { data: uploadData } = await supabase.storage
-        .from("brc-documents")
-        .upload(fileName, certPdfFile, { upsert: true });
-
-      if (uploadData) {
-        const { data: urlData } = supabase.storage
-          .from("brc-documents")
-          .getPublicUrl(fileName);
-        pdfUrl = urlData?.publicUrl ?? null;
-      }
+    if (!certPdfFile) {
+      setCertError("Adjunta el Certificado Notarial en PDF para continuar.");
+      return;
     }
 
-    // Certify through the API (single atomic-ish call: insert cert + update
-    // expediente + update property + log + notify requester).
-    const { data: { session } } = await supabase.auth.getSession();
-    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "";
-    const res = await fetch(`${apiBase}/api/v1/brc/expedientes/${expedienteId}/certify`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-      },
-      body: JSON.stringify({
-        certificate_number: certNumber,
-        observations: certObservations.trim() || undefined,
-        pdf_url: pdfUrl ?? undefined,
-      }),
-    });
+    setCertSubmitting(true);
+    setCertError(null);
 
-    setCertSubmitting(false);
-    if (res.ok) router.push("/dashboard/expedientes");
+    try {
+      // Storage write stays client-side; storage RLS (migración 021/024) is
+      // what decides whether this notary may write into the folder.
+      const fileName = `certificates/${expedienteId}/notarial-${Date.now()}-${certPdfFile.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from("brc-documents")
+        .upload(fileName, certPdfFile, { upsert: true });
+      if (uploadError) throw new Error(uploadError.message);
+
+      const { data: urlData } = supabase.storage
+        .from("brc-documents")
+        .getPublicUrl(fileName);
+      const fileUrl = urlData?.publicUrl;
+      if (!fileUrl) throw new Error("No se pudo resolver la ruta del archivo.");
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "";
+      const res = await fetch(
+        `${apiBase}/api/v1/brc/expedientes/${expedienteId}/notarial-certificate`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(session?.access_token
+              ? { Authorization: `Bearer ${session.access_token}` }
+              : {}),
+          },
+          body: JSON.stringify({
+            file_url: fileUrl,
+            file_name: certPdfFile.name,
+            file_size: certPdfFile.size,
+            mime_type: certPdfFile.type || "application/pdf",
+            observations: certObservations.trim() || undefined,
+          }),
+        },
+      );
+
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(
+          body?.message ?? "No se pudo emitir el Certificado Notarial.",
+        );
+      }
+
+      setShowCertModal(false);
+      setCertPdfFile(null);
+      setCertObservations("");
+      await fetchData();
+    } catch (err) {
+      setCertError(
+        err instanceof Error ? err.message : "No se pudo emitir el Certificado Notarial.",
+      );
+    } finally {
+      setCertSubmitting(false);
+    }
+  }
+
+  /** Opens the Certificado Notarial through a short-lived signed URL. */
+  async function openNotarialCertificate() {
+    if (!notarialCert) return;
+    const signed = await getSignedDocumentUrl(supabase, notarialCert.file_url);
+    if (!signed) {
+      window.alert("No se pudo abrir el Certificado Notarial.");
+      return;
+    }
+    window.open(signed, "_blank", "noopener,noreferrer");
   }
 
   /* ---------------------------------------------------------------- */
   /*  Derived state                                                    */
   /* ---------------------------------------------------------------- */
 
-  const tableRows = useMemo(() => {
+  const tableRows = useMemo<ExpedienteTableRow[]>(() => {
     return allDocumentTypes.map((dt) => {
       // A correction adds a new row instead of overwriting, so the rejected
       // version stays in the record — show the most recent one.
@@ -643,45 +765,36 @@ export default function ExpedienteDetailPage() {
    * never uploaded at all did not block anything because it had no row to
    * inspect. Optional documents are ignored — that is what optional means.
    */
-  const allRequiredValidated = useMemo(() => {
-    const forProperty = {
+  const requirementRows = useMemo(
+    () =>
+      tableRows.map(({ docType, doc }) => ({
+        name: docType.name,
+        is_required: !!docType.is_required,
+        status: doc?.status ?? null,
+      })),
+    [tableRows],
+  );
+
+  const propertyForBrc = useMemo(
+    () => ({
       type: property?.type ?? null,
       operation: property?.operation ?? null,
-    };
-    const requiredRows = tableRows.filter(({ docType }) =>
-      isDocumentRequired(
-        { name: docType.name, is_required: !!docType.is_required },
-        forProperty,
-      ),
-    );
-    if (requiredRows.length === 0) return false;
-    return requiredRows.every(
-      ({ doc }) =>
-        doc && (doc.status === "VALIDADO" || doc.status === "APROBADO"),
-    );
-  }, [tableRows, property]);
+    }),
+    [property],
+  );
+
+  const allRequiredValidated = useMemo(
+    () => areRequiredDocumentsValidated(requirementRows, propertyForBrc),
+    [requirementRows, propertyForBrc],
+  );
 
   /** Names of the required documents still standing between here and the
    *  certificate — so the notary is told what is missing, not just that
    *  something is. */
-  const pendingRequiredNames = useMemo(() => {
-    const forProperty = {
-      type: property?.type ?? null,
-      operation: property?.operation ?? null,
-    };
-    return tableRows
-      .filter(({ docType, doc }) => {
-        const required = isDocumentRequired(
-          { name: docType.name, is_required: !!docType.is_required },
-          forProperty,
-        );
-        if (!required) return false;
-        return !doc || (doc.status !== "VALIDADO" && doc.status !== "APROBADO");
-      })
-      .map(({ docType }) => docType.name);
-  }, [tableRows, property]);
-
-  const notaryDisplayName = user?.fullName ?? "Notario";
+  const pendingRequiredNames = useMemo(
+    () => missingRequiredDocuments(requirementRows, propertyForBrc),
+    [requirementRows, propertyForBrc],
+  );
 
   const progressStep = expediente ? getProgressStep(expediente.status) : 0;
 
@@ -735,7 +848,13 @@ export default function ExpedienteDetailPage() {
   }
 
   const address = [property.address_line, property.city, property.state].filter(Boolean).join(", ");
-  const heroImage = property.property_media[0]?.url ?? null;
+  // `property_media` holds photos AND videos since migración 030, so the hero
+  // and the "+N fotos" counter have to be taken from the photos alone: an
+  // unsplit `[0]` puts an .mp4 (or a YouTube watch URL) inside <Image>.
+  const propertyPhotos = property.property_media.filter(
+    (m) => (m.media_type ?? "IMAGE") === "IMAGE",
+  );
+  const heroImage = propertyPhotos[0]?.url ?? null;
 
   return (
     <div className="space-y-6">
@@ -856,9 +975,9 @@ export default function ExpedienteDetailPage() {
                   className="object-cover"
                   unoptimized
                 />
-                {property.property_media.length > 1 && (
+                {propertyPhotos.length > 1 && (
                   <div className="absolute bottom-3 right-3 rounded-lg bg-black/60 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">
-                    +{property.property_media.length - 1} fotos
+                    +{propertyPhotos.length - 1} fotos
                   </div>
                 )}
               </div>
@@ -1103,15 +1222,52 @@ export default function ExpedienteDetailPage() {
             )}
           </div>
 
-          {/* ---- Final Decision (Notary only) ---- */}
+          {/* ---- Certificado Notarial (basis for the BRC) ---- */}
+          {notarialCert && (
+            <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-6 shadow-sm">
+              <h3
+                className="mb-2 text-sm font-bold uppercase tracking-wider text-indigo-900"
+                style={{ fontFamily: "Barlow, Inter, sans-serif" }}
+              >
+                Certificado Notarial
+              </h3>
+              <p className="text-xs leading-relaxed text-indigo-900/80">
+                {expediente.status === BRC_STATUS.CERTIFICADO
+                  ? "Sustento legal del certificado BRC emitido por BitHauss."
+                  : "La notaría hizo constar que el expediente está en regla. BitHauss emitirá el certificado BRC a partir de este documento."}
+              </p>
+              <p className="mt-2 text-[11px] text-indigo-900/60">
+                Emitido el {formatDate(notarialCert.issued_at)}
+              </p>
+              {notarialCert.observations && (
+                <p className="mt-2 rounded-lg bg-white/70 p-3 text-[11px] leading-relaxed text-indigo-900/80">
+                  {notarialCert.observations}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={openNotarialCertificate}
+                className="mt-3 inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-white px-4 py-2 text-xs font-bold text-indigo-700 transition-all hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Ver Certificado Notarial
+              </button>
+            </div>
+          )}
+
+          {/* ---- Notarial ruling (Notary only) ---- */}
           {isNotario && expediente.status !== "CERTIFICADO" && expediente.status !== "RECHAZADO" && (
             <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
               <h3
-                className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wider"
+                className="text-sm font-bold text-gray-900 mb-1 uppercase tracking-wider"
                 style={{ fontFamily: "Barlow, Inter, sans-serif" }}
               >
-                Decision Final
+                Dictamen Notarial
               </h3>
+              <p className="mb-4 text-[11px] leading-relaxed text-gray-500">
+                Emites el Certificado Notarial. BitHauss emite el BRC a partir
+                de él y coloca el sello en la publicación.
+              </p>
 
               <div className="space-y-3">
                 <button
@@ -1121,8 +1277,10 @@ export default function ExpedienteDetailPage() {
                   style={{ background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))" }}
                 >
                   <div className="flex items-center justify-center gap-2">
-                    <Award className="h-4 w-4" />
-                    Aprobar y Certificar
+                    <Stamp className="h-4 w-4" />
+                    {notarialCert
+                      ? "Re-emitir Certificado Notarial"
+                      : "Emitir Certificado Notarial"}
                   </div>
                 </button>
                 {!allRequiredValidated && (
@@ -1141,7 +1299,8 @@ export default function ExpedienteDetailPage() {
                       </ul>
                     )}
                     <p className="mt-1">
-                      Los documentos opcionales no bloquean la certificación.
+                      Los documentos opcionales no bloquean la emisión del
+                      Certificado Notarial.
                     </p>
                   </div>
                 )}
@@ -1201,242 +1360,26 @@ export default function ExpedienteDetailPage() {
           </p>
         </div>
 
-        {tableRows.length === 0 ? (
-          <div className="rounded-xl bg-gray-50 p-8 text-center mx-6 mb-6">
-            <FileText className="mx-auto h-10 w-10 text-gray-300 mb-2" />
-            <p className="text-sm text-gray-400">No se encontraron tipos de documentos.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto pb-2">
-            <table className="w-full text-left">
-              <thead>
-                <tr
-                  className="text-[11px] font-bold text-white uppercase tracking-wider"
-                  style={{ background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(210 80% 45%))" }}
-                >
-                  <th className="px-4 py-3">Documento</th>
-                  <th className="px-3 py-3">Fecha Revisión</th>
-                  <th className="px-3 py-3">Validación de Documentos</th>
-                  <th className="px-3 py-3">Certificado Recibido</th>
-                  <th className="px-3 py-3">Resultado del Dictamen</th>
-                  <th className="px-3 py-3">Dictaminador Jurídico de Notaría</th>
-                  <th className="px-3 py-3">Inconsistencia Detectada</th>
-                  <th className="px-3 py-3">Instrucción al Propietario</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {tableRows.map(({ docType, doc }) => {
-                  const hasFile = !!doc;
-                  const isReviewed = doc?.reviewed_at != null;
-                  const isApproved = doc?.status === "VALIDADO" || doc?.status === "APROBADO";
-                  const isRejected = doc?.status === "RECHAZADO";
-                  const isRejecting = doc && rejectingDocId === doc.id;
-
-                  const isConditional = !docType.is_required;
-
-                  return (
-                    <tr
-                      key={docType.id}
-                      className={`text-xs transition-colors ${
-                        isRejected ? "bg-red-50/40" : isApproved ? "bg-emerald-50/30" : "bg-white hover:bg-gray-50/50"
-                      }`}
-                    >
-                      {/* DOCUMENTO */}
-                      <td className="px-4 py-3 align-top">
-                        <div>
-                          <p className="font-bold text-gray-900 text-[12px] leading-tight">
-                            {docType.name}
-                          </p>
-                          {isConditional && docType.description && (
-                            <span className="text-[10px] text-amber-600 leading-tight block">{docType.description}</span>
-                          )}
-                          {hasFile && doc.file_url && (
-                            <button
-                              type="button"
-                              onClick={() => openDocument(doc.id, doc.file_url!)}
-                              disabled={openingDocId === doc.id}
-                              className="mt-1 flex items-center gap-1 text-[10px] text-blue-500 hover:text-blue-700 hover:underline disabled:opacity-60"
-                            >
-                              {openingDocId === doc.id ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <Download className="h-3 w-3" />
-                              )}
-                              {doc.file_name}
-                            </button>
-                          )}
-                          {hasFile && (
-                            <OcrDocumentReview
-                              doc={doc}
-                              expectedType={docType.name}
-                              isNotario={isNotario}
-                              onCorrected={handleDocCorrected}
-                            />
-                          )}
-                        </div>
-                      </td>
-
-                      {/* FECHA REVISIÓN */}
-                      <td className="px-3 py-3 align-top text-gray-600">
-                        {doc?.reviewed_at ? formatDate(doc.reviewed_at) : doc?.created_at ? formatDate(doc.created_at) : "—"}
-                      </td>
-
-                      {/* VALIDACIÓN DE DOCUMENTOS */}
-                      <td className="px-3 py-3 align-top">
-                        {isReviewed ? (
-                          <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
-                            REALIZADO
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-600 border border-amber-200">
-                            PENDIENTE
-                          </span>
-                        )}
-                      </td>
-
-                      {/* CERTIFICADO RECIBIDO */}
-                      <td className="px-3 py-3 align-top">
-                        {hasFile ? (
-                          <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700 border border-blue-200">
-                            RECIBIDO
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center rounded-md bg-gray-50 px-2 py-0.5 text-[10px] font-bold text-gray-400 border border-gray-200">
-                            —
-                          </span>
-                        )}
-                      </td>
-
-                      {/* RESULTADO DEL DICTAMEN */}
-                      <td className="px-3 py-3 align-top">
-                        {isApproved ? (
-                          <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
-                            APROBADO
-                          </span>
-                        ) : isRejected ? (
-                          <div className="flex flex-col gap-1">
-                            <span className="inline-flex items-center rounded-md bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-600 border border-red-200">
-                              RECHAZADO
-                            </span>
-                            {isRequester && canFixDocuments && (
-                              <label className="flex cursor-pointer items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-600 transition-all hover:bg-blue-100">
-                                {reuploadingTypeId === docType.id ? (
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                ) : (
-                                  <Upload className="h-3 w-3" />
-                                )}
-                                Volver a subir
-                                <input
-                                  type="file"
-                                  accept=".pdf,.jpg,.jpeg,.png"
-                                  className="hidden"
-                                  disabled={reuploadingTypeId !== null}
-                                  onChange={(e) => {
-                                    const f = e.target.files?.[0];
-                                    e.target.value = "";
-                                    if (f) handleReupload(docType.id, f);
-                                  }}
-                                />
-                              </label>
-                            )}
-                          </div>
-                        ) : hasFile && isNotario && doc.status !== "VALIDADO" ? (
-                          <div className="flex flex-col gap-1">
-                            <button
-                              onClick={() => handleApproveDoc(doc.id)}
-                              disabled={actionLoading === doc.id}
-                              className="flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-600 border border-emerald-200 transition-all hover:bg-emerald-100 disabled:opacity-50"
-                            >
-                              {actionLoading === doc.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
-                              Aprobar
-                            </button>
-                            <button
-                              onClick={() => {
-                                setRejectingDocId(doc.id);
-                                setRejectReason(doc.rejection_reason ?? "");
-                                setRejectInstruction(doc.owner_instruction ?? "");
-                              }}
-                              disabled={actionLoading === doc.id}
-                              className="flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-[10px] font-bold text-red-600 border border-red-200 transition-all hover:bg-red-100 disabled:opacity-50"
-                            >
-                              <XCircle className="h-3 w-3" />
-                              Rechazar
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="text-[10px] text-gray-400">—</span>
-                        )}
-                      </td>
-
-                      {/* DICTAMINADOR JURÍDICO */}
-                      <td className="px-3 py-3 align-top text-gray-700">
-                        {(isApproved || isRejected) && doc?.reviewed_by
-                          ? notaryDisplayName
-                          : ""}
-                      </td>
-
-                      {/* INCONSISTENCIA DETECTADA */}
-                      <td className="px-3 py-3 align-top">
-                        {isRejecting ? (
-                          <textarea
-                            value={rejectReason}
-                            onChange={(e) => setRejectReason(e.target.value)}
-                            placeholder="Describir la inconsistencia..."
-                            rows={2}
-                            className="w-full rounded-md border border-red-200 px-2 py-1.5 text-[11px] text-gray-800 outline-none focus:border-red-300 focus:ring-1 focus:ring-red-100 resize-none"
-                            autoFocus
-                          />
-                        ) : isRejected && doc?.rejection_reason ? (
-                          <p className="text-[11px] text-red-700 leading-relaxed">{doc.rejection_reason}</p>
-                        ) : (
-                          <span className="text-[10px] text-gray-300">—</span>
-                        )}
-                      </td>
-
-                      {/* INSTRUCCIÓN AL PROPIETARIO */}
-                      <td className="px-3 py-3 align-top">
-                        {isRejecting ? (
-                          <div className="space-y-1.5">
-                            <textarea
-                              value={rejectInstruction}
-                              onChange={(e) => setRejectInstruction(e.target.value)}
-                              placeholder="Instrucción para el propietario..."
-                              rows={2}
-                              className="w-full rounded-md border border-red-200 px-2 py-1.5 text-[11px] text-gray-800 outline-none focus:border-red-300 focus:ring-1 focus:ring-red-100 resize-none"
-                            />
-                            <div className="flex gap-1">
-                              <button
-                                onClick={() => doc && handleRejectDoc(doc.id)}
-                                disabled={!rejectReason.trim() || actionLoading === doc?.id}
-                                className="rounded-md bg-red-600 px-2.5 py-1 text-[10px] font-bold text-white transition-all hover:bg-red-700 disabled:opacity-50"
-                              >
-                                Confirmar
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setRejectingDocId(null);
-                                  setRejectReason("");
-                                  setRejectInstruction("");
-                                }}
-                                className="rounded-md border border-gray-200 px-2.5 py-1 text-[10px] font-semibold text-gray-500 transition-all hover:bg-gray-50"
-                              >
-                                Cancelar
-                              </button>
-                            </div>
-                          </div>
-                        ) : isRejected && doc?.owner_instruction ? (
-                          <p className="text-[11px] text-red-700 leading-relaxed">{doc.owner_instruction}</p>
-                        ) : (
-                          <span className="text-[10px] text-gray-300">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <ExpedienteDocumentsTable
+          rows={tableRows}
+          isNotario={isNotario}
+          isRequester={isRequester}
+          canFixDocuments={canFixDocuments}
+          notarialCertificate={notarialCert}
+          actionLoadingId={actionLoading}
+          openingDocId={openingDocId}
+          reuploadingTypeId={reuploadingTypeId}
+          savingTrackingDocId={savingTrackingDocId}
+          onOpenDocument={openDocument}
+          onApproveDocument={handleApproveDoc}
+          onRejectDocument={handleRejectDoc}
+          onReuploadDocument={handleReupload}
+          onDocumentCorrected={handleDocCorrected}
+          onSaveCertTracking={isNotario ? handleSaveCertTracking : undefined}
+          onOpenNotarialCertificate={
+            notarialCert ? openNotarialCertificate : undefined
+          }
+        />
       </div>
 
       {/* ============================================================ */}
@@ -1466,7 +1409,7 @@ export default function ExpedienteDetailPage() {
                       className="text-lg font-bold"
                       style={{ fontFamily: "Barlow, Inter, sans-serif" }}
                     >
-                      Emitir Certificado BRC
+                      Emitir Certificado Notarial
                     </h3>
                     <p className="text-sm text-white/70">
                       {property.title}
@@ -1484,15 +1427,20 @@ export default function ExpedienteDetailPage() {
 
             {/* Body */}
             <div className="p-6 space-y-5">
-              {/* Certificate number */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                  Numero de Certificado
-                </label>
-                <div className="flex items-center gap-2 rounded-xl bg-gray-50 border border-gray-200 px-4 py-3">
-                  <ShieldBrc className="h-4 w-4 text-gray-400" />
-                  <span className="text-sm font-mono font-bold text-gray-900">{certNumber}</span>
-                  <span className="ml-auto text-[10px] text-gray-400">Auto-generado</span>
+              {/* What this document is — and what it is not. */}
+              <div className="flex gap-3 rounded-xl border border-blue-100 bg-blue-50/60 p-4">
+                <ShieldBrc className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" />
+                <div className="space-y-1 text-xs leading-relaxed text-blue-900">
+                  <p className="font-bold">
+                    Estás subiendo el Certificado Notarial, no el BRC.
+                  </p>
+                  <p>
+                    Con este documento haces constar que el expediente de la
+                    propiedad está en regla. Es el sustento legal del
+                    certificado BRC: <strong>BitHauss</strong> lo emitirá a
+                    partir de él, lo tokenizará y colocará el sello en la
+                    publicación del inmueble.
+                  </p>
                 </div>
               </div>
 
@@ -1513,7 +1461,8 @@ export default function ExpedienteDetailPage() {
               {/* PDF Upload */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                  Certificado Firmado (PDF)
+                  Certificado Notarial firmado (PDF)
+                  <span className="ml-1 text-red-500" aria-hidden="true">*</span>
                 </label>
                 {certPdfFile ? (
                   <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
@@ -1532,21 +1481,34 @@ export default function ExpedienteDetailPage() {
                   <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-gray-200 px-4 py-6 transition-all hover:border-gray-300 hover:bg-gray-50">
                     <Upload className="h-6 w-6 text-gray-300" />
                     <span className="text-sm text-gray-500">
-                      Click para subir PDF firmado
+                      Haz clic para subir el PDF firmado
                     </span>
-                    <span className="text-xs text-gray-400">Opcional</span>
+                    <span className="text-xs text-gray-400">Obligatorio</span>
                     <input
                       type="file"
                       accept=".pdf"
                       className="hidden"
+                      aria-label="Certificado Notarial firmado en PDF"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
-                        if (file) setCertPdfFile(file);
+                        if (file) {
+                          setCertPdfFile(file);
+                          setCertError(null);
+                        }
                       }}
                     />
                   </label>
                 )}
               </div>
+
+              {certError && (
+                <p
+                  role="alert"
+                  className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-semibold text-red-700"
+                >
+                  {certError}
+                </p>
+              )}
 
               {/* Actions */}
               <div className="flex gap-3 pt-2">
@@ -1558,8 +1520,8 @@ export default function ExpedienteDetailPage() {
                   Cancelar
                 </button>
                 <button
-                  onClick={handleIssueCertificate}
-                  disabled={certSubmitting}
+                  onClick={handleIssueNotarialCertificate}
+                  disabled={certSubmitting || !certPdfFile}
                   className="flex-1 rounded-xl py-2.5 text-sm font-bold text-white transition-all hover:opacity-90 disabled:opacity-50"
                   style={{ background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))" }}
                 >
@@ -1570,8 +1532,8 @@ export default function ExpedienteDetailPage() {
                     </div>
                   ) : (
                     <div className="flex items-center justify-center gap-2">
-                      <Award className="h-4 w-4" />
-                      Emitir Certificado
+                      <Stamp className="h-4 w-4" />
+                      Emitir Certificado Notarial
                     </div>
                   )}
                 </button>

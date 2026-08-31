@@ -72,21 +72,121 @@ export function checkRateLimit(key: string, opts: RateLimitOptions): RateLimitRe
   };
 }
 
+const IPV4 = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
+
+/** Strips a `:port` suffix (Azure appends one) and IPv6 brackets. */
+function normalizeIp(raw: string): string | null {
+  let value = raw.trim();
+  if (!value) return null;
+  if (value.startsWith("[")) {
+    const close = value.indexOf("]");
+    if (close > 0) value = value.slice(1, close);
+  } else if (IPV4.test(value.split(":")[0] ?? "") && value.includes(":")) {
+    value = value.split(":")[0] ?? value;
+  }
+  // Reject anything that is not plausibly an address, so a header full of
+  // junk cannot mint unlimited bucket keys.
+  if (!/^[0-9a-fA-F:.]+$/.test(value)) return null;
+  if (value.length > 45) return null;
+  return value.toLowerCase();
+}
+
 /**
- * Best-effort client IP extraction. Falls back to a constant key when nothing
- * useful is on the request (e.g. local tests using `new Request()` directly).
+ * How many proxies sit between the client and this process. Azure App Service
+ * appends the caller's address to `X-Forwarded-For`, so the *rightmost* entry
+ * is the one the platform wrote and the only one an attacker cannot choose.
+ * Behind Azure Front Door there is one more hop — raise this to 2 (env var)
+ * when Front Door is in front, per docs/SECURITY.md section 4.3.
+ */
+function proxyDepth(): number {
+  const raw = Number(process.env.RATE_LIMIT_PROXY_DEPTH ?? "1");
+  return Number.isFinite(raw) && raw >= 1 ? Math.floor(raw) : 1;
+}
+
+/**
+ * Client identity for rate limiting (BH-10).
+ *
+ * The previous implementation read `x-forwarded-for` left-to-right, so
+ * `curl -H "X-Forwarded-For: 1.2.3.<random>"` produced a fresh bucket on every
+ * request and the limiter did nothing at all. Two changes fix that:
+ *
+ *  1. Prefer headers a client cannot forge because the edge overwrites them
+ *     (`x-azure-clientip` from Front Door, `cf-connecting-ip` from Cloudflare).
+ *  2. Otherwise take `x-forwarded-for` from the RIGHT, skipping `proxyDepth()-1`
+ *     entries — the attacker controls the left of that list, never the right.
+ *
+ * This is still per-process state (see the module header); the header handling
+ * is what stops the trivial bypass, the distributed store is the fase-1 task.
  */
 export function clientIp(req: Request): string {
+  // Edge-injected headers: these are overwritten by the proxy, so a value the
+  // client sent is discarded before it reaches us.
+  for (const header of ["x-azure-clientip", "cf-connecting-ip", "true-client-ip"]) {
+    const value = req.headers.get(header);
+    const ip = value ? normalizeIp(value.split(",")[0] ?? "") : null;
+    if (ip) return ip;
+  }
+
   const xff = req.headers.get("x-forwarded-for");
   if (xff) {
-    const first = xff.split(",")[0];
-    if (first) return first.trim();
+    const parts = xff
+      .split(",")
+      .map((p) => p.trim())
+      .filter(Boolean);
+    const index = parts.length - proxyDepth();
+    const candidate = parts[Math.max(0, index)];
+    const ip = candidate ? normalizeIp(candidate) : null;
+    if (ip) return ip;
   }
+
   const realIp = req.headers.get("x-real-ip");
-  if (realIp) return realIp.trim();
-  const cfIp = req.headers.get("cf-connecting-ip");
-  if (cfIp) return cfIp.trim();
+  if (realIp) {
+    const ip = normalizeIp(realIp);
+    if (ip) return ip;
+  }
+
+  // Everything unattributable shares one bucket on purpose: an anonymous
+  // flood should exhaust a single allowance, not bypass the limiter.
   return "unknown";
+}
+
+/** Standard rate-limit headers, so clients can back off intelligently. */
+export function rateLimitHeaders(
+  result: RateLimitResult,
+  opts: RateLimitOptions,
+): Record<string, string> {
+  return {
+    "X-RateLimit-Limit": String(opts.limit),
+    "X-RateLimit-Remaining": String(Math.max(0, result.remaining)),
+    "X-RateLimit-Reset": String(Math.floor(result.resetAt / 1000)),
+    ...(result.allowed ? {} : { "Retry-After": String(result.retryAfterSeconds) }),
+  };
+}
+
+/**
+ * One-liner for route handlers: returns a 429 `Response` when the caller is
+ * over the limit, or `null` when the request may proceed.
+ */
+export function enforceRateLimit(
+  req: Request,
+  scope: string,
+  opts: RateLimitOptions,
+): Response | null {
+  const result = checkRateLimit(`${scope}:${clientIp(req)}`, opts);
+  if (result.allowed) return null;
+  return new Response(
+    JSON.stringify({
+      error: "Demasiadas solicitudes. Espera unos segundos e inténtalo de nuevo.",
+      retryAfterSeconds: result.retryAfterSeconds,
+    }),
+    {
+      status: 429,
+      headers: {
+        "Content-Type": "application/json",
+        ...rateLimitHeaders(result, opts),
+      },
+    },
+  );
 }
 
 /** Test-only: clear all state. Not exported via index — import directly. */

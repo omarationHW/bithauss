@@ -5,6 +5,14 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { logError } from "@/lib/log";
 import { useUser } from "../../_context/user-context";
+import {
+  ALL_BRC_STATUSES,
+  BRC_STATUS,
+  BRC_STATUS_BADGE_STYLES,
+  BRC_STATUS_SHORT_LABELS,
+  isBrcInProgress,
+  type BrcExpedienteStatus,
+} from "@/lib/brc-notarial";
 import { ShieldBrc } from '@/components/ui/shield-brc'
 import {
   FileText,
@@ -29,14 +37,17 @@ import {
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
-type ExpedienteStatus =
-  | "SOLICITADO"
-  | "EN_REVISION"
-  | "EN_PROCESO"
-  | "PENDIENTE_FIRMA"
-  | "CERTIFICADO"
-  | "RECHAZADO"
-  | "CANCELADO";
+/**
+ * `brc_expedientes.status`, i.e. the Postgres `brc_status` enum.
+ *
+ * This screen used to declare its own list — SOLICITADO / EN_PROCESO /
+ * PENDIENTE_FIRMA / CANCELADO — none of which exist in the enum, while every
+ * state the flow actually produces (BORRADOR, DOCUMENTACION_PENDIENTE,
+ * VALIDACION_NOTARIAL and, since migración 024, PENDIENTE_EMISION_BRC) was
+ * missing. The filter therefore offered four impossible options and hid four
+ * real ones, and the "en proceso" counter never saw a notarial certificate.
+ */
+type ExpedienteStatus = BrcExpedienteStatus;
 
 interface PropertyInfo {
   title: string;
@@ -74,25 +85,14 @@ interface NotaryProfile {
   profiles: ProfileInfo;
 }
 
-const statusLabels: Record<ExpedienteStatus, string> = {
-  SOLICITADO: "Solicitado",
-  EN_REVISION: "En Revision",
-  EN_PROCESO: "En Proceso",
-  PENDIENTE_FIRMA: "Pendiente Firma",
-  CERTIFICADO: "Certificado",
-  RECHAZADO: "Rechazado",
-  CANCELADO: "Cancelado",
-};
+/** Copy and colours come from the shared state machine, never from a copy. */
+const statusLabels = BRC_STATUS_SHORT_LABELS;
+const statusBadgeStyles = BRC_STATUS_BADGE_STYLES;
 
-const statusBadgeStyles: Record<ExpedienteStatus, string> = {
-  SOLICITADO: "bg-amber-50 text-amber-700 border-amber-200",
-  EN_REVISION: "bg-blue-50 text-blue-700 border-blue-200",
-  EN_PROCESO: "bg-indigo-50 text-indigo-700 border-indigo-200",
-  PENDIENTE_FIRMA: "bg-purple-50 text-purple-700 border-purple-200",
-  CERTIFICADO: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  RECHAZADO: "bg-red-50 text-red-700 border-red-200",
-  CANCELADO: "bg-gray-50 text-gray-700 border-gray-200",
-};
+/** States the filter offers, in flow order. */
+const FILTERABLE_STATUSES: readonly ExpedienteStatus[] = ALL_BRC_STATUSES.filter(
+  (s) => s !== BRC_STATUS.NO_SOLICITADO,
+);
 
 /* ------------------------------------------------------------------ */
 /*  Page                                                              */
@@ -272,9 +272,10 @@ export default function AsignacionesPage() {
   const stats = useMemo(() => {
     return {
       sinAsignar: expedientes.filter((e) => !e.assigned_notary_id).length,
-      enProceso: expedientes.filter((e) =>
-        ["EN_PROCESO", "EN_REVISION", "PENDIENTE_FIRMA"].includes(e.status)
-      ).length,
+      // Everything between submission and resolution, including
+      // PENDIENTE_EMISION_BRC — an expediente whose notarial certificate is in
+      // and which is waiting on BitHauss is the most "in process" of all.
+      enProceso: expedientes.filter((e) => isBrcInProgress(e.status)).length,
       certificados: expedientes.filter((e) => e.status === "CERTIFICADO").length,
       total: expedientes.length,
     };
@@ -530,7 +531,7 @@ export default function AsignacionesPage() {
           className="h-10 rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none transition-all duration-300 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
         >
           <option value="ALL">Todos los estados</option>
-          {(Object.keys(statusLabels) as ExpedienteStatus[]).map((s) => (
+          {FILTERABLE_STATUSES.map((s) => (
             <option key={s} value={s}>
               {statusLabels[s]}
             </option>

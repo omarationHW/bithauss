@@ -428,9 +428,15 @@ export default function ConfiguracionPage() {
         return;
       }
 
+      // media_type = 'IMAGE' is NOT optional. Since migración 030 the same
+      // table also holds VIDEO rows, and this routine downloads every `url`,
+      // stamps it as a PNG and writes the result BACK to `property_media.url`:
+      // without the filter it would overwrite a broker's video with a picture
+      // (or, for a YouTube row, fail and report the listing as "con error").
       const { data: media, error: mediaErr } = await supabase
         .from("property_media")
         .select("id, property_id, url, sort_order")
+        .eq("media_type", "IMAGE")
         .in("property_id", propIds)
         .order("sort_order", { ascending: true });
       if (mediaErr) throw mediaErr;
@@ -580,10 +586,15 @@ export default function ConfiguracionPage() {
 
       // Refresh featured_image_url for each touched property (cover = sort_order 0).
       for (const pid of touchedProps) {
+        // Same reason: the cover is a PHOTO. Videos sort after the photos, so
+        // an unfiltered `limit(1)` usually lands on a photo — but on a listing
+        // published with video and no photos it would set a video URL as
+        // `featured_image_url` and every listing card would break.
         const { data: cover } = await supabase
           .from("property_media")
           .select("url")
           .eq("property_id", pid)
+          .eq("media_type", "IMAGE")
           .order("sort_order", { ascending: true })
           .limit(1);
         if (cover?.[0]?.url) {

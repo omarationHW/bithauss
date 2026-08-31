@@ -7,7 +7,11 @@ import {
   buildStegoWatermarkSvg,
   buildSignablePayload,
   base64UrlEncode,
-  buildQrUrl,
+  buildVerificationUrl,
+  canonicalJson,
+  signPayload,
+  timingSafeEqualHex,
+  verifyPayloadSignature,
   sha256,
   computeSecurity,
   type CertData,
@@ -118,21 +122,99 @@ describe("base64UrlEncode", () => {
   });
 });
 
-describe("buildSignablePayload + buildQrUrl", () => {
-  it("includes folio-checksum, serie, hash prefix, iat and verify URL", () => {
+describe("buildSignablePayload", () => {
+  it("includes folio-checksum, serie, hash prefix and iat", () => {
     const hash = "a".repeat(64);
     const ts = "2026-05-19T12:00:00.000Z";
-    const payload = buildSignablePayload(fixture, hash, 7, ts);
+    const payload = buildSignablePayload(fixture, hash, 7, ts, "https://x/certificado/abc");
     expect(payload.folio).toBe("000123-7");
     expect(payload.serie).toBe("BRC-ABC");
     expect(payload.hash).toBe("a".repeat(32));
     expect(payload.iat).toBe(ts);
-    expect(payload.verify).toContain("/verify/000123");
+    expect(payload.verify).toBe("https://x/certificado/abc");
   });
 
-  it("builds a verify URL with the encoded payload as ?p=", () => {
-    const url = buildQrUrl(buildSignablePayload(fixture, "f".repeat(64), 0, "2026-05-19T00:00:00.000Z"));
-    expect(url).toMatch(/^https:\/\/bithauss\.com\/verify\?p=[A-Za-z0-9\-_]+$/);
+  it("no longer carries a fake signature field", () => {
+    // `sig: "[PENDIENTE-FIRMA-PKI]"` read as "signed" while signing nothing.
+    const payload = buildSignablePayload(fixture, "f".repeat(64), 0, "2026-05-19T00:00:00.000Z");
+    expect(payload).not.toHaveProperty("sig");
+  });
+});
+
+describe("buildVerificationUrl", () => {
+  it("points at the certificate page, which is backed by /api/verify/<id>", () => {
+    expect(buildVerificationUrl("https://bithauss.com", "cert-uuid")).toBe(
+      "https://bithauss.com/certificado/cert-uuid",
+    );
+  });
+
+  it("tolerates a trailing slash in the origin", () => {
+    expect(buildVerificationUrl("https://bithauss.com/", "abc")).toBe(
+      "https://bithauss.com/certificado/abc",
+    );
+  });
+});
+
+describe("canonicalJson", () => {
+  it("sorts keys so the same payload always signs to the same bytes", () => {
+    expect(canonicalJson({ b: 1, a: 2 })).toBe(canonicalJson({ a: 2, b: 1 }));
+  });
+
+  it("recurses into nested objects and arrays", () => {
+    expect(canonicalJson({ x: [{ b: 1, a: 2 }] })).toBe('{"x":[{"a":2,"b":1}]}');
+  });
+});
+
+describe("signPayload / verifyPayloadSignature", () => {
+  const secret = "server-side-secret-value";
+  const payload = { folio: "000123-7", serie: "BRC-ABC" };
+
+  it("refuses to sign without a secret instead of falling back to a constant", async () => {
+    await expect(signPayload(payload, "")).rejects.toThrow(/secreto/i);
+    await expect(signPayload(payload, "   ")).rejects.toThrow(/secreto/i);
+  });
+
+  it("produces a stable 64-char hex HMAC", async () => {
+    const sig = await signPayload(payload, secret);
+    expect(sig).toHaveLength(64);
+    expect(sig).toMatch(/^[0-9a-f]+$/);
+    expect(await signPayload(payload, secret)).toBe(sig);
+  });
+
+  it("is independent of key order but not of content", async () => {
+    expect(await signPayload({ serie: "BRC-ABC", folio: "000123-7" }, secret)).toBe(
+      await signPayload(payload, secret),
+    );
+    expect(await signPayload({ ...payload, folio: "000124-7" }, secret)).not.toBe(
+      await signPayload(payload, secret),
+    );
+  });
+
+  it("changes with the secret", async () => {
+    expect(await signPayload(payload, "another-secret")).not.toBe(
+      await signPayload(payload, secret),
+    );
+  });
+
+  it("verifies a genuine signature and rejects a forged one", async () => {
+    const sig = await signPayload(payload, secret);
+    expect(await verifyPayloadSignature(payload, sig, secret)).toBe(true);
+    expect(await verifyPayloadSignature(payload, "0".repeat(64), secret)).toBe(false);
+    expect(
+      await verifyPayloadSignature({ ...payload, folio: "999" }, sig, secret),
+    ).toBe(false);
+  });
+});
+
+describe("timingSafeEqualHex", () => {
+  it("matches identical strings and rejects different ones", () => {
+    expect(timingSafeEqualHex("abcd", "abcd")).toBe(true);
+    expect(timingSafeEqualHex("abcd", "abce")).toBe(false);
+  });
+
+  it("rejects on a length mismatch without indexing out of range", () => {
+    expect(timingSafeEqualHex("abcd", "abcde")).toBe(false);
+    expect(timingSafeEqualHex("", "a")).toBe(false);
   });
 });
 
@@ -160,6 +242,19 @@ describe("computeSecurity", () => {
     expect(s.checksum).toBeLessThanOrEqual(9);
     expect(new Date(s.timestamp).toString()).not.toBe("Invalid Date");
     expect(s.payload.folio).toBe(`${fixture.folio}-${s.checksum}`);
-    expect(s.encodedPayload).toContain("https://bithauss.com/verify?p=");
+  });
+
+  it("encodes nothing in the QR unless given an authoritative URL", async () => {
+    // Otherwise the QR carried an unsigned, self-asserted payload pointing at
+    // a route that does not exist.
+    const s = await computeSecurity(fixture);
+    expect(s.encodedPayload).toBeNull();
+  });
+
+  it("encodes the verification URL when one is supplied", async () => {
+    const verifyUrl = "https://bithauss.com/certificado/cert-uuid";
+    const s = await computeSecurity(fixture, { verifyUrl });
+    expect(s.encodedPayload).toBe(verifyUrl);
+    expect(s.payload.verify).toBe(verifyUrl);
   });
 });

@@ -1,18 +1,15 @@
 import { NextResponse } from "next/server";
 import { createHmac, randomUUID } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { logError } from "@/lib/log";
 import { checkRateLimit, clientIp } from "@/lib/rate-limit";
+import { requireSigningKey } from "@/lib/brc-verify-secret";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const RATE_LIMIT = { limit: 20, windowMs: 60_000 } as const;
-
-const SIGNING_KEY =
-  process.env.BRC_VERIFY_SECRET ??
-  // Dev fallback — DO NOT rely on this in production.
-  "dev-only-brc-verify-secret-rotate-in-prod";
 
 /** Stable JSON serializer (sorted keys) so the signature is deterministic. */
 function canonical(value: unknown): string {
@@ -26,32 +23,50 @@ function canonical(value: unknown): string {
 }
 
 function sign(payload: unknown): string {
-  return createHmac("sha256", SIGNING_KEY).update(canonical(payload)).digest("hex");
+  return createHmac("sha256", requireSigningKey())
+    .update(canonical(payload))
+    .digest("hex");
 }
 
 type CertStatus = "VIGENTE" | "EXPIRADO" | "REVOCADO" | "NO_ENCONTRADO";
+
+/**
+ * BH-09: the public answer is deliberately the minimum a third party needs to
+ * believe the certificate: is it real, is it current, who issued it, and which
+ * property (city/state, never the street). `address_line`, `price` and
+ * `owner_id` used to travel to anyone holding the share link — for a
+ * high-value property that combination is exactly the dataset used to plan a
+ * targeted robbery, and under LFPDPPP it is a disclosure with no declared
+ * purpose. Those fields now require an authenticated participant.
+ */
+interface PublicProperty {
+  id: string;
+  title: string;
+  city: string | null;
+  state: string | null;
+}
+
+interface PrivilegedProperty extends PublicProperty {
+  address_line: string | null;
+  price: number;
+  currency: string;
+  featured_image_url: string | null;
+  owner_id: string | null;
+}
 
 interface VerifyResponse {
   valid: boolean;
   status: CertStatus;
   reason?: string;
+  /** "publica" | "participante" — tells the client which fields it may expect. */
+  scope: "publica" | "participante";
   certificate?: {
     id: string;
     certificate_number: string;
     issued_at: string;
     expires_at: string;
   };
-  property?: {
-    id: string;
-    title: string;
-    address_line: string | null;
-    city: string | null;
-    state: string | null;
-    price: number;
-    currency: string;
-    featured_image_url: string | null;
-    owner_id: string | null;
-  };
+  property?: PublicProperty | PrivilegedProperty;
   notary?: {
     name: string | null;
     number: string | null;
@@ -69,16 +84,65 @@ function notFound(): NextResponse {
     valid: false,
     status: "NO_ENCONTRADO" as CertStatus,
     reason: "El certificado solicitado no existe.",
+    scope: "publica" as const,
     verifiedAt,
     verificationId,
   };
   return NextResponse.json({ ...body, signature: sign(body) }, { status: 404 });
 }
 
+/**
+ * Is the caller a participant of this certificate (owner of the property, the
+ * issuing notary, or an admin)? Only they get the full detail set. Failure to
+ * resolve a session is not an error — it just means "public".
+ */
+async function callerIsParticipant(
+  admin: ReturnType<typeof createAdminClient>,
+  ownerId: string | null | undefined,
+  issuedBy: string | null | undefined,
+): Promise<boolean> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return false;
+    if (ownerId && user.id === ownerId) return true;
+    if (issuedBy && user.id === issuedBy) return true;
+
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+    const role = (profile as { role?: string } | null)?.role;
+    return role === "ADMIN" || role === "OPERADOR_BRC";
+  } catch {
+    // No cookie store (unit tests, edge invocation) → treat as anonymous.
+    return false;
+  }
+}
+
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  // Fail loudly and early when the deployment is missing its signing key.
+  // Doing this before anything else keeps `notFound()` (which signs) safe and
+  // stops a configuration bug from being reported as "certificado inexistente".
+  try {
+    requireSigningKey();
+  } catch (err) {
+    logError("verify: signing key missing", err);
+    return NextResponse.json(
+      {
+        error:
+          "El servicio de verificación no está configurado correctamente. Escríbenos a soporte@bithauss.com.",
+      },
+      { status: 500 },
+    );
+  }
+
   const { id } = await params;
   if (!id) return notFound();
 
@@ -164,14 +228,50 @@ export async function GET(
       reason = "El periodo de vigencia de 90 días ha terminado.";
     }
 
-    let property = null;
+    let rawProperty: {
+      id: string;
+      title: string;
+      address_line: string | null;
+      city: string | null;
+      state: string | null;
+      price: number;
+      currency: string;
+      featured_image_url: string | null;
+      owner_id: string | null;
+    } | null = null;
     if (cert.property_id) {
       const { data: p } = await supabase
         .from("properties")
         .select("id, title, address_line, city, state, price, currency, featured_image_url, owner_id")
         .eq("id", cert.property_id)
         .maybeSingle();
-      property = p;
+      rawProperty = p;
+    }
+
+    const privileged = await callerIsParticipant(
+      supabase,
+      rawProperty?.owner_id,
+      cert.issued_by,
+    );
+
+    let property: PublicProperty | PrivilegedProperty | undefined;
+    if (rawProperty) {
+      const base: PublicProperty = {
+        id: rawProperty.id,
+        title: rawProperty.title,
+        city: rawProperty.city,
+        state: rawProperty.state,
+      };
+      property = privileged
+        ? {
+            ...base,
+            address_line: rawProperty.address_line,
+            price: rawProperty.price,
+            currency: rawProperty.currency,
+            featured_image_url: rawProperty.featured_image_url,
+            owner_id: rawProperty.owner_id,
+          }
+        : base;
     }
 
     let notaryName: string | null = null;
@@ -204,25 +304,14 @@ export async function GET(
       valid: status === "VIGENTE",
       status,
       reason,
+      scope: privileged ? "participante" : "publica",
       certificate: {
         id: cert.id,
         certificate_number: cert.certificate_number,
         issued_at: cert.issued_at,
         expires_at: cert.expires_at,
       },
-      property: property
-        ? {
-            id: property.id,
-            title: property.title,
-            address_line: property.address_line,
-            city: property.city,
-            state: property.state,
-            price: property.price,
-            currency: property.currency,
-            featured_image_url: property.featured_image_url,
-            owner_id: property.owner_id,
-          }
-        : undefined,
+      property,
       notary: {
         name: notaryName,
         number: notaryNumber,
@@ -235,6 +324,17 @@ export async function GET(
     return NextResponse.json({ ...body, signature: sign(body) });
   } catch (err) {
     logError("verify: unexpected error", err);
+    // A missing signing key must not masquerade as "certificate not found":
+    // that is exactly how BH-02 stayed invisible in production.
+    if (err instanceof Error && err.message.includes("BRC_VERIFY_SECRET")) {
+      return NextResponse.json(
+        {
+          error:
+            "El servicio de verificación no está configurado correctamente. Escríbenos a soporte@bithauss.com.",
+        },
+        { status: 500 },
+      );
+    }
     return notFound();
   }
 }

@@ -29,6 +29,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  BRC_STATUS_BADGE_STYLES,
+  BRC_STATUS_SHORT_LABELS,
+  isBrcInProgress,
+} from "@/lib/brc-notarial";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -41,10 +46,30 @@ type DbStatus =
   | "ARCHIVADO"
   /** Legacy soft delete. Nothing sets it any more — see migration 015. */
   | "ELIMINADO";
-type BrcStatus = "CERTIFICADO" | "EN_REVISION" | "NO_SOLICITADO" | null;
+/**
+ * `properties.brc_status` as the row may CARRY it. The certification flow has
+ * four intermediate states (migración 024 added PENDIENTE_EMISION_BRC), so the
+ * read type must cover the whole Postgres enum: a narrower type is how the
+ * badge and the filter below quietly stopped covering half the flow.
+ */
+type BrcStatus =
+  | "NO_SOLICITADO"
+  | "BORRADOR"
+  | "EN_REVISION"
+  | "DOCUMENTACION_PENDIENTE"
+  | "VALIDACION_NOTARIAL"
+  | "PENDIENTE_EMISION_BRC"
+  | "CERTIFICADO"
+  | "RECHAZADO"
+  | null;
 type TabValue = "todas" | "PUBLICADO" | "BORRADOR" | "PAUSADO" | "ARCHIVADO";
 
-type OperationType = "VENTA" | "RENTA" | "TRASPASO";
+/**
+ * Operations a row may CARRY. TRASPASO is retired — it can no longer be
+ * chosen when publishing — but historical rows still hold it and must keep
+ * rendering, so the read type stays wide.
+ */
+type OperationType = "VENTA" | "RENTA" | "VENTA_RENTA" | "TRASPASO";
 type BrcFilter = "todas" | "CERTIFICADO" | "EN_REVISION" | "NO_SOLICITADO";
 type OpFilter = "todas" | OperationType;
 
@@ -130,28 +155,32 @@ function estadoBadge(status: DbStatus) {
   );
 }
 
+/**
+ * Badge for the certification state of a listing.
+ *
+ * Reads the shared maps in `lib/brc-notarial` instead of a local two-entry
+ * table: the local one only knew CERTIFICADO and EN_REVISION, so a property
+ * sitting in DOCUMENTACION_PENDIENTE, VALIDACION_NOTARIAL or (since migración
+ * 024) PENDIENTE_EMISION_BRC rendered NO badge at all — the owner saw the
+ * mark disappear mid-flow and reappear at the end.
+ */
 function brcBadge(brcStatus: BrcStatus) {
-  if (!brcStatus || brcStatus === "NO_SOLICITADO") return null;
+  if (!brcStatus || brcStatus === "NO_SOLICITADO" || brcStatus === "BORRADOR") {
+    return null;
+  }
 
-  const map: Record<string, { classes: string; label: string }> = {
-    CERTIFICADO: {
-      classes: "bg-emerald-50 text-emerald-600 border-emerald-200",
-      label: "BRC Certificado",
-    },
-    EN_REVISION: {
-      classes: "bg-blue-50 text-blue-600 border-blue-200",
-      label: "BRC En Revisión",
-    },
-  };
-  const info = map[brcStatus];
-  if (!info) return null;
+  const label = BRC_STATUS_SHORT_LABELS[brcStatus];
+  if (!label) return null;
+  const classes =
+    BRC_STATUS_BADGE_STYLES[brcStatus] ??
+    "bg-gray-50 text-gray-600 border-gray-200";
 
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold ${info.classes}`}
+      className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold ${classes}`}
     >
       <ShieldBrc className="h-3 w-3" />
-      {info.label}
+      {label}
     </span>
   );
 }
@@ -250,7 +279,16 @@ export default function PropiedadesPage() {
   /* ---- Filter ---------------------------------------------------- */
   const filtered = properties.filter((p) => {
     if (activeTab !== "todas" && p.status !== activeTab) return false;
-    if (brcFilter !== "todas" && p.brc_status !== brcFilter) return false;
+    // "En revisión" means "certification under way", which is FOUR states, not
+    // one: filtering on equality hid every expediente past the first step.
+    if (brcFilter === "EN_REVISION" && !isBrcInProgress(p.brc_status)) return false;
+    if (
+      brcFilter !== "todas" &&
+      brcFilter !== "EN_REVISION" &&
+      p.brc_status !== brcFilter
+    ) {
+      return false;
+    }
     if (opFilter !== "todas" && p.operation !== opFilter) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -390,7 +428,10 @@ export default function PropiedadesPage() {
       {/* Extra filters */}
       <div className="flex flex-wrap gap-2">
         <span className="text-xs font-medium text-gray-400 self-center mr-1">Operación:</span>
-        {([["todas", "Todas"], ["VENTA", "Venta"], ["RENTA", "Renta"], ["TRASPASO", "Traspaso"]] as const).map(([val, label]) => (
+        {/* Traspaso is gone as an operation (it is now the "¿Aplica traspaso?"
+            attribute of a Local Comercial); Venta y Renta was missing, which
+            made VENTA_RENTA listings unfilterable. */}
+        {([["todas", "Todas"], ["VENTA", "Venta"], ["RENTA", "Renta"], ["VENTA_RENTA", "Venta y Renta"]] as const).map(([val, label]) => (
           <button
             key={val}
             onClick={() => setOpFilter(val as OpFilter)}

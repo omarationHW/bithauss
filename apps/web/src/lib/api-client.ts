@@ -1,3 +1,8 @@
+import {
+  isAccountDisabledResponse,
+  expireDisabledSession,
+} from "@/lib/account-status";
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api";
 
@@ -42,6 +47,12 @@ async function request<T>(
 
   if (!response.ok) {
     const data = await response.json().catch(() => null);
+    // BH-04: an administrator deactivated this account while the tab was open.
+    // Drop the session instead of letting the user keep hitting a wall of
+    // generic 403s with no explanation.
+    if (isAccountDisabledResponse(response.status, data)) {
+      void expireDisabledSession();
+    }
     throw new ApiError(response.status, response.statusText, data);
   }
 

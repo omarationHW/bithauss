@@ -38,6 +38,8 @@ import {
   type FichaOptions,
   type FichaOrientation,
 } from "./ficha-options";
+import { propertyOperationLabel } from "./property-operations";
+import { getPropertyFieldLabel, isFieldVisible } from "@/lib/property-fields";
 
 export interface FichaProperty {
   id: string;
@@ -54,6 +56,10 @@ export interface FichaProperty {
   area_total: number | null;
   area_built: number | null;
   bedrooms: number | null;
+  /** Matrix row "No. Privados / Espacios" (oficina, local, bodega, nave, edificio). */
+  private_units?: number | null;
+  /** Matrix row "Antigüedad" in years. */
+  age_years?: number | null;
   bathrooms: number | null;
   half_bathrooms?: number | null;
   parking_spaces: number | null;
@@ -62,7 +68,16 @@ export interface FichaProperty {
   maintenance_fee?: number | null;
   has_service_room?: boolean;
   has_storage?: boolean;
-  has_terrace?: boolean;
+  /** Tri-state since migration 027: null means the owner never answered. */
+  has_terrace?: boolean | null;
+  /** Matrix row "Amueblado" (tri-state, migración 027). */
+  is_furnished?: boolean | null;
+  /**
+   * Matrix row "¿Aplica traspaso?" — LOCAL_COMERCIAL only. This is what
+   * replaced TRASPASO as an operation, so it is the answer a buyer of a
+   * commercial unit most needs to see on the sheet.
+   */
+  applies_traspaso?: boolean | null;
   has_laundry_room?: boolean;
   has_integrated_kitchen?: boolean;
   address_line: string | null;
@@ -137,13 +152,6 @@ function formatPrice(price: number, currency: string): string {
   }).format(price);
 }
 
-function operationLabel(op: string): string {
-  if (op === "VENTA") return "En venta";
-  if (op === "RENTA") return "En renta";
-  if (op === "VENTA_RENTA") return "Venta y renta";
-  if (op === "TRASPASO") return "En traspaso";
-  return op;
-}
 
 function typeLabel(t: string): string {
   const map: Record<string, string> = {
@@ -541,7 +549,7 @@ function HeroBadges({
           borderRadius: "8px",
         }}
       >
-        {operationLabel(operation)}
+        {propertyOperationLabel(operation)}
       </span>
       {isBrcCertified && (
         <span
@@ -678,7 +686,22 @@ export function FichaTecnicaTemplate({
       out.push({ key: "area_built", icon: Building2, label: "Construcción", value: `${property.area_built} m²` });
     }
     if (property.bedrooms != null) {
-      out.push({ key: "bedrooms", icon: BedDouble, label: "Recámaras", value: String(property.bedrooms) });
+      // "Recámaras" for a house, "habitaciones" for a hotel — the label comes
+      // from the same matrix the capture form used.
+      out.push({
+        key: "bedrooms",
+        icon: BedDouble,
+        label: getPropertyFieldLabel("bedrooms", property.type).replace("No. de ", ""),
+        value: String(property.bedrooms),
+      });
+    }
+    if (property.private_units != null) {
+      out.push({
+        key: "private_units",
+        icon: Building2,
+        label: getPropertyFieldLabel("private_units", property.type).replace("No. de ", ""),
+        value: String(property.private_units),
+      });
     }
     if (property.bathrooms != null) {
       out.push({ key: "bathrooms", icon: Bath, label: "Baños", value: String(property.bathrooms) });
@@ -687,16 +710,43 @@ export function FichaTecnicaTemplate({
       out.push({ key: "parking", icon: Car, label: "Estacionamientos", value: String(property.parking_spaces) });
     }
     if (property.floors != null) {
-      out.push({ key: "floors", icon: Building2, label: "Pisos / niveles", value: String(property.floors) });
+      out.push({ key: "floors", icon: Building2, label: "Niveles construidos", value: String(property.floors) });
+    }
+    if (property.age_years != null) {
+      out.push({ key: "age_years", icon: Building2, label: "Antigüedad", value: `${property.age_years} años` });
+    }
+    // Tri-state matrix rows. `null` = "sin responder" and must NOT print as
+    // "No" — that would answer on the publisher's behalf. They are gated by
+    // the matrix so a "¿Aplica traspaso?" line never appears on a house.
+    const triState: Array<["is_furnished" | "has_terrace" | "applies_traspaso", string]> = [
+      ["is_furnished", "Amueblado"],
+      ["has_terrace", "Terraza"],
+      ["applies_traspaso", "¿Aplica traspaso?"],
+    ];
+    for (const [field, label] of triState) {
+      const value = property[field];
+      if (value == null || !isFieldVisible(field, property.type)) continue;
+      out.push({
+        key: field,
+        icon: Building2,
+        label,
+        value: value ? "Sí" : "No",
+      });
     }
     return out;
   }, [
+    property.type,
     property.area_total,
     property.area_built,
     property.bedrooms,
+    property.private_units,
     property.bathrooms,
     property.parking_spaces,
     property.floors,
+    property.age_years,
+    property.is_furnished,
+    property.has_terrace,
+    property.applies_traspaso,
   ]);
 
   // Photos for gallery: dedupe featured + media.
@@ -1226,7 +1276,7 @@ export function FichaTecnicaTemplate({
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px dashed #e2e8f0" }}>
                 <dt style={{ color: "#64748b" }}>Operación</dt>
-                <dd style={{ margin: 0, fontWeight: 600 }}>{operationLabel(property.operation)}</dd>
+                <dd style={{ margin: 0, fontWeight: 600 }}>{propertyOperationLabel(property.operation)}</dd>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px dashed #e2e8f0" }}>
                 <dt style={{ color: "#64748b" }}>Estado BRC</dt>

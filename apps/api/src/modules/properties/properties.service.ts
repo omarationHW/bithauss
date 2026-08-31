@@ -29,7 +29,24 @@ import {
 } from 'class-validator';
 
 const PROPERTY_TYPES = ['CASA', 'CASA_CONDOMINIO', 'DEPARTAMENTO', 'TERRENO', 'OFICINA', 'LOCAL_COMERCIAL', 'BODEGA', 'HOTEL', 'EDIFICIO', 'NAVE_INDUSTRIAL', 'CASA_USO_SUELO', 'OTRO'] as const;
-const PROPERTY_OPERATIONS = ['VENTA', 'RENTA', 'VENTA_RENTA', 'TRASPASO'] as const;
+/**
+ * Operations a listing may be created or updated with.
+ *
+ * TRASPASO was retired: a traspaso is an attribute of a commercial unit
+ * (`applies_traspaso`, Local Comercial only), not a way of transacting the
+ * property. It stays in the Postgres enum because values cannot be dropped,
+ * so historical rows keep reading fine — but nothing may write it again.
+ */
+const PROPERTY_OPERATIONS = ['VENTA', 'RENTA', 'VENTA_RENTA'] as const;
+
+/** Retired operations: readable on historical rows, never writable. */
+const LEGACY_PROPERTY_OPERATIONS = ['TRASPASO'] as const;
+
+/** Everything a stored row may carry — used by read-side filters only. */
+const READABLE_PROPERTY_OPERATIONS = [
+  ...PROPERTY_OPERATIONS,
+  ...LEGACY_PROPERTY_OPERATIONS,
+] as const;
 const PROPERTY_STATUSES = ['BORRADOR', 'PENDIENTE', 'PUBLICADO', 'PAUSADO', 'VENDIDO', 'RENTADO'] as const;
 const PROPERTY_BRC_STATUSES = ['SIN_BRC', 'EN_PROCESO', 'CERTIFICADO', 'RECHAZADO'] as const;
 const CURRENCIES = ['MXN', 'USD'] as const;
@@ -63,6 +80,17 @@ export class CreatePropertyDto {
   @IsOptional() @IsNumber() @Min(0) @Max(200) floors?: number;
   @IsOptional() @IsNumber() @Min(0) @Max(500) floor_number?: number;
   @IsOptional() @IsNumber() @Min(0) maintenance_fee?: number;
+
+  // Matrix rows added in migration 027 (see PROPERTY_FIELD_MATRIX in
+  // @bithauss/validators for which types require which).
+  @IsOptional() @IsNumber() @Min(0) @Max(500) age_years?: number;
+  @IsOptional() @IsNumber() @Min(0) @Max(10_000) private_units?: number;
+  /** Tri-state ("forzar a responder"): null/absent means unanswered. */
+  @IsOptional() @IsBoolean() is_furnished?: boolean;
+  /** Tri-state, Local Comercial only. Replaced the TRASPASO operation. */
+  @IsOptional() @IsBoolean() applies_traspaso?: boolean;
+  /** The publisher confirmed their amenities selection (may be empty). */
+  @IsOptional() @IsBoolean() amenities_answered?: boolean;
 
   @IsOptional() @IsBoolean() has_service_room?: boolean;
   @IsOptional() @IsBoolean() has_storage?: boolean;
@@ -109,6 +137,12 @@ export class UpdatePropertyDto {
   @IsOptional() @IsNumber() @Min(0) @Max(200) floors?: number;
   @IsOptional() @IsNumber() @Min(0) @Max(500) floor_number?: number;
   @IsOptional() @IsNumber() @Min(0) maintenance_fee?: number;
+  // Matrix rows added in migration 027.
+  @IsOptional() @IsNumber() @Min(0) @Max(500) age_years?: number;
+  @IsOptional() @IsNumber() @Min(0) @Max(10_000) private_units?: number;
+  @IsOptional() @IsBoolean() is_furnished?: boolean;
+  @IsOptional() @IsBoolean() applies_traspaso?: boolean;
+  @IsOptional() @IsBoolean() amenities_answered?: boolean;
   @IsOptional() @IsBoolean() has_service_room?: boolean;
   @IsOptional() @IsBoolean() has_storage?: boolean;
   @IsOptional() @IsBoolean() has_terrace?: boolean;
@@ -132,7 +166,9 @@ export class PropertyFilters {
   @IsOptional() @IsNumber() @Min(1) @Max(100) limit?: number;
   @IsOptional() @IsString() @Length(0, 200) search?: string;
   @IsOptional() @IsString() @IsIn(PROPERTY_TYPES as unknown as string[]) type?: string;
-  @IsOptional() @IsString() @IsIn(PROPERTY_OPERATIONS as unknown as string[]) operation?: string;
+  // Read-side: a filter may still narrow to a retired operation so historical
+  // listings remain reachable.
+  @IsOptional() @IsString() @IsIn(READABLE_PROPERTY_OPERATIONS as unknown as string[]) operation?: string;
   @IsOptional() @IsString() @IsIn(PROPERTY_STATUSES as unknown as string[]) status?: string;
   @IsOptional() @IsString() @Length(0, 100) city?: string;
   @IsOptional() @IsString() @Length(0, 100) state?: string;
@@ -234,9 +270,16 @@ export class PropertiesService {
         floors: dto.floors ?? null,
         floor_number: dto.floor_number ?? null,
         maintenance_fee: dto.maintenance_fee ?? null,
+        age_years: dto.age_years ?? null,
+        private_units: dto.private_units ?? null,
+        // Tri-state: an unanswered "Amueblado"/"Terraza"/"¿Aplica traspaso?"
+        // must persist as NULL. Defaulting to false would answer "No" on the
+        // publisher's behalf, which is what "forzar a responder" forbids.
+        is_furnished: dto.is_furnished ?? null,
+        applies_traspaso: dto.applies_traspaso ?? null,
         has_service_room: dto.has_service_room ?? false,
         has_storage: dto.has_storage ?? false,
-        has_terrace: dto.has_terrace ?? false,
+        has_terrace: dto.has_terrace ?? null,
         has_laundry_room: dto.has_laundry_room ?? false,
         has_integrated_kitchen: dto.has_integrated_kitchen ?? false,
         address_line: dto.address_line ?? null,
@@ -249,6 +292,7 @@ export class PropertiesService {
         longitude: dto.longitude ?? null,
         show_address: dto.show_address ?? true,
         amenities: dto.amenities ?? [],
+        amenities_answered: dto.amenities_answered ?? false,
         featured_image_url: dto.featured_image_url ?? null,
       })
       .select('*')
@@ -398,9 +442,17 @@ export class PropertiesService {
       'area_total',
       'area_built',
       'bedrooms',
+      'private_units',
       'bathrooms',
+      'half_bathrooms',
       'parking_spaces',
       'floors',
+      'floor_number',
+      'maintenance_fee',
+      'age_years',
+      'is_furnished',
+      'has_terrace',
+      'applies_traspaso',
       'address_line',
       'neighborhood',
       'city',
@@ -410,6 +462,7 @@ export class PropertiesService {
       'latitude',
       'longitude',
       'amenities',
+      'amenities_answered',
       'featured_image_url',
     ];
 

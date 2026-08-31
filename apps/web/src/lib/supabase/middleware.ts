@@ -47,15 +47,37 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
+  const isProtected =
+    pathname.startsWith("/dashboard") || pathname.startsWith("/admin");
 
   // Protected routes: redirect to login if not authenticated
-  if (
-    !user &&
-    (pathname.startsWith("/dashboard") || pathname.startsWith("/admin"))
-  ) {
+  if (!user && isProtected) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth/login";
+    url.search = "";
     return NextResponse.redirect(url);
+  }
+
+  // BH-04: `is_active` was written by the admin panel and read by nobody, so
+  // "desactivar" was a label, not a control. The API now denies deactivated
+  // accounts; the middleware handles the other half — otherwise the dashboard
+  // still renders (empty, with failing calls) and the user has no idea why.
+  // One profile read per protected navigation, under the user's own session,
+  // so RLS still applies.
+  if (user && isProtected) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("is_active")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profile && profile.is_active === false) {
+      await supabase.auth.signOut();
+      const url = request.nextUrl.clone();
+      url.pathname = "/auth/login";
+      url.search = "?error=cuenta_desactivada";
+      return NextResponse.redirect(url);
+    }
   }
 
   // Redirect authenticated users away from auth pages

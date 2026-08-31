@@ -1,4 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // property-video.ts parses embed URLs with the WHATWG `URL` class, which
+    // exists in every runtime that consumes this package (browser and Node
+    // 18+) but is not declared by the ES2022 lib alone.
+    "lib": ["ES2022", "DOM"]
+  },
   "include": ["src"]
 }

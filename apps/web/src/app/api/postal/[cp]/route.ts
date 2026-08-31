@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { lookupPostal } from "@/lib/sepomex-server";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -10,10 +11,18 @@ export const runtime = "nodejs";
 /*  shared with /api/localidades/*. The dataset stays on the server.   */
 /* ------------------------------------------------------------------ */
 
+// BH-10: the SEPOMEX catalog is a local dataset, but each lookup is a scan
+// over it. Without a cap the endpoint is a free CPU sink and lets anyone
+// mirror the whole catalog by walking the 100 000 possible codes.
+const RATE_LIMIT = { limit: 120, windowMs: 60_000 } as const;
+
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ cp: string }> }
 ) {
+  const limited = enforceRateLimit(req, "postal", RATE_LIMIT);
+  if (limited) return limited;
+
   const { cp } = await params;
 
   if (!/^\d{5}$/.test(cp)) {

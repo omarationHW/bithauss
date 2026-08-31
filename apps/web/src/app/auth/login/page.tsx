@@ -9,6 +9,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
+import {
+  loginErrorMessage,
+  LOGIN_ACCOUNT_DISABLED,
+  LOGIN_GENERIC_ERROR,
+} from "@/lib/auth-messages";
 
 /**
  * Persist the "Remember me" choice into a cookie that both the browser
@@ -29,6 +34,21 @@ function persistRememberFlag(remember: boolean) {
     : `${base}${window.location.protocol === "https:" ? "; Secure" : ""}`;
 }
 
+/**
+ * Reason codes the middleware / OAuth callback can hand back in the URL.
+ * Read from `window.location` rather than `useSearchParams()` so the page
+ * keeps rendering without a Suspense boundary.
+ */
+function redirectReasonMessage(): string | null {
+  if (typeof window === "undefined") return null;
+  const reason = new URLSearchParams(window.location.search).get("error");
+  if (!reason) return null;
+  if (reason === "cuenta_desactivada") return LOGIN_ACCOUNT_DISABLED;
+  if (reason === "callback_error")
+    return "No pudimos completar el inicio de sesión con ese proveedor. Inténtalo de nuevo.";
+  return LOGIN_GENERIC_ERROR;
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
@@ -38,7 +58,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() => redirectReasonMessage());
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,15 +74,10 @@ export default function LoginPage() {
       });
 
       if (signInError) {
-        if (signInError.message === "Invalid login credentials") {
-          setError("Correo electrónico o contraseña incorrectos.");
-        } else if (signInError.message === "Email not confirmed") {
-          setError("Tu correo electrónico aún no ha sido confirmado. Revisa tu bandeja de entrada.");
-        } else if (signInError.message.includes("rate limit")) {
-          setError("Demasiados intentos. Por favor espera unos minutos antes de intentar de nuevo.");
-        } else {
-          setError("Ocurrió un error al iniciar sesión. Inténtalo de nuevo.");
-        }
+        // BH-21: one message for "no existe la cuenta" and for "contraseña
+        // incorrecta". The mapping lives in @/lib/auth-messages so registro
+        // and login cannot drift apart.
+        setError(loginErrorMessage(signInError.message));
         return;
       }
 

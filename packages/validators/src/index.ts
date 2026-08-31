@@ -6,3 +6,4 @@ export * from './lead.schema';
 export * from './brc.schema';
 export * from './kyc.schema';
 export * from './purchase.schema';
+export * from './payment.schema';

@@ -2,10 +2,15 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  ForbiddenException,
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
 import { SupabaseConfigService } from '../../config/supabase.config';
+import {
+  DEFAULT_SIGNUP_ROLE,
+  PROTECTED_PROFILE_FIELDS,
+} from '../../common/constants/roles';
 
 import {
   IsString,
@@ -42,6 +47,28 @@ export interface Profile {
   avatar_url: string | null;
   created_at: string;
   updated_at: string;
+}
+
+
+/**
+ * Rejects any attempt to write a field only an admin may change.
+ *
+ * `forbidNonWhitelisted` in the global ValidationPipe already returns 400 for
+ * unknown properties, but that pipe is configured in main.ts and can be
+ * loosened by anyone; a privilege escalation must not depend on a global
+ * setting living in another file.
+ */
+export function assertNoProtectedProfileFields(payload: unknown): void {
+  if (!payload || typeof payload !== 'object') return;
+  const keys = Object.keys(payload as Record<string, unknown>);
+  const offending = keys.filter((k) =>
+    (PROTECTED_PROFILE_FIELDS as readonly string[]).includes(k),
+  );
+  if (offending.length > 0) {
+    throw new ForbiddenException(
+      `No puedes modificar estos campos desde tu perfil: ${offending.join(', ')}. Solicítalo a un administrador.`,
+    );
+  }
 }
 
 @Injectable()
@@ -85,6 +112,11 @@ export class ProfilesService {
         last_name: dto.last_name ?? null,
         phone: dto.phone ?? null,
         avatar_url: dto.avatar_url ?? null,
+        // BH-01: the role is decided here, never by the caller. The DTO has
+        // no `role` field and `forbidNonWhitelisted` already rejects extras,
+        // but writing it explicitly means a future DTO change cannot silently
+        // reopen the hole.
+        role: DEFAULT_SIGNUP_ROLE,
       })
       .select('*')
       .single();
@@ -109,6 +141,14 @@ export class ProfilesService {
     userId: string,
     dto: UpdateProfileDto,
   ): Promise<Profile> {
+    // BH-01: this service writes with the service_role client, which bypasses
+    // RLS — the "users cannot change their own role" policy in
+    // 003_security_hardening.sql does not protect this path at all. The
+    // allowlist below is therefore the only thing standing between a user and
+    // `role: 'ADMIN'`, so it is enforced explicitly rather than implied by the
+    // shape of the DTO.
+    assertNoProtectedProfileFields(dto);
+
     const supabase = this.supabaseConfig.getAdminClient();
 
     const updateData: Record<string, unknown> = {

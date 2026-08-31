@@ -41,6 +41,9 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { ShieldBrc } from '@/components/ui/shield-brc'
 import { FichaTecnicaTemplate } from "@/components/propiedades/ficha-tecnica-template";
+import { PropertyVideoGallery } from "@/components/propiedades/property-video-gallery";
+import { splitPropertyMedia } from "@/lib/property-video";
+import { BRC_STATUS_LABELS, isBrcInProgress } from "@/lib/brc-notarial";
 import { FichaOptionsDialog } from "@/components/propiedades/ficha-options-dialog";
 import {
   DEFAULT_FICHA_OPTIONS,
@@ -50,6 +53,12 @@ import {
 } from "@/components/propiedades/ficha-options";
 import { downloadFichaTecnica } from "@/lib/download-ficha-tecnica";
 import { logError } from "@/lib/log";
+import { propertyOperationLabel } from "@/components/propiedades/property-operations";
+import {
+  PROPERTY_FIELD_META,
+  getPropertyFieldLabel,
+  getVisibleFields,
+} from "@/lib/property-fields";
 
 interface Property {
   id: string;
@@ -75,9 +84,16 @@ interface Property {
   floors: number;
   floor_number: number | null;
   maintenance_fee: number | null;
+  /** Matrix rows added in migration 027. */
+  age_years: number | null;
+  private_units: number | null;
+  /** Tri-state: null means the publisher never answered. */
+  is_furnished: boolean | null;
+  applies_traspaso: boolean | null;
   has_service_room: boolean;
   has_storage: boolean;
-  has_terrace: boolean;
+  /** Tri-state since migration 027 (see is_furnished). */
+  has_terrace: boolean | null;
   has_laundry_room: boolean;
   has_integrated_kitchen: boolean;
   address_line: string;
@@ -103,6 +119,10 @@ interface PropertyMedia {
   property_id: string;
   url: string;
   media_type: string;
+  /** UPLOAD | YOUTUBE | VIMEO for VIDEO rows; null for photos (migración 030). */
+  provider: string | null;
+  external_id: string | null;
+  thumbnail_url: string | null;
   alt_text: string;
   sort_order: number;
 }
@@ -161,20 +181,6 @@ function formatTimeAgo(dateString: string): string {
   return `Publicado el ${date.toLocaleDateString("es-MX")}`;
 }
 
-function operationLabel(operation: string): string {
-  switch (operation) {
-    case "VENTA":
-      return "En Venta";
-    case "RENTA":
-      return "En Renta";
-    case "VENTA_RENTA":
-      return "Venta y Renta";
-    case "TRASPASO":
-      return "En Traspaso";
-    default:
-      return operation;
-  }
-}
 
 /**
  * Render the price block for the listing. When `show_price` is false we
@@ -680,16 +686,24 @@ export default function PropertyDetailPage() {
     };
   }, [pendingFicha, property]);
 
+  // Photos and videos share `property_media`, so the set must be split before
+  // anything renders: an unfiltered map would push an .mp4 URL into <Image>
+  // and into the ficha técnica PDF.
+  const { images: imageMedia, videos: videoMedia } = useMemo(
+    () => splitPropertyMedia(media),
+    [media],
+  );
+
   // Build images array from media or fallback to featured_image_url
   const images = useMemo(() => {
-    if (media.length > 0) {
-      return media.map((m) => m.url);
+    if (imageMedia.length > 0) {
+      return imageMedia.map((m) => m.url);
     }
     if (property?.featured_image_url) {
       return [property.featured_image_url];
     }
     return [];
-  }, [media, property?.featured_image_url]);
+  }, [imageMedia, property?.featured_image_url]);
 
   const amenities = property?.amenities ?? [];
 
@@ -860,7 +874,7 @@ export default function PropertyDetailPage() {
               />
               <div className="absolute top-3 left-3 flex gap-2">
                 <span className="bg-primary text-white text-xs font-semibold px-2.5 py-1 rounded-lg">
-                  {operationLabel(property.operation)}
+                  {propertyOperationLabel(property.operation)}
                 </span>
                 {isBrcCertified && (
                   <span
@@ -898,6 +912,13 @@ export default function PropertyDetailPage() {
             ))}
           </div>
         )}
+
+        {/* Video — renders nothing when the listing has none, so a property
+            without video shows exactly the same page as before. */}
+        <PropertyVideoGallery
+          videos={videoMedia}
+          posterFallback={images[0] ?? property.featured_image_url ?? null}
+        />
 
         {/* Content */}
         <div className="grid gap-8 lg:grid-cols-3">
@@ -1041,8 +1062,11 @@ export default function PropertyDetailPage() {
               </div>
             )}
 
-            {/* BRC - In review */}
-            {property.brc_status === "EN_REVISION" && (
+            {/* BRC - Under way. Four states, not one: DOCUMENTACION_PENDIENTE,
+                VALIDACION_NOTARIAL and PENDIENTE_EMISION_BRC (migración 024)
+                used to render nothing at all, so the panel vanished between
+                submitting the expediente and the BRC being issued. */}
+            {isBrcInProgress(property.brc_status) && (
               <div
                 className="rounded-2xl p-5 flex items-center gap-4"
                 style={{ background: 'hsl(221 83% 53% / 0.06)' }}
@@ -1058,7 +1082,7 @@ export default function PropertyDetailPage() {
                 </div>
                 <span className="ml-auto shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-600">
                   <ShieldBrc className="h-3.5 w-3.5" />
-                  En revisión
+                  {BRC_STATUS_LABELS[property.brc_status] ?? "En revisión"}
                 </span>
               </div>
             )}
@@ -1086,31 +1110,37 @@ export default function PropertyDetailPage() {
               <TabsContent value="caracteristicas" className="mt-6 space-y-6">
                 {/* Numeric details */}
                 {(() => {
-                  const numericRows: { label: string; value: string }[] = [];
-                  if (property.type === "CASA") {
-                    if (property.area_total) numericRows.push({ label: "m² de terreno", value: `${property.area_total} m²` });
-                    if (property.area_built) numericRows.push({ label: "m² de construcción", value: `${property.area_built} m²` });
-                  } else if (property.type === "DEPARTAMENTO") {
-                    if (property.area_built) numericRows.push({ label: "Área construida", value: `${property.area_built} m²` });
-                    if (property.area_total) numericRows.push({ label: "Área total", value: `${property.area_total} m²` });
-                  } else {
-                    if (property.area_total) numericRows.push({ label: "Área total", value: `${property.area_total} m²` });
-                    if (property.area_built) numericRows.push({ label: "Área construida", value: `${property.area_built} m²` });
-                  }
-                  if (property.bedrooms != null) numericRows.push({ label: "Recámaras", value: String(property.bedrooms) });
-                  if (property.bathrooms != null) numericRows.push({ label: "Baños completos", value: String(property.bathrooms) });
-                  if (property.half_bathrooms != null) numericRows.push({ label: "Medios baños", value: String(property.half_bathrooms) });
-                  if (property.parking_spaces != null) numericRows.push({ label: "Estacionamientos", value: String(property.parking_spaces) });
-                  if (property.floors != null) numericRows.push({ label: property.type === "DEPARTAMENTO" ? "Niveles del depto" : "Niveles", value: String(property.floors) });
-                  if (property.type === "DEPARTAMENTO" && property.floor_number != null) {
-                    numericRows.push({ label: "Piso", value: String(property.floor_number) });
-                  }
-                  if (property.type === "DEPARTAMENTO" && property.maintenance_fee != null) {
-                    numericRows.push({
-                      label: "Cuota de mantenimiento",
-                      value: `${formatPrice(property.maintenance_fee, property.currency || "MXN")} ${property.currency || "MXN"}`,
-                    });
-                  }
+                  // Derived from the client's field matrix instead of a chain
+                  // of `type === "CASA"` branches: the rows shown here are, by
+                  // construction, the ones the publisher was asked for.
+                  const cur = property.currency || "MXN";
+                  const row = (field: string): { label: string; value: string } | null => {
+                    const label = getPropertyFieldLabel(
+                      field as Parameters<typeof getPropertyFieldLabel>[0],
+                      property.type
+                    );
+                    const meta =
+                      PROPERTY_FIELD_META[field as keyof typeof PROPERTY_FIELD_META];
+                    const raw = (property as unknown as Record<string, unknown>)[field];
+                    if (raw === null || raw === undefined) return null;
+                    if (meta.kind === "tristate") {
+                      return { label, value: raw === true ? "Sí" : "No" };
+                    }
+                    if (typeof raw !== "number") return null;
+                    if (meta.kind === "currency") {
+                      return { label, value: `${formatPrice(raw, cur)} ${cur}` };
+                    }
+                    return {
+                      label,
+                      value: meta.unit ? `${raw} ${meta.unit}` : String(raw),
+                    };
+                  };
+                  const numericRows = getVisibleFields(property.type)
+                    // Price and currency head the page; amenities have their
+                    // own block below.
+                    .filter((f) => f !== "price" && f !== "currency" && f !== "amenities")
+                    .map(row)
+                    .filter((r): r is { label: string; value: string } => r !== null);
                   if (numericRows.length === 0) return null;
                   return (
                     <div>
@@ -1135,7 +1165,8 @@ export default function PropertyDetailPage() {
                   const features: string[] = [];
                   if (property.has_service_room) features.push("Cuarto de servicio");
                   if (property.has_storage) features.push("Bodega");
-                  if (property.has_terrace) features.push("Terraza");
+                  // "Terraza" is a matrix row now and is listed under Detalles
+                  // with its explicit Sí/No answer.
                   if (property.has_laundry_room) features.push("Cuarto de lavado");
                   if (property.has_integrated_kitchen) features.push("Cocina integral");
                   if (features.length === 0) return null;
@@ -1217,7 +1248,7 @@ export default function PropertyDetailPage() {
                 </div>
               </div>
             )}
-            {property.brc_status === "EN_REVISION" && (
+            {isBrcInProgress(property.brc_status) && (
               <div className="rounded-2xl border border-blue-100 p-5">
                 <h3 className="font-semibold text-sm mb-3">Información Notarial</h3>
                 <div className="flex items-center gap-3">
@@ -1225,8 +1256,16 @@ export default function PropertyDetailPage() {
                     <ShieldBrc className="h-5 w-5 text-blue-600" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium">Revisión en proceso</p>
-                    <p className="text-xs text-muted-foreground">Un notario está validando la documentación legal de esta propiedad</p>
+                    <p className="text-sm font-medium">
+                      {property.brc_status === "PENDIENTE_EMISION_BRC"
+                        ? "Certificado Notarial emitido"
+                        : "Revisión en proceso"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {property.brc_status === "PENDIENTE_EMISION_BRC"
+                        ? "El notario ya emitió su Certificado Notarial. BitHauss está emitiendo el Certificado BRC."
+                        : "Un notario está validando la documentación legal de esta propiedad"}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -1394,7 +1433,7 @@ export default function PropertyDetailPage() {
       <div ref={fichaContainerRef}>
         <FichaTecnicaTemplate
           property={property}
-          media={media.map((m) => ({ id: m.id, url: m.url, alt_text: m.alt_text }))}
+          media={imageMedia.map((m) => ({ id: m.id, url: m.url, alt_text: m.alt_text }))}
           qrDataUrl={fichaQr}
           publicUrl={typeof window !== "undefined" ? `${window.location.origin}/propiedades/${property.id}` : `/propiedades/${property.id}`}
           generatedAt={new Date()}

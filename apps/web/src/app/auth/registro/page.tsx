@@ -22,6 +22,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 import { logError } from "@/lib/log";
+import {
+  resolveSignupRole,
+  isRoleApplication,
+  NOTARY_APPLICATION_NOTICE,
+} from "@/lib/auth-roles";
+import {
+  MIN_PASSWORD_LENGTH,
+  PASSWORD_TOO_SHORT,
+  SIGNUP_CHECK_YOUR_EMAIL,
+  signupErrorMessage,
+} from "@/lib/auth-messages";
 
 type Role = "comprador" | "vendedor" | "broker" | "inmobiliaria" | "notario";
 
@@ -74,6 +85,7 @@ export default function RegistroPage() {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   // Common
   const [email, setEmail] = useState("");
@@ -143,6 +155,7 @@ export default function RegistroPage() {
   const handleRegistro = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setNotice(null);
 
     if (!acceptedTerms) {
       setError("Debes aceptar los términos de servicio y política de privacidad.");
@@ -152,8 +165,8 @@ export default function RegistroPage() {
       setError("Las contraseñas no coinciden.");
       return;
     }
-    if (password.length < 6) {
-      setError("La contraseña debe tener al menos 6 caracteres.");
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setError(PASSWORD_TOO_SHORT);
       return;
     }
 
@@ -212,6 +225,14 @@ export default function RegistroPage() {
       const profileFirstName = isInmobiliaria ? companyName.trim() : firstName.trim();
       const profileLastName = isInmobiliaria ? null : lastName.trim();
 
+      // BH-01: `user_metadata` is writable by the user at any time
+      // (`auth.updateUser({ data: { role: 'ADMIN' } })`), so nothing that
+      // grants authority may travel through it. We keep the *request* under a
+      // distinct key that no guard or policy ever reads, purely so support can
+      // see what the person asked for.
+      const requestedRole = resolveSignupRole(selectedRole);
+      const isPrivilegedRequest = isRoleApplication(selectedRole.toUpperCase());
+
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
@@ -220,22 +241,20 @@ export default function RegistroPage() {
             first_name: profileFirstName,
             last_name: profileLastName ?? "",
             phone,
-            role: selectedRole.toUpperCase(),
+            signup_role_request: selectedRole.toUpperCase(),
           },
         },
       });
 
       if (signUpError) {
-        if (signUpError.message.includes("already registered")) {
-          setError("Este correo electrónico ya está registrado. Intenta iniciar sesión.");
-        } else if (signUpError.message.includes("valid email")) {
-          setError("Por favor ingresa un correo electrónico válido.");
-        } else if (signUpError.message.includes("password")) {
-          setError("La contraseña no cumple con los requisitos mínimos de seguridad.");
-        } else if (signUpError.message.includes("rate limit")) {
-          setError("Demasiados intentos. Por favor espera unos minutos.");
+        // BH-21: an "already registered" answer turns this form into an
+        // account-existence oracle. Present it as the ordinary success path;
+        // Supabase emails the real owner of the address instead.
+        const message = signupErrorMessage(signUpError.message);
+        if (message === null) {
+          setNotice(SIGNUP_CHECK_YOUR_EMAIL);
         } else {
-          setError("Ocurrió un error al crear tu cuenta. Inténtalo de nuevo.");
+          setError(message);
         }
         return;
       }
@@ -262,9 +281,20 @@ export default function RegistroPage() {
         rfc: rfc || null,
         address_line: addressLine || null,
         avatar_url: avatarUrl,
-        role: selectedRole.toUpperCase(),
+        // Never the raw selection: a privileged pick becomes an application,
+        // not a grant. RLS (031_security_rbac_hardening.sql) rejects the
+        // privileged values anyway — this keeps the two layers in agreement
+        // instead of relying on a database error the user would never
+        // understand.
+        role: requestedRole,
       });
-      if (profileError) logError("Error creating profile:", profileError);
+      if (profileError) {
+        logError("Error creating profile:", profileError);
+        setError(
+          "Creamos tu acceso pero no pudimos completar tu perfil. Inicia sesión e inténtalo de nuevo desde Configuración.",
+        );
+        return;
+      }
 
       // 3) If Inmobiliaria, create company_profiles row and link via company_id.
       if (isInmobiliaria) {
@@ -294,7 +324,9 @@ export default function RegistroPage() {
         }
       }
 
-      // 4) If Notario, link notary profile.
+      // 4) Notary: this is an APPLICATION, not a role grant. The row lands
+      //    with is_verified = false (column default) and an admin has to
+      //    verify it before RolesGuard lets the account act as a notary.
       if (isNotario) {
         const { error: notaryError } = await supabase.from("notary_profiles").insert({
           profile_id: userId,
@@ -302,6 +334,16 @@ export default function RegistroPage() {
           notary_state: notaryState.trim(),
         });
         if (notaryError) logError("Error creating notary profile:", notaryError);
+      }
+
+      if (isPrivilegedRequest) {
+        setNotice(NOTARY_APPLICATION_NOTICE);
+        // Give the person a beat to read why they are not a notary yet.
+        setTimeout(() => {
+          router.push("/dashboard");
+          router.refresh();
+        }, 4000);
+        return;
       }
 
       router.push("/dashboard");
@@ -332,6 +374,13 @@ export default function RegistroPage() {
       {error && (
         <div className="mb-4 rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
           {error}
+        </div>
+      )}
+
+      {/* Non-error notice (e.g. notary application received) */}
+      {notice && (
+        <div className="mb-4 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          {notice}
         </div>
       )}
 
@@ -582,6 +631,9 @@ export default function RegistroPage() {
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Mínimo {MIN_PASSWORD_LENGTH} caracteres.
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="confirm-password">Confirmar contraseña</Label>
@@ -611,8 +663,13 @@ export default function RegistroPage() {
           <div className="space-y-4 mt-4 p-4 rounded-xl border border-blue-200 bg-blue-50/50">
             <div className="flex items-center gap-2 text-sm font-semibold text-blue-700">
               <Scale className="h-4 w-4" />
-              Información Notarial
+              Solicitud de alta notarial
             </div>
+            <p className="text-xs text-blue-700/80">
+              El rol de Notario lo otorga BitHauss. Enviaremos tus datos a
+              revisión: hasta que un administrador verifique tu número de
+              notaría, tu cuenta operará con el perfil estándar.
+            </p>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="notary-number">Número de Notaría *</Label>

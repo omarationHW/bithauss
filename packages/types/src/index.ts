@@ -7,4 +7,5 @@ export * from './lead.types';
 export * from './brc.types';
 export * from './kyc.types';
 export * from './purchase.types';
+export * from './payment.types';
 export * from './notification.types';

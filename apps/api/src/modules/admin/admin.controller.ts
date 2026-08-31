@@ -1,5 +1,6 @@
 import { Body, Controller, Param, Patch, ParseUUIDPipe } from '@nestjs/common';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import {
   AdminService,
   UpdateUserRoleDto,
@@ -17,8 +18,9 @@ export class AdminController {
   updateUserRole(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: UpdateUserRoleDto,
+    @CurrentUser('id') actorId: string,
   ) {
-    return this.adminService.updateUserRole(id, dto.role);
+    return this.adminService.updateUserRole(id, dto.role, actorId);
   }
 
   @Roles('ADMIN')
@@ -26,8 +28,9 @@ export class AdminController {
   updateUserActive(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: UpdateUserActiveDto,
+    @CurrentUser('id') actorId: string,
   ) {
-    return this.adminService.updateUserActive(id, dto.is_active);
+    return this.adminService.updateUserActive(id, dto.is_active, actorId);
   }
 
   @Roles('ADMIN')
@@ -35,8 +38,9 @@ export class AdminController {
   verifyNotary(
     @Param('profileId', new ParseUUIDPipe()) profileId: string,
     @Body() dto: VerifyNotaryDto,
+    @CurrentUser('id') actorId: string,
   ) {
-    return this.adminService.verifyNotary(profileId, dto.verified);
+    return this.adminService.verifyNotary(profileId, dto.verified, actorId);
   }
 
   @Roles('ADMIN', 'OPERADOR_BRC')

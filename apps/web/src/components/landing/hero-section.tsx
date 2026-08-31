@@ -13,7 +13,22 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const tabs = ["Compra", "Venta", "Renta", "Todos"];
+/**
+ * The listing only knows two operations from the visitor's side: buying or
+ * renting ("en la página inicial, en las opciones, aquí sólo son Compra y
+ * Renta"). "Venta" and "Todos" were dead weight — both fell through to the
+ * same `op=comprar` search as "Compra", so three of the four tabs did the
+ * same thing.
+ */
+const tabs = ["Compra", "Renta"] as const;
+
+type Tab = (typeof tabs)[number];
+
+/** Tab → the `op` value /propiedades reads from the query string. */
+const TAB_OPERATION: Record<Tab, "comprar" | "rentar"> = {
+  Compra: "comprar",
+  Renta: "rentar",
+};
 
 const placeholders = [
   "Departamento en Polanco, CDMX",
@@ -27,7 +42,7 @@ const placeholders = [
 ];
 
 export function HeroSection() {
-  const [activeTab, setActiveTab] = useState("Compra");
+  const [activeTab, setActiveTab] = useState<Tab>("Compra");
   const [placeholderText, setPlaceholderText] = useState("");
   const [placeholderIdx, setPlaceholderIdx] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -43,7 +58,9 @@ export function HeroSection() {
    */
   function runSearch() {
     const params = new URLSearchParams();
-    if (activeTab === "Renta") params.set("op", "rentar");
+    // Always explicit: /propiedades defaults to "comprar", but sending the tab
+    // keeps the URL a faithful record of what the visitor picked.
+    params.set("op", TAB_OPERATION[activeTab]);
     if (propertyType) params.set("tipo", propertyType);
     const q = inputValue.trim();
     if (q) params.set("q", q);
@@ -141,6 +158,8 @@ export function HeroSection() {
           {tabs.map((tab) => (
             <button
               key={tab}
+              type="button"
+              aria-pressed={activeTab === tab}
               onClick={() => setActiveTab(tab)}
               className={cn(
                 "relative pb-2 text-sm sm:text-base font-medium transition-colors duration-200",

@@ -45,7 +45,7 @@ interface CertificateData {
     address_line: string | null;
     city: string | null;
     state: string | null;
-    price: number;
+    price: number | null;
     currency: string;
     featured_image_url: string | null;
   } | null;
@@ -200,12 +200,15 @@ export default function CertificadoPage() {
             ? {
                 id: data.property.id,
                 title: data.property.title,
-                address_line: data.property.address_line,
+                // BH-09: address/price only travel to a participant of the
+                // certificate. For a public viewer they are absent and the
+                // card below simply omits them.
+                address_line: data.property.address_line ?? null,
                 city: data.property.city,
                 state: data.property.state,
-                price: data.property.price,
-                currency: data.property.currency,
-                featured_image_url: data.property.featured_image_url,
+                price: typeof data.property.price === "number" ? data.property.price : null,
+                currency: data.property.currency ?? "MXN",
+                featured_image_url: data.property.featured_image_url ?? null,
               }
             : null,
           issued_by_profile: data.notary?.name
@@ -332,7 +335,7 @@ export default function CertificadoPage() {
       address_line: null,
       city: null,
       state: null,
-      price: 0,
+      price: null,
       currency: "MXN",
       featured_image_url: null,
     };
@@ -469,9 +472,11 @@ export default function CertificadoPage() {
                   <span>{address}</span>
                 </p>
               )}
-              <p className="mt-3 text-2xl font-bold text-slate-900">
-                {formatCurrency(property.price, property.currency)}
-              </p>
+              {property.price !== null && (
+                <p className="mt-3 text-2xl font-bold text-slate-900">
+                  {formatCurrency(property.price, property.currency)}
+                </p>
+              )}
               <Button asChild className="mt-5 w-fit rounded-xl text-white" style={{ background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))" }}>
                 <Link href={`/propiedades/${property.id}`}>
                   Ver propiedad completa
