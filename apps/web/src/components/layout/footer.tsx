@@ -22,7 +22,7 @@ export function Footer() {
           <div className="space-y-4">
             <Link href="/" className="inline-flex items-center">
               <Image
-                src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Logo-BitHauss-Texto-Negro.png"
+                src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Logo-BitHauss-Texto-Blanco.png"
                 alt="BitHauss"
                 width={200}
                 height={52}

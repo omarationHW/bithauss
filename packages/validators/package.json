@@ -2,13 +2,19 @@
   "name": "@bithauss/validators",
   "version": "0.0.0",
   "private": true,
-  "main": "./src/index.ts",
+  "main": "./dist/index.js",
   "types": "./src/index.ts",
-  "dependencies": {
-    "zod": "^3.24.0"
-  },
+  "files": [
+    "dist",
+    "src"
+  ],
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/"
+  },
+  "dependencies": {
+    "zod": "^3.24.0"
   }
 }
