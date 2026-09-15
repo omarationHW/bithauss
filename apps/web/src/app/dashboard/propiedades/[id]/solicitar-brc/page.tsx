@@ -307,6 +307,32 @@ export default function SolicitarBrcPage() {
 
   const ACCEPTED_DROP_TYPES = ["application/pdf", "image/jpeg", "image/png"];
 
+  /**
+   * Si el archivo se suelta fuera de una tarjeta, el navegador abriría el PDF
+   * en la pestaña (y parece que "no pasó nada"). Bloqueamos ese comportamiento
+   * en toda la ventana mientras esta pantalla esté montada.
+   */
+  const [dropHint, setDropHint] = useState<string | null>(null);
+  useEffect(() => {
+    const prevent = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes("Files")) e.preventDefault();
+    };
+    const onWindowDrop = (e: DragEvent) => {
+      if (!e.dataTransfer?.types.includes("Files")) return;
+      e.preventDefault();
+      if (!e.defaultPrevented || !(e.target as HTMLElement | null)?.closest?.("[data-doc-dropzone]")) {
+        setDropHint("Suelta el archivo sobre la tarjeta del documento al que pertenece.");
+        window.setTimeout(() => setDropHint(null), 4000);
+      }
+    };
+    window.addEventListener("dragover", prevent);
+    window.addEventListener("drop", onWindowDrop);
+    return () => {
+      window.removeEventListener("dragover", prevent);
+      window.removeEventListener("drop", onWindowDrop);
+    };
+  }, []);
+
   /** Soltar un archivo sobre la tarjeta equivale a elegirlo con "Subir archivo". */
   function handleDrop(docTypeId: string, e: React.DragEvent<HTMLDivElement>) {
     e.preventDefault();
@@ -782,6 +808,15 @@ export default function SolicitarBrcPage() {
         <p className="text-sm text-gray-500 mb-6">
           Sube los documentos necesarios para la certificación. Los formatos aceptados son PDF, JPG y PNG. También puedes arrastrar y soltar cada archivo sobre su documento.
         </p>
+        {dropHint && (
+          <p
+            role="status"
+            className="mb-4 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800"
+          >
+            <Upload className="h-3.5 w-3.5 shrink-0" />
+            {dropHint}
+          </p>
+        )}
 
         <div className="space-y-4">
           {documentTypes.map((dt, dtIndex) => {
@@ -812,7 +847,11 @@ export default function SolicitarBrcPage() {
                     setDragOverDocId((cur) => (cur === dt.id ? null : cur));
                   }
                 }}
-                onDrop={(e) => handleDrop(dt.id, e)}
+                onDrop={(e) => {
+                  e.stopPropagation();
+                  handleDrop(dt.id, e);
+                }}
+                data-doc-dropzone={dt.id}
                 className={`relative rounded-xl border p-4 transition-all duration-200 ${
                   dragOverDocId === dt.id
                     ? "border-blue-400 border-dashed bg-blue-50/60 ring-2 ring-blue-200"
