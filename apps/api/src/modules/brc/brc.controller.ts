@@ -77,10 +77,11 @@ export class BrcController {
   }
 
   /**
-   * Step B — BITHAUSS issues the BRC from that certificate. Deliberately NOT
-   * open to NOTARIO: the platform grants the seal, not the reviewing party.
+   * Step B — the BRC is issued from that certificate by BitHauss (admin u
+   * operador BRC) or by the assigned NOTARIO once its Certificado Notarial
+   * exists; the service enforces the assignment.
    */
-  @Roles('ADMIN', 'OPERADOR_BRC')
+  @Roles('ADMIN', 'OPERADOR_BRC', 'NOTARIO')
   @Post('expedientes/:id/issue-brc')
   issueBrc(
     @Param('id', new ParseUUIDPipe()) id: string,

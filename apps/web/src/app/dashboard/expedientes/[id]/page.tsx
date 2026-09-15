@@ -266,8 +266,14 @@ export default function ExpedienteDetailPage() {
   const [certificateId, setCertificateId] = useState<string | null>(null);
 
   const isNotario = user?.role === "NOTARIO";
-  /** Paso B del flujo: BitHauss (admin u operador BRC) emite el BRC. */
-  const canIssueBrc = user?.role === "ADMIN" || user?.role === "OPERADOR_BRC";
+  /**
+   * Paso B del flujo: emite el BRC BitHauss (admin u operador BRC) o la
+   * notaría asignada, una vez emitido su Certificado Notarial.
+   */
+  const canIssueBrc =
+    user?.role === "ADMIN" ||
+    user?.role === "OPERADOR_BRC" ||
+    (isNotario && !!expediente && expediente.assigned_notary_id === user?.id);
   const [brcIssuing, setBrcIssuing] = useState(false);
   const [brcIssueError, setBrcIssueError] = useState<string | null>(null);
   const [brcIssuedNumber, setBrcIssuedNumber] = useState<string | null>(null);
@@ -1330,7 +1336,7 @@ export default function ExpedienteDetailPage() {
               <p className="text-xs leading-relaxed text-indigo-900/80">
                 {expediente.status === BRC_STATUS.CERTIFICADO
                   ? "Sustento legal del certificado BRC emitido por BitHauss."
-                  : "La notaría hizo constar que el expediente está en regla. BitHauss emitirá el certificado BRC a partir de este documento."}
+                  : "La notaría hizo constar que el expediente está en regla. A partir de este documento se emite el certificado BRC."}
               </p>
               <p className="mt-2 text-[11px] text-indigo-900/60">
                 Emitido el {formatDate(notarialCert.issued_at)}
@@ -1363,7 +1369,9 @@ export default function ExpedienteDetailPage() {
               <p className="text-xs leading-relaxed text-emerald-900/80">
                 El Certificado Notarial ya está emitido. Al emitir el BRC, la
                 propiedad recibe el sello en su publicación y el certificado
-                queda disponible para consulta pública.
+                queda disponible para consulta pública. Mientras los pagos en
+                línea estén pausados, el cobro se coordina fuera de la
+                plataforma.
               </p>
               {brcIssueError && (
                 <p className="mt-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
@@ -1400,8 +1408,8 @@ export default function ExpedienteDetailPage() {
                 Dictamen Notarial
               </h3>
               <p className="mb-4 text-[11px] leading-relaxed text-gray-500">
-                Emites el Certificado Notarial. BitHauss emite el BRC a partir
-                de él y coloca el sello en la publicación.
+                Emites el Certificado Notarial y, a partir de él, el BRC: al
+                emitirlo se coloca el sello en la publicación.
               </p>
 
               <div className="space-y-3">

@@ -785,9 +785,10 @@ export class BrcService {
     const supabase = this.supabaseConfig.getAdminClient();
 
     const role = await this.getRole(userId);
-    if (!role || !BRC_ISSUER_ROLES.includes(role)) {
+    const isIssuerStaff = !!role && BRC_ISSUER_ROLES.includes(role);
+    if (!isIssuerStaff && role !== 'NOTARIO') {
       throw new ForbiddenException(
-        'Sólo BitHauss (admin u operador BRC) puede emitir el Certificado BRC',
+        'Sólo BitHauss (admin u operador BRC) o la notaría asignada pueden emitir el Certificado BRC',
       );
     }
 
@@ -798,6 +799,14 @@ export class BrcService {
       )
       .eq('id', expedienteId)
       .maybeSingle();
+
+    // La notaría puede emitir el BRC, pero SOLO la asignada al expediente y
+    // después de haber emitido su Certificado Notarial (se verifica abajo).
+    if (!isIssuerStaff && expediente && expediente.assigned_notary_id !== userId) {
+      throw new ForbiddenException(
+        'Sólo la notaría asignada a este expediente puede emitir el Certificado BRC',
+      );
+    }
     if (!expediente) throw new NotFoundException('Expediente no encontrado');
 
     if (expediente.status === 'CERTIFICADO') {

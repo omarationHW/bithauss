@@ -618,12 +618,22 @@ describe('BrcService.issueNotarialCertificate', () => {
 /* ------------------------------------------------------------------ */
 
 describe('BrcService.issueBrc', () => {
-  it('NEVER lets a NOTARIO issue the BRC', async () => {
+  it('lets the ASSIGNED notary issue the BRC once its notarial certificate exists', async () => {
+    delete process.env.STRIPE_SECRET_KEY;
     const mock = makeSupabase(
       readyForBrc({ profiles: { select: { data: { role: 'NOTARIO' } } } }),
     );
     const service = makeService(mock);
-    await expect(service.issueBrc(EXP_ID, NOTARY_ID, {})).rejects.toBeInstanceOf(
+    await expect(service.issueBrc(EXP_ID, NOTARY_ID, {})).resolves.toBeDefined();
+    expect(mock.insertCalls.some((c) => c.table === 'brc_certificates')).toBe(true);
+  });
+
+  it('refuses a notary that is NOT assigned to the expediente', async () => {
+    const mock = makeSupabase(
+      readyForBrc({ profiles: { select: { data: { role: 'NOTARIO' } } } }),
+    );
+    const service = makeService(mock);
+    await expect(service.issueBrc(EXP_ID, 'other-notary', {})).rejects.toBeInstanceOf(
       ForbiddenException,
     );
     expect(mock.insertCalls.some((c) => c.table === 'brc_certificates')).toBe(false);
