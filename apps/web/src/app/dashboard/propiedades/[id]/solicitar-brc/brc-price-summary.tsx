@@ -101,7 +101,10 @@ export function BrcPriceSummary({
   const showConversion =
     propertyCurrency?.toUpperCase() === "USD" && propertyValue > 0;
 
-  const ctaDisabled = !stripeConfigured || submitting || disabled;
+  // Con los pagos pausados (Stripe sin configurar) la solicitud se envía a
+  // revisión sin cobro: el CTA sigue activo y cambia de texto.
+  const paymentsPaused = !stripeConfigured;
+  const ctaDisabled = submitting || disabled;
 
   return (
     <section data-tour="brc:pago" aria-labelledby="brc-price-summary-title">
@@ -220,27 +223,29 @@ export function BrcPriceSummary({
           ) : (
             <>
               <CreditCard className="h-4 w-4" />
-              Pagar y solicitar certificación
+              {paymentsPaused
+                ? "Enviar solicitud de certificación"
+                : "Pagar y solicitar certificación"}
             </>
           )}
         </button>
 
-        {!stripeConfigured && (
+        {paymentsPaused && (
           <p
             role="status"
             className="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900"
           >
             <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
             <span>
-              Pago en línea en configuración; contáctanos para completar tu pago.{" "}
+              Pagos en línea pausados temporalmente: tu solicitud se enviará a
+              revisión sin cobro y te contactaremos para coordinar el pago.{" "}
               <a
                 href={contactHref}
                 className="font-semibold underline underline-offset-2"
               >
                 Escríbenos
               </a>{" "}
-              y te ayudamos a cerrar tu solicitud. Puedes seguir guardando tu
-              expediente mientras tanto.
+              si tienes dudas.
             </span>
           </p>
         )}

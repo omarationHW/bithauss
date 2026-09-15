@@ -186,28 +186,30 @@ describe("BrcPriceSummary · payment CTA", () => {
     expect(onPay).toHaveBeenCalledTimes(1);
   });
 
-  it("degrades gracefully when Stripe is not configured", async () => {
+  it("lets the request through without payment while payments are paused", async () => {
     const onPay = vi.fn();
     renderSummary({ stripeConfigured: false, onPay });
 
-    const button = screen.getByRole("button", {
-      name: /Pagar y solicitar certificación/i,
-    });
-    expect(button).toBeDisabled();
+    // No hay botón de pago: el CTA envía la solicitud a revisión sin cobro.
     expect(
-      screen.getByText(
-        /Pago en línea en configuración; contáctanos para completar tu pago\./,
-      ),
+      screen.queryByRole("button", { name: /Pagar y solicitar/i }),
+    ).not.toBeInTheDocument();
+    const button = screen.getByRole("button", {
+      name: /Enviar solicitud de certificación/i,
+    });
+    expect(button).toBeEnabled();
+    expect(
+      screen.getByText(/Pagos en línea pausados temporalmente/),
     ).toBeInTheDocument();
 
     await userEvent.click(button);
-    expect(onPay).not.toHaveBeenCalled();
+    expect(onPay).toHaveBeenCalledTimes(1);
   });
 
-  it("does not show the degraded notice when Stripe is configured", () => {
+  it("does not show the paused-payments notice when Stripe is configured", () => {
     renderSummary();
     expect(
-      screen.queryByText(/Pago en línea en configuración/),
+      screen.queryByText(/Pagos en línea pausados/),
     ).not.toBeInTheDocument();
   });
 
