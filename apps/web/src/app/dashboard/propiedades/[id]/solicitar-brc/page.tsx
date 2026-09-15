@@ -10,6 +10,7 @@ import {
   Loader2,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
   X,
   Save,
 } from "lucide-react";
@@ -124,7 +125,16 @@ export default function SolicitarBrcPage() {
   const [validatingDocId, setValidatingDocId] = useState<string | null>(null);
   /** Tarjeta de documento sobre la que se está arrastrando un archivo. */
   const [dragOverDocId, setDragOverDocId] = useState<string | null>(null);
-  const [ocrResults, setOcrResults] = useState<Record<string, { valid: boolean; confidence: string; message: string; detectedType: string; extractedData: Record<string, unknown>; standaloneChecks?: Array<{ rule: string; label: string; status: string; message: string }> }>>({});
+  type OcrResult = { valid: boolean; confidence: string; message: string; detectedType: string; extractedData: Record<string, unknown>; standaloneChecks?: Array<{ rule: string; label: string; status: string; message: string }> };
+  /** Último resultado por tipo de documento (alimenta el panel de la tarjeta). */
+  const [ocrResults, setOcrResults] = useState<Record<string, OcrResult>>({});
+  /**
+   * Resultado por ARCHIVO. En requisitos múltiples (una identificación por
+   * copropietario) cada archivo conserva su propio OCR: es lo que se guarda en
+   * su fila de brc_documents y lo que se muestra junto a cada nombre.
+   */
+  const [ocrByFile, setOcrByFile] = useState<Record<string, OcrResult>>({});
+  const fileKey = (docTypeId: string, f: File) => `${docTypeId}::${f.name}::${f.size}::${f.lastModified}`;
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -298,6 +308,12 @@ export default function SolicitarBrcPage() {
   /* ---- File handlers with OCR validation ---- */
 
   /** Appends for multi-file requirements, replaces for single-file ones. */
+  /** Registra el OCR de un archivo concreto y, además, como "último" del tipo. */
+  function recordOcr(docTypeId: string, file: File, result: OcrResult) {
+    setOcrByFile((prev) => ({ ...prev, [fileKey(docTypeId, file)]: result }));
+    setOcrResults((prev) => ({ ...prev, [docTypeId]: result }));
+  }
+
   function addFile(docTypeId: string, file: File, multiple: boolean) {
     setFiles((prev) => ({
       ...prev,
@@ -406,16 +422,13 @@ export default function SolicitarBrcPage() {
         // motivo real: tamaño, formato, sesión, límite de peticiones…
         const body: unknown = await res.json().catch(() => null);
         addFile(docTypeId, file, multiple);
-        setOcrResults((prev) => ({
-          ...prev,
-          [docTypeId]: {
-            valid: true,
-            confidence: "low",
-            message: describeOcrFailure(res.status, body, file),
-            detectedType: "No verificado",
-            extractedData: {},
-          },
-        }));
+        recordOcr(docTypeId, file, {
+          valid: true,
+          confidence: "low",
+          message: describeOcrFailure(res.status, body, file),
+          detectedType: "No verificado",
+          extractedData: {},
+        });
         return;
       }
 
@@ -423,7 +436,7 @@ export default function SolicitarBrcPage() {
 
       if (result.valid) {
         addFile(docTypeId, file, multiple);
-        setOcrResults((prev) => ({ ...prev, [docTypeId]: result }));
+        recordOcr(docTypeId, file, result);
       } else {
         // Document rejected — clear file
         const input = fileInputRefs.current[docTypeId];
@@ -434,29 +447,35 @@ export default function SolicitarBrcPage() {
     } catch {
       // On network error, accept file
       addFile(docTypeId, file, multiple);
-      setOcrResults((prev) => ({
-        ...prev,
-        [docTypeId]: {
-          valid: true,
-          confidence: "low",
-          message: "Validación no disponible. Se aceptó para revisión manual.",
-          detectedType: "No verificado",
-          extractedData: {},
-        },
-      }));
+      recordOcr(docTypeId, file, {
+        valid: true,
+        confidence: "low",
+        message: "Validación no disponible. Se aceptó para revisión manual.",
+        detectedType: "No verificado",
+        extractedData: {},
+      });
     } finally {
       setValidatingDocId(null);
     }
   }
 
   function removeFile(docTypeId: string, index: number) {
-    setFiles((prev) => ({
-      ...prev,
-      [docTypeId]: (prev[docTypeId] ?? []).filter((_, i) => i !== index),
-    }));
+    const removed = (files[docTypeId] ?? [])[index];
+    const remaining = (files[docTypeId] ?? []).filter((_, i) => i !== index);
+    setFiles((prev) => ({ ...prev, [docTypeId]: remaining }));
+    if (removed) {
+      setOcrByFile((prev) => {
+        const next = { ...prev };
+        delete next[fileKey(docTypeId, removed)];
+        return next;
+      });
+    }
+    const last = remaining[remaining.length - 1];
+    const lastResult = last ? ocrByFile[fileKey(docTypeId, last)] : undefined;
     setOcrResults((prev) => {
       const next = { ...prev };
-      delete next[docTypeId];
+      if (lastResult) next[docTypeId] = lastResult;
+      else delete next[docTypeId];
       return next;
     });
     const input = fileInputRefs.current[docTypeId];
@@ -532,7 +551,8 @@ export default function SolicitarBrcPage() {
         }
       }
 
-      const ocr = ocrResults[docTypeId];
+      // Cada archivo lleva SU OCR (no el del último subido del mismo tipo).
+      const ocr = ocrByFile[fileKey(docTypeId, file)] ?? ocrResults[docTypeId];
       const standaloneChecks =
         Array.isArray(ocr?.standaloneChecks) && ocr.standaloneChecks.length > 0
           ? ocr.standaloneChecks.map((c) => ({
@@ -970,6 +990,28 @@ export default function SolicitarBrcPage() {
                       >
                         <FileText className="h-3.5 w-3.5 shrink-0 text-gray-400" />
                         <span className="truncate">{f.name}</span>
+                        {(() => {
+                          const r = ocrByFile[fileKey(dt.id, f)];
+                          if (!r) return null;
+                          const verified = r.valid && r.confidence === "high";
+                          return (
+                            <span
+                              title={r.message}
+                              className={`ml-2 hidden shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold sm:inline-flex ${
+                                verified
+                                  ? "bg-emerald-50 text-emerald-700"
+                                  : "bg-amber-50 text-amber-700"
+                              }`}
+                            >
+                              {verified ? (
+                                <CheckCircle2 className="h-3 w-3" />
+                              ) : (
+                                <AlertTriangle className="h-3 w-3" />
+                              )}
+                              {verified ? `Verificado · ${r.detectedType}` : "Revisión manual"}
+                            </span>
+                          );
+                        })()}
                         <span className="ml-auto shrink-0 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
                           Sin guardar
                         </span>
