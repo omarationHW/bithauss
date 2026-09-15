@@ -338,14 +338,28 @@ export default function SolicitarBrcPage() {
     e.preventDefault();
     setDragOverDocId(null);
     if (validatingDocId) return;
-    const file = Array.from(e.dataTransfer.files).find((f) =>
-      ACCEPTED_DROP_TYPES.includes(f.type) || /\.(pdf|jpe?g|png)$/i.test(f.name),
+    void handleFilesSelected(docTypeId, Array.from(e.dataTransfer.files));
+  }
+
+  /**
+   * Varios archivos a la vez (selector con `multiple` o drop de varios): en
+   * requisitos múltiples —p.ej. la identificación de cada copropietario— se
+   * validan uno por uno en orden; en los de un solo archivo se toma el primero.
+   */
+  async function handleFilesSelected(docTypeId: string, incoming: File[]) {
+    const accepted = incoming.filter(
+      (f) => ACCEPTED_DROP_TYPES.includes(f.type) || /\.(pdf|jpe?g|png)$/i.test(f.name),
     );
-    if (!file) {
+    if (accepted.length === 0) {
       window.alert("Solo se aceptan archivos PDF, JPG o PNG.");
       return;
     }
-    handleFileChange(docTypeId, file);
+    const multiple = !!documentTypes.find((dt) => dt.id === docTypeId)?.allows_multiple;
+    const queue = multiple ? accepted : accepted.slice(0, 1);
+    for (const file of queue) {
+      // eslint-disable-next-line no-await-in-loop -- la validación OCR es secuencial a propósito
+      await handleFileChange(docTypeId, file);
+    }
   }
 
   async function handleFileChange(docTypeId: string, file: File | null) {
@@ -923,8 +937,10 @@ export default function SolicitarBrcPage() {
                         type="file"
                         className="hidden"
                         accept=".pdf,.jpg,.jpeg,.png"
+                        multiple={dt.allows_multiple}
                         onChange={(e) => {
-                          handleFileChange(dt.id, e.target.files?.[0] ?? null);
+                          const list = Array.from(e.target.files ?? []);
+                          if (list.length > 0) void handleFilesSelected(dt.id, list);
                           e.target.value = "";
                         }}
                       />
