@@ -70,6 +70,9 @@ export default function PerfilPage() {
         firstName: authUser.firstName || prev.firstName,
         lastName: authUser.lastName || prev.lastName,
         email: authUser.email || prev.email,
+        // El teléfono real vive en profiles.phone; si no hay, el campo va vacío
+        // (mostrar el mock hacía creer que ya estaba capturado).
+        phone: authUser.phone ?? "",
       }));
     }
   }, [authUser]);
@@ -163,6 +166,39 @@ export default function PerfilPage() {
     setNotaryProfile((prev) =>
       prev ? { ...prev, [field]: value } : prev
     );
+  }
+
+  const [savingPersonal, setSavingPersonal] = useState(false);
+  const [personalError, setPersonalError] = useState<string | null>(null);
+
+  /** Persiste nombre, apellido y teléfono en `profiles` (lo que lee el resto del panel). */
+  async function handleSavePersonal() {
+    if (!authUser) return;
+    const firstName = profile.firstName.trim();
+    const lastName = profile.lastName.trim();
+    const phone = profile.phone.trim();
+    setSavingPersonal(true);
+    setPersonalError(null);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("profiles")
+        .update({ first_name: firstName, last_name: lastName, phone: phone || null })
+        .eq("id", authUser.id);
+      if (error) throw error;
+      updateUser({
+        firstName,
+        lastName,
+        fullName: `${firstName} ${lastName}`.trim() || authUser.email || "Usuario",
+        phone: phone || null,
+      });
+      setEditingSection(null);
+    } catch (err) {
+      logError("Error guardando información personal:", err);
+      setPersonalError("No se pudo guardar. Inténtalo de nuevo.");
+    } finally {
+      setSavingPersonal(false);
+    }
   }
 
   async function handleSaveNotary() {
@@ -310,12 +346,20 @@ export default function PerfilPage() {
             </h3>
           </div>
           <button
-            onClick={() => toggleEdit("personal")}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-semibold text-gray-700 transition-all duration-300 hover:bg-gray-50 hover:shadow-sm"
+            onClick={() => {
+              if (editingSection === "personal") handleSavePersonal();
+              else toggleEdit("personal");
+            }}
+            disabled={savingPersonal}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-semibold text-gray-700 transition-all duration-300 hover:bg-gray-50 hover:shadow-sm disabled:opacity-60"
           >
             {editingSection === "personal" ? (
               <>
-                <Save className="h-3.5 w-3.5" />
+                {savingPersonal ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="h-3.5 w-3.5" />
+                )}
                 Guardar
               </>
             ) : (
@@ -369,6 +413,11 @@ export default function PerfilPage() {
               />
             </div>
           </div>
+          {personalError && (
+            <p role="alert" className="text-sm font-medium text-red-600 sm:col-span-2">
+              {personalError}
+            </p>
+          )}
         </div>
       </div>
 

@@ -112,6 +112,8 @@ interface BrcDocument {
   cert_received_at: string | null;
   cert_result: string | null;
   cert_requirement: string | null;
+  cert_file_url?: string | null;
+  cert_file_name?: string | null;
   notary_legal_opinion: string | null;
   brc_document_types: BrcDocumentTypeNested | null;
   ocr_detected_type: string | null;
@@ -254,6 +256,7 @@ export default function ExpedienteDetailPage() {
   const [notarialCert, setNotarialCert] = useState<NotarialCertificate | null>(null);
   /** Document whose "certificados recabados" block is being saved. */
   const [savingTrackingDocId, setSavingTrackingDocId] = useState<string | null>(null);
+  const [uploadingCertDocId, setUploadingCertDocId] = useState<string | null>(null);
   /** Document whose signed URL is being minted. */
   const [openingDocId, setOpeningDocId] = useState<string | null>(null);
   /** Document type whose corrected file is being uploaded. */
@@ -319,7 +322,7 @@ export default function ExpedienteDetailPage() {
     // 4. Documents
     const { data: docsData } = await supabase
       .from("brc_documents")
-      .select("id, document_type_id, file_name, file_url, file_size, status, rejection_reason, owner_instruction, reviewed_at, reviewed_by, reviewer_name, created_at, cert_requested_at, cert_received_at, cert_result, cert_requirement, notary_legal_opinion, ocr_detected_type, ocr_confidence, ocr_valid, ocr_extracted_data, ocr_corrected_data, ocr_standalone_checks, ocr_validated_at, brc_document_types ( name, is_required )")
+      .select("id, document_type_id, file_name, file_url, file_size, status, rejection_reason, owner_instruction, reviewed_at, reviewed_by, reviewer_name, created_at, cert_requested_at, cert_received_at, cert_result, cert_requirement, cert_file_url, cert_file_name, notary_legal_opinion, ocr_detected_type, ocr_confidence, ocr_valid, ocr_extracted_data, ocr_corrected_data, ocr_standalone_checks, ocr_validated_at, brc_document_types ( name, is_required )")
       .eq("expediente_id", expedienteId)
       .order("created_at", { ascending: true });
 
@@ -500,6 +503,58 @@ export default function ExpedienteDetailPage() {
       );
     } finally {
       setSavingTrackingDocId(null);
+    }
+  }
+
+  /**
+   * La notaría adjunta el documento que entregó la dependencia (p.ej. el CLG
+   * del RPP) para un certificado recabado. Va al bucket privado, en la carpeta
+   * `certificates/<expediente>/…` que las policies ya autorizan, y la ruta se
+   * persiste vía API en las columnas cert_file_* del documento.
+   */
+  async function handleUploadCertFile(docId: string, file: File) {
+    if (!expediente) return;
+    setUploadingCertDocId(docId);
+    try {
+      const path = `certificates/${expediente.id}/recabados/${docId}/${Date.now()}-${file.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from("brc-documents")
+        .upload(path, file, { upsert: false });
+      if (uploadError) throw new Error(uploadError.message);
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("brc-documents").getPublicUrl(path);
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "";
+      const res = await fetch(
+        `${apiBase}/api/v1/brc/documents/${docId}/certificate-tracking`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            ...(session?.access_token
+              ? { Authorization: `Bearer ${session.access_token}` }
+              : {}),
+          },
+          body: JSON.stringify({ cert_file_url: publicUrl, cert_file_name: file.name }),
+        },
+      );
+      if (!res.ok) throw new Error("No se pudo registrar el archivo del certificado.");
+
+      setDocuments((prev) =>
+        prev.map((d) =>
+          d.id === docId ? { ...d, cert_file_url: publicUrl, cert_file_name: file.name } : d,
+        ),
+      );
+    } catch (err) {
+      window.alert(
+        err instanceof Error
+          ? `No se pudo subir el certificado: ${err.message}`
+          : "No se pudo subir el certificado.",
+      );
+    } finally {
+      setUploadingCertDocId(null);
     }
   }
 
@@ -1376,6 +1431,8 @@ export default function ExpedienteDetailPage() {
           onReuploadDocument={handleReupload}
           onDocumentCorrected={handleDocCorrected}
           onSaveCertTracking={isNotario ? handleSaveCertTracking : undefined}
+          onUploadCertFile={isNotario ? handleUploadCertFile : undefined}
+          uploadingCertDocId={uploadingCertDocId}
           onOpenNotarialCertificate={
             notarialCert ? openNotarialCertificate : undefined
           }

@@ -14,11 +14,11 @@ import {
   type BrcExpedienteStatus,
 } from "@/lib/brc-notarial";
 import { ShieldBrc } from '@/components/ui/shield-brc'
+import { SpotlightCard } from "@/components/ui/spotlight-card";
 import {
   FileText,
   Search,
   Loader2,
-  TrendingUp,
   X,
   AlertCircle,
   CheckCircle2,
@@ -328,18 +328,14 @@ export default function AsignacionesPage() {
     const currentModalTarget = modalExpedienteId === exp.id;
 
     return (
-      <div className="group relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md">
-        <div
-          className="absolute inset-x-0 top-0 h-1 opacity-80"
-          style={{
-            background: exp.assigned_notary_id
-              ? "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))"
-              : "linear-gradient(135deg, hsl(35 92% 53%), hsl(14 90% 55%))",
-          }}
-        />
-
+      <SpotlightCard
+        padding="none"
+        interactive
+        className="p-5"
+        spotlightColor={exp.assigned_notary_id ? undefined : "hsl(35 92% 53% / 0.14)"}
+      >
         {/* Header: Property + Status */}
-        <div className="flex items-start justify-between gap-3">
+        <div className="relative flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <h4
               className="truncate text-base font-bold text-gray-900"
@@ -366,7 +362,7 @@ export default function AsignacionesPage() {
         </div>
 
         {/* Details */}
-        <div className="mt-4 grid grid-cols-2 gap-3">
+        <div className="relative mt-4 grid grid-cols-2 gap-3">
           <div className="flex items-center gap-2 text-xs text-gray-500">
             <User className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
             <span className="truncate">{formatName(exp.broker)}</span>
@@ -386,21 +382,16 @@ export default function AsignacionesPage() {
         </div>
 
         {/* Notary info + action */}
-        <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-4">
+        <div className="relative mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
           {exp.assigned_notary_id && exp.notary ? (
             <div className="flex items-center gap-2">
-              <div
-                className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold text-white"
-                style={{
-                  background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
-                }}
-              >
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-[10px] font-bold text-blue-700">
                 {(exp.notary.first_name?.[0] ?? "N").toUpperCase()}
                 {(exp.notary.last_name?.[0] ?? "").toUpperCase()}
               </div>
               <div>
                 <p className="text-xs font-semibold text-gray-800">{formatName(exp.notary)}</p>
-                <p className="text-[10px] text-gray-400">Notario asignado</p>
+                <p className="text-[11px] text-gray-500">Notario asignado</p>
               </div>
             </div>
           ) : (
@@ -413,20 +404,19 @@ export default function AsignacionesPage() {
           <div className="flex items-center gap-2">
             <Link
               href={`/dashboard/expedientes/${exp.id}`}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 transition-all duration-300 hover:bg-gray-50 hover:shadow-sm"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-xs font-semibold text-gray-700 transition-colors duration-200 hover:border-gray-300 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
             >
-              <Eye className="h-3 w-3" />
+              <Eye className="h-3.5 w-3.5" />
               Ver
             </Link>
             {showAssign && (
               <button
+                type="button"
                 onClick={() => openModal(exp.id)}
                 disabled={currentModalTarget}
-                className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold text-white transition-all duration-300 hover:opacity-90 disabled:opacity-50"
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition-[opacity,box-shadow] duration-200 hover:opacity-90 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 disabled:opacity-50"
                 style={{
-                  background: exp.assigned_notary_id
-                    ? "linear-gradient(135deg, hsl(221 83% 53%), hsl(200 80% 45%))"
-                    : "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
+                  background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
                 }}
               >
                 {exp.assigned_notary_id ? (
@@ -444,7 +434,7 @@ export default function AsignacionesPage() {
             )}
           </div>
         </div>
-      </div>
+      </SpotlightCard>
     );
   }
 
@@ -467,40 +457,28 @@ export default function AsignacionesPage() {
       {/* Stats */}
       <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          { label: "Sin Asignar", value: stats.sinAsignar, icon: AlertCircle, change: "pendientes" },
-          { label: "En Proceso", value: stats.enProceso, icon: Clock, change: "activos" },
-          { label: "Certificados", value: stats.certificados, icon: CheckCircle2, change: "completados" },
-          { label: "Total Expedientes", value: stats.total, icon: FileText, change: "registrados" },
+          { label: "Sin Asignar", value: stats.sinAsignar, icon: AlertCircle, change: "pendientes", iconBg: "bg-amber-50", iconColor: "text-amber-600", glow: "hsl(35 92% 53% / 0.14)" },
+          { label: "En Proceso", value: stats.enProceso, icon: Clock, change: "activos", iconBg: "bg-blue-50", iconColor: "text-blue-600", glow: undefined },
+          { label: "Certificados", value: stats.certificados, icon: CheckCircle2, change: "completados", iconBg: "bg-emerald-50", iconColor: "text-emerald-600", glow: "hsl(160 84% 39% / 0.12)" },
+          { label: "Total Expedientes", value: stats.total, icon: FileText, change: "registrados", iconBg: "bg-gray-100", iconColor: "text-gray-600", glow: undefined },
         ].map((kpi) => (
-          <div
-            key={kpi.label}
-            className="group relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
-          >
-            <div
-              className="absolute inset-x-0 top-0 h-1 opacity-80"
-              style={{
-                background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
-              }}
-            />
-            <div className="flex items-center justify-between">
-              <div
-                className="flex h-12 w-12 items-center justify-center rounded-xl shadow-sm"
-                style={{
-                  background: "linear-gradient(135deg, hsl(221 83% 53% / 0.1), hsl(160 84% 39% / 0.1))",
-                }}
-              >
-                <kpi.icon className="h-5 w-5" style={{ color: "hsl(221 83% 53%)" }} />
+          <SpotlightCard key={kpi.label} padding="md" spotlightColor={kpi.glow}>
+            <div className="relative flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-gray-500">{kpi.label}</p>
+                <p
+                  className="mt-2 text-3xl font-bold tracking-tight text-gray-900"
+                  style={{ fontFamily: "Barlow, Inter, sans-serif" }}
+                >
+                  {loading ? "..." : kpi.value}
+                </p>
+                <p className="mt-1 text-xs text-gray-400">{kpi.change}</p>
               </div>
-              <div className="flex items-center gap-1 rounded-lg bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-600">
-                <TrendingUp className="h-3 w-3" />
-                {kpi.change}
+              <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${kpi.iconBg}`}>
+                <kpi.icon className={`h-5 w-5 ${kpi.iconColor}`} />
               </div>
             </div>
-            <div className="mt-4">
-              <p className="text-3xl font-bold text-gray-900">{loading ? "..." : kpi.value}</p>
-              <p className="mt-1 text-sm font-medium text-gray-500">{kpi.label}</p>
-            </div>
-          </div>
+          </SpotlightCard>
         ))}
       </div>
 
@@ -546,10 +524,12 @@ export default function AsignacionesPage() {
           <p className="mt-3 text-sm text-gray-400">Cargando expedientes...</p>
         </div>
       ) : expedientes.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-gray-100 bg-white py-20 shadow-sm">
-          <FileText className="h-12 w-12 text-gray-200" />
-          <p className="mt-3 text-sm font-medium text-gray-400">No hay expedientes registrados.</p>
-        </div>
+        <SpotlightCard padding="none" className="flex flex-col items-center justify-center px-6 py-20 text-center">
+          <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50">
+            <FileText className="h-7 w-7 text-blue-500" />
+          </div>
+          <p className="relative mt-4 text-sm font-medium text-gray-500">No hay expedientes registrados.</p>
+        </SpotlightCard>
       ) : (
         <>
           {/* Section: Sin Asignar */}
@@ -648,8 +628,10 @@ export default function AsignacionesPage() {
                   </p>
                 </div>
                 <button
+                  type="button"
+                  aria-label="Cerrar"
                   onClick={closeModal}
-                  className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+                  className="flex h-11 w-11 items-center justify-center rounded-xl text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
                 >
                   <X className="h-5 w-5" />
                 </button>

@@ -421,3 +421,57 @@ describe("ExpedienteDocumentsTable · empty state", () => {
     expect(screen.queryByRole("table")).toBeNull();
   });
 });
+
+/* ------------------------------------------------------------------ */
+/*  Certificado recabado: archivo resultado + dictaminador             */
+/* ------------------------------------------------------------------ */
+
+describe("ExpedienteDocumentsTable · certificate result file", () => {
+  it("lets the notary upload the certificate the agency delivered (e.g. CLG)", async () => {
+    const user = userEvent.setup();
+    const { props } = renderTable({ onUploadCertFile: vi.fn() });
+    const input = screen.getByLabelText(/Subir certificado recibido para/);
+    const file = new File(["clg"], "CLG-RPP.pdf", { type: "application/pdf" });
+    await user.upload(input, file);
+    expect(props.onUploadCertFile).toHaveBeenCalledWith("doc-1", file);
+  });
+
+  it("shows the delivered file to participants and opens it through the signed-url handler", async () => {
+    const user = userEvent.setup();
+    const { props } = renderTable({
+      isNotario: false,
+      isRequester: true,
+      rows: [
+        {
+          docType: ESCRITURA,
+          doc: makeDoc({
+            cert_result: "FAVORABLE",
+            cert_file_url: "https://x/storage/v1/object/public/brc-documents/certificates/e/recabados/doc-1/CLG.pdf",
+            cert_file_name: "CLG.pdf",
+          }),
+        },
+      ],
+    });
+    // The applicant sees the file but never an upload control.
+    expect(screen.queryByLabelText(/Subir certificado recibido/)).toBeNull();
+    await user.click(screen.getByRole("button", { name: /CLG\.pdf/ }));
+    expect(props.onOpenDocument).toHaveBeenCalledWith(
+      "doc-1",
+      expect.stringContaining("CLG.pdf"),
+    );
+  });
+
+  it("lets the notary capture the dictaminador name with the tracking block", async () => {
+    const user = userEvent.setup();
+    const { props } = renderTable();
+    await user.click(
+      screen.getByRole("button", { name: /Editar certificados recabados/ }),
+    );
+    await user.type(screen.getByLabelText("Nombre del dictaminador"), "Lic. Ana Pérez");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    expect(props.onSaveCertTracking).toHaveBeenCalledWith(
+      "doc-1",
+      expect.objectContaining({ reviewer_name: "Lic. Ana Pérez" }),
+    );
+  });
+});

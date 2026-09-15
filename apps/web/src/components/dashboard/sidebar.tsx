@@ -31,7 +31,7 @@ const navItems = [
   { label: "Leads", icon: Users, href: "/dashboard/leads" },
   { label: "Mensajes", icon: MessageSquare, href: "/dashboard/mensajes" },
   { label: "Membresia", icon: CreditCard, href: "/dashboard/membresia" },
-  { label: "BRC Expedientes", icon: ShieldBrc, href: "/dashboard/expedientes" },
+  { label: "Certificados BRC", icon: ShieldBrc, href: "/dashboard/expedientes" },
   { label: "Perfil", icon: User, href: "/dashboard/perfil" },
   { label: "Configuracion", icon: Settings, href: "/dashboard/configuracion" },
 ];

@@ -132,19 +132,19 @@ const team = [
     name: "Renato Torres",
     role: "Fundador",
     bio: "Visionario del sector inmobiliario con amplia experiencia en negocios y desarrollo estratégico",
-    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/FUNDADOR.jpg",
+    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Renato-Torres.jpg",
   },
   {
     name: "Omar Rivera",
     role: "Co-Fundador",
     bio: "Emprendedor tech con 10+ años en desarrollo de plataformas digitales",
-    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/FUNDADOR.jpg",
+    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Omar-Rivera.jpg",
   },
   {
     name: "Oscar Rivera",
     role: "Co-Fundador",
     bio: "Especialista en tecnología y arquitectura de soluciones empresariales",
-    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/FUNDADOR.jpg",
+    image: "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Oscar-Rivera.jpg",
   },
 ];
 

@@ -9,7 +9,6 @@ import {
   Building2,
   Search,
   Loader2,
-  TrendingUp,
   ChevronDown,
   ChevronUp,
   X,
@@ -17,6 +16,7 @@ import {
   UserX,
 } from "lucide-react";
 import { ShieldBrc } from '@/components/ui/shield-brc'
+import { SpotlightCard } from "@/components/ui/spotlight-card";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -181,40 +181,28 @@ export default function UsuariosPage() {
       {/* Stats */}
       <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          { label: "Total Usuarios", value: stats.total, icon: Users, change: "registrados" },
-          { label: "Brokers", value: stats.brokers, icon: Building2, change: "activos" },
-          { label: "Compradores", value: stats.compradores, icon: UserCheck, change: "registrados" },
-          { label: "Notarios", value: stats.notarios, icon: ShieldBrc, change: "registrados" },
+          { label: "Total Usuarios", value: stats.total, icon: Users, change: "registrados", iconBg: "bg-blue-50", iconColor: "text-blue-600", glow: undefined },
+          { label: "Brokers", value: stats.brokers, icon: Building2, change: "activos", iconBg: "bg-emerald-50", iconColor: "text-emerald-600", glow: "hsl(160 84% 39% / 0.12)" },
+          { label: "Compradores", value: stats.compradores, icon: UserCheck, change: "registrados", iconBg: "bg-violet-50", iconColor: "text-violet-600", glow: "hsl(262 83% 58% / 0.12)" },
+          { label: "Notarios", value: stats.notarios, icon: ShieldBrc, change: "registrados", iconBg: "bg-amber-50", iconColor: "text-amber-600", glow: "hsl(38 92% 50% / 0.14)" },
         ].map((kpi) => (
-          <div
-            key={kpi.label}
-            className="group relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
-          >
-            <div
-              className="absolute inset-x-0 top-0 h-1 opacity-80"
-              style={{
-                background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
-              }}
-            />
-            <div className="flex items-center justify-between">
-              <div
-                className="flex h-12 w-12 items-center justify-center rounded-xl shadow-sm"
-                style={{
-                  background: "linear-gradient(135deg, hsl(221 83% 53% / 0.1), hsl(160 84% 39% / 0.1))",
-                }}
-              >
-                <kpi.icon className="h-5 w-5" style={{ color: "hsl(221 83% 53%)" }} />
+          <SpotlightCard key={kpi.label} padding="md" spotlightColor={kpi.glow}>
+            <div className="relative flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-gray-500">{kpi.label}</p>
+                <p
+                  className="mt-2 text-3xl font-bold tracking-tight text-gray-900"
+                  style={{ fontFamily: "Barlow, Inter, sans-serif" }}
+                >
+                  {loading ? "..." : kpi.value}
+                </p>
+                <p className="mt-1 text-xs text-gray-400">{kpi.change}</p>
               </div>
-              <div className="flex items-center gap-1 rounded-lg bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-600">
-                <TrendingUp className="h-3 w-3" />
-                {kpi.change}
+              <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${kpi.iconBg}`}>
+                <kpi.icon className={`h-5 w-5 ${kpi.iconColor}`} />
               </div>
             </div>
-            <div className="mt-4">
-              <p className="text-3xl font-bold text-gray-900">{loading ? "..." : kpi.value}</p>
-              <p className="mt-1 text-sm font-medium text-gray-500">{kpi.label}</p>
-            </div>
-          </div>
+          </SpotlightCard>
         ))}
       </div>
 
@@ -239,8 +227,8 @@ export default function UsuariosPage() {
       </div>
 
       {/* Users Table */}
-      <div className="rounded-2xl border border-gray-100 bg-white shadow-sm">
-        <div className="overflow-x-auto">
+      <SpotlightCard padding="none">
+        <div className="relative overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50/50 text-left">
@@ -303,12 +291,7 @@ export default function UsuariosPage() {
                               unoptimized
                             />
                           ) : (
-                            <div
-                              className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold text-white"
-                              style={{
-                                background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
-                              }}
-                            >
+                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-50 text-xs font-bold text-blue-700">
                               {initials}
                             </div>
                           )}
@@ -347,9 +330,10 @@ export default function UsuariosPage() {
                       </td>
                       <td className="px-6 py-4">
                         <button
+                          type="button"
+                          aria-expanded={isExpanded}
                           onClick={() => setExpandedId(isExpanded ? null : profile.id)}
-                          className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-300 hover:bg-gray-100"
-                          style={{ color: "hsl(221 83% 53%)" }}
+                          className="flex min-h-11 items-center gap-1 rounded-xl px-3 py-2 text-xs font-semibold text-blue-600 transition-colors duration-200 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
                         >
                           {isExpanded ? "Cerrar" : "Ver mas"}
                           {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
@@ -365,7 +349,7 @@ export default function UsuariosPage() {
 
         {/* Expanded User Detail Panel */}
         {expandedId && (
-          <div className="border-t border-gray-100 bg-gray-50/50 p-6">
+          <div className="relative border-t border-gray-100 bg-gray-50/60 p-6">
             {(() => {
               const profile = profiles.find((p) => p.id === expandedId);
               if (!profile) return null;
@@ -382,8 +366,10 @@ export default function UsuariosPage() {
                       Detalles de {fullName}
                     </h4>
                     <button
+                      type="button"
+                      aria-label="Cerrar detalle"
                       onClick={() => setExpandedId(null)}
-                      className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-200 hover:text-gray-600 transition-colors"
+                      className="flex h-11 w-11 items-center justify-center rounded-xl text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
                     >
                       <X className="h-4 w-4" />
                     </button>
@@ -458,7 +444,7 @@ export default function UsuariosPage() {
             })()}
           </div>
         )}
-      </div>
+      </SpotlightCard>
 
       {/* Count */}
       {!loading && (

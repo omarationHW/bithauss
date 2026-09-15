@@ -71,6 +71,9 @@ export interface ExpedienteDocumentRow {
   cert_result: string | null;
   cert_requirement: string | null;
   notary_legal_opinion: string | null;
+  /* Documento entregado por la dependencia (CLG, predial, agua…). */
+  cert_file_url?: string | null;
+  cert_file_name?: string | null;
   /* OCR analysis, rendered by OcrDocumentReview. */
   ocr_detected_type: string | null;
   ocr_confidence: string | null;
@@ -92,6 +95,11 @@ export interface CertTrackingPatch {
   cert_result: string | null;
   cert_requirement: string | null;
   notary_legal_opinion: string | null;
+  /** Nombre del dictaminador (columna navy); lo captura la notaría. */
+  reviewer_name?: string | null;
+  /** Archivo resultado del certificado; lo sube la notaría desde la fila. */
+  cert_file_url?: string | null;
+  cert_file_name?: string | null;
 }
 
 export interface NotarialCertificateSummary {
@@ -130,6 +138,10 @@ export interface ExpedienteDocumentsTableProps {
     correctedData: Record<string, unknown>,
   ) => void;
   onSaveCertTracking?: (docId: string, patch: CertTrackingPatch) => void;
+  /** La notaría adjunta el documento recibido de la dependencia (CLG, etc.). */
+  onUploadCertFile?: (docId: string, file: File) => void;
+  /** id del documento cuyo archivo de certificado se está subiendo. */
+  uploadingCertDocId?: string | null;
   onOpenNotarialCertificate?: () => void;
 }
 
@@ -319,6 +331,8 @@ export function ExpedienteDocumentsTable(props: ExpedienteDocumentsTableProps) {
     onReuploadDocument,
     onDocumentCorrected,
     onSaveCertTracking,
+    onUploadCertFile,
+    uploadingCertDocId = null,
     onOpenNotarialCertificate,
   } = props;
 
@@ -361,6 +375,7 @@ export function ExpedienteDocumentsTable(props: ExpedienteDocumentsTableProps) {
     cert_result: null,
     cert_requirement: null,
     notary_legal_opinion: null,
+    reviewer_name: null,
   });
 
   const startTracking = useCallback((doc: ExpedienteDocumentRow) => {
@@ -371,6 +386,7 @@ export function ExpedienteDocumentsTable(props: ExpedienteDocumentsTableProps) {
       cert_result: doc.cert_result,
       cert_requirement: doc.cert_requirement,
       notary_legal_opinion: doc.notary_legal_opinion,
+      reviewer_name: doc.reviewer_name,
     });
   }, []);
 
@@ -586,8 +602,67 @@ export function ExpedienteDocumentsTable(props: ExpedienteDocumentsTableProps) {
     return <Empty />;
   }
 
+  /**
+   * Archivo entregado por la dependencia para este certificado (p.ej. el CLG
+   * que emite el RPP). La notaría lo sube desde la fila; quien participa en
+   * el expediente lo abre con URL firmada.
+   */
+  function renderCertFile(doc: ExpedienteDocumentRow | null) {
+    if (!doc) return null;
+    const uploading = uploadingCertDocId === doc.id;
+    const canUpload = canEditTracking && !!onUploadCertFile;
+    if (!doc.cert_file_url && !canUpload) return null;
+    return (
+      <div className="flex flex-col items-start gap-1">
+        {doc.cert_file_url && (
+          <button
+            type="button"
+            onClick={() => onOpenDocument(doc.id, doc.cert_file_url!)}
+            disabled={openingDocId === doc.id}
+            title={doc.cert_file_name ?? "Ver certificado"}
+            className="flex max-w-full items-center gap-1 text-[10px] font-semibold text-emerald-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 disabled:opacity-50"
+          >
+            <Download className="h-3 w-3 shrink-0" />
+            <span className="truncate">
+              {openingDocId === doc.id ? "Abriendo..." : doc.cert_file_name ?? "Ver certificado"}
+            </span>
+          </button>
+        )}
+        {canUpload && (
+          <label
+            className={`flex cursor-pointer items-center gap-1 rounded-md border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 transition-all hover:bg-emerald-50 focus-within:ring-2 focus-within:ring-emerald-400 ${
+              uploading ? "pointer-events-none opacity-60" : ""
+            }`}
+          >
+            <Upload className="h-3 w-3" />
+            {uploading
+              ? "Subiendo..."
+              : doc.cert_file_url
+                ? "Reemplazar archivo"
+                : "Subir certificado"}
+            <input
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png"
+              className="sr-only"
+              disabled={uploading}
+              aria-label={`Subir certificado recibido para ${doc.file_name}`}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) onUploadCertFile?.(doc.id, file);
+                e.target.value = "";
+              }}
+            />
+          </label>
+        )}
+      </div>
+    );
+  }
+
   function renderCertResult(doc: ExpedienteDocumentRow | null) {
-    if (!doc?.cert_result) return <Empty />;
+    const file = renderCertFile(doc);
+    if (!doc?.cert_result) {
+      return file ? <div className="space-y-1.5"><Empty />{file}</div> : <Empty />;
+    }
     const tone =
       doc.cert_result === "FAVORABLE"
         ? "green"
@@ -595,9 +670,12 @@ export function ExpedienteDocumentsTable(props: ExpedienteDocumentsTableProps) {
           ? "red"
           : "gray";
     return (
-      <StatusPill tone={tone}>
-        {CERT_RESULT_LABELS[doc.cert_result as CertResult] ?? doc.cert_result}
-      </StatusPill>
+      <div className="space-y-1.5">
+        <StatusPill tone={tone}>
+          {CERT_RESULT_LABELS[doc.cert_result as CertResult] ?? doc.cert_result}
+        </StatusPill>
+        {file}
+      </div>
     );
   }
 
@@ -626,14 +704,35 @@ export function ExpedienteDocumentsTable(props: ExpedienteDocumentsTableProps) {
   }
 
   function renderDictaminador(doc: ExpedienteDocumentRow | null, state: RowState) {
+    // En modo edición la notaría captura el nombre junto con el resto del
+    // bloque de certificados; se guarda con el mismo botón "Guardar".
+    if (doc && trackingDocId === doc.id) {
+      return (
+        <>
+          <label className="sr-only" htmlFor={`dictaminador-${doc.id}`}>
+            Nombre del dictaminador
+          </label>
+          <input
+            id={`dictaminador-${doc.id}`}
+            type="text"
+            maxLength={200}
+            placeholder="Nombre del dictaminador"
+            value={trackingDraft.reviewer_name ?? ""}
+            onChange={(e) =>
+              setTrackingDraft((d) => ({ ...d, reviewer_name: e.target.value || null }))
+            }
+            className="w-full rounded-md border border-gray-300 px-2 py-1 text-[11px] text-gray-900 outline-none focus:ring-1 focus:ring-blue-300"
+          />
+        </>
+      );
+    }
+    if (doc?.reviewer_name) {
+      return <span className="text-[11px] text-gray-700">{doc.reviewer_name}</span>;
+    }
     if (!(state.isApproved || state.isRejected)) return <Empty />;
     // Persisted at review time. Older rows have no name stored; say so instead
     // of showing whoever happens to be looking at the screen.
-    return (
-      <span className="text-[11px] text-gray-700">
-        {doc?.reviewer_name ?? "Notaría"}
-      </span>
-    );
+    return <span className="text-[11px] text-gray-700">Notaría</span>;
   }
 
   function renderTrackingEditor(doc: ExpedienteDocumentRow) {
@@ -886,10 +985,13 @@ export function ExpedienteDocumentsTable(props: ExpedienteDocumentsTableProps) {
           <thead>
             {/* Group bands */}
             <tr className="text-[10px] font-bold uppercase tracking-wider text-white">
+              {/* Sólo fija arriba: si además fuera `left-0`, esta banda (que
+                  abarca todas las columnas documentales) se quedaría pegada a
+                  la izquierda al desplazar y taparía la banda verde. */}
               <th
                 scope="colgroup"
                 colSpan={DOCUMENTAL_COLUMNS.length}
-                className="sticky left-0 top-0 z-30 px-4 text-center"
+                className="sticky top-0 z-20 px-4 text-center"
                 style={{ background: BLUE_GRADIENT, height: BAND_ROW_HEIGHT }}
               >
                 {BAND_DOCUMENTAL}

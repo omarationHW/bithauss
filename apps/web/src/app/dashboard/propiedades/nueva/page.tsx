@@ -262,14 +262,20 @@ const initialFormData: FormData = {
 function SectionCard({
   title,
   subtitle,
+  tourId,
   children,
 }: {
   title: string;
   subtitle?: string;
+  /** Ancla del recorrido guiado (ver lib/onboarding/tours.ts). */
+  tourId?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm sm:p-8">
+    <div
+      data-tour={tourId}
+      className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm sm:p-8"
+    >
       <h3
         className="text-lg font-bold text-gray-900"
         style={{ fontFamily: "Barlow, Inter, sans-serif" }}
@@ -797,7 +803,11 @@ export default function NuevaPropiedadPage() {
       );
 
       setTimeout(() => {
-        router.push("/dashboard/propiedades");
+        router.push(
+          status === "publicado" && property?.id
+            ? `/dashboard/propiedades?publicada=${property.id}`
+            : "/dashboard/propiedades",
+        );
       }, 1500);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ocurrió un error inesperado.");
@@ -847,7 +857,7 @@ export default function NuevaPropiedadPage() {
       {/* ============================================================ */}
       {/*  Información Básica                                           */}
       {/* ============================================================ */}
-      <SectionCard title="Información Básica">
+      <SectionCard title="Información Básica" tourId="nueva:basica">
         <div className="space-y-5">
           <div>
             <Label htmlFor="titulo" className="mb-1.5 block text-gray-700">
@@ -926,6 +936,7 @@ export default function NuevaPropiedadPage() {
       {/*  Precio                                                       */}
       {/* ============================================================ */}
       <SectionCard
+        tourId="nueva:precio"
         title="Precio"
         subtitle="Si desactivas la publicación del precio, los visitantes verán 'Precio a consultar'."
       >
@@ -1044,6 +1055,7 @@ export default function NuevaPropiedadPage() {
       {/* ============================================================ */}
       {form.tipo_propiedad && (
         <SectionCard
+          tourId="nueva:caracteristicas"
           title="Características"
           subtitle="Los campos cambian según el tipo de inmueble. Los marcados con * son obligatorios."
         >
@@ -1061,6 +1073,7 @@ export default function NuevaPropiedadPage() {
       {/* ============================================================ */}
       {isResidential && (
         <SectionCard
+          tourId="nueva:caracteristicas"
           title="Características del inmueble"
           subtitle="Espacios privados del inmueble (no son áreas comunes del edificio)."
         >
@@ -1113,6 +1126,7 @@ export default function NuevaPropiedadPage() {
       {/*  Ubicación                                                    */}
       {/* ============================================================ */}
       <SectionCard
+        tourId="nueva:ubicacion"
         title="Ubicación"
         subtitle="La dirección exacta solo se usa para geolocalizar. Puedes ocultarla del público y mostrar solo colonia y ciudad."
       >
@@ -1216,7 +1230,7 @@ export default function NuevaPropiedadPage() {
       {/* ============================================================ */}
       {/*  Imágenes                                                     */}
       {/* ============================================================ */}
-      <SectionCard title="Imágenes">
+      <SectionCard title="Imágenes" tourId="nueva:imagenes">
         <PhotoManager
           items={photoItems}
           onAdd={addImages}
@@ -1245,7 +1259,7 @@ export default function NuevaPropiedadPage() {
       </SectionCard>
 
       {/* Action Buttons */}
-      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+      <div data-tour="nueva:publicar" className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
         <button
           type="button"
           disabled={submitting}

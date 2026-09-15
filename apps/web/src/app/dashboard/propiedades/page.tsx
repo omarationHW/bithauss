@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
@@ -21,7 +21,9 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "../_context/user-context";
 import { ShieldBrc } from '@/components/ui/shield-brc'
+import { SpotlightCard } from "@/components/ui/spotlight-card";
 import { HistorialTimeline } from "@/components/dashboard/historial-timeline";
+import { PublishedNudge } from "@/components/onboarding/published-nudge";
 import {
   Dialog,
   DialogContent,
@@ -330,14 +332,19 @@ export default function PropiedadesPage() {
           </div>
         </div>
 
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-gray-100 bg-white py-20 shadow-sm">
-          <Building2 className="mb-4 h-12 w-12 text-gray-300" />
-          <p className="mb-6 text-base font-medium text-gray-500">
+        <SpotlightCard
+          padding="none"
+          className="flex flex-col items-center justify-center px-6 py-20 text-center"
+        >
+          <div className="relative mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50">
+            <Building2 className="h-7 w-7 text-blue-500" />
+          </div>
+          <p className="relative mb-6 text-base font-medium text-gray-500">
             Aún no has publicado propiedades
           </p>
           <Link
             href="/dashboard/propiedades/nueva"
-            className="inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-bold text-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg"
+            className="relative inline-flex min-h-11 items-center gap-2 rounded-xl px-6 py-3 text-sm font-bold text-white shadow-sm transition-[transform,box-shadow] duration-300 hover:shadow-lg motion-safe:hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
             style={{
               background:
                 "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
@@ -346,13 +353,15 @@ export default function PropiedadesPage() {
             <Plus className="h-4 w-4" />
             Publicar mi primera propiedad
           </Link>
-        </div>
+        </SpotlightCard>
       </div>
     );
   }
 
   return (
     <div className="space-y-8">
+      <PublishedNudge />
+
       {/* ============================================================ */}
       {/*  Header                                                       */}
       {/* ============================================================ */}
@@ -465,19 +474,21 @@ export default function PropiedadesPage() {
       {/*  Property Cards Grid                                          */}
       {/* ============================================================ */}
       {filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-gray-100 bg-white py-16 shadow-sm">
-          <Building2 className="mb-3 h-10 w-10 text-gray-300" />
-          <p className="text-sm text-gray-500">
+        <SpotlightCard
+          padding="none"
+          className="flex flex-col items-center justify-center px-6 py-16 text-center"
+        >
+          <div className="relative mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50">
+            <Building2 className="h-6 w-6 text-blue-500" />
+          </div>
+          <p className="relative text-sm text-gray-500">
             No se encontraron propiedades
           </p>
-        </div>
+        </SpotlightCard>
       ) : (
         <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((prop) => (
-            <div
-              key={prop.id}
-              className="group relative overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
-            >
+            <SpotlightCard key={prop.id} padding="none" interactive>
               {/* Image */}
               <div className="relative h-48 w-full overflow-hidden bg-gray-100">
                 {prop.featured_image_url ? (
@@ -506,7 +517,7 @@ export default function PropiedadesPage() {
               </div>
 
               {/* Content */}
-              <div className="p-5">
+              <div className="relative p-5">
                 <Link href={`/propiedades/${prop.id}`} target="_blank">
                   <h3
                     className="text-base font-bold text-gray-900 line-clamp-1 hover:text-blue-600 transition-colors cursor-pointer"
@@ -617,7 +628,7 @@ export default function PropiedadesPage() {
                   </Link>
                 )}
               </div>
-            </div>
+            </SpotlightCard>
           ))}
         </div>
       )}

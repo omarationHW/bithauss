@@ -118,16 +118,18 @@ describe("<PricingSection />", () => {
     ).toBeInTheDocument();
   });
 
-  it("muestra las mensualidades domiciliadas de los planes con cargo mensual", async () => {
+  it("lidera con la mensualidad y ofrece el pago del periodo como la opción que conviene", async () => {
     const user = userEvent.setup();
     render(<PricingSection />);
 
     await user.click(screen.getByRole("radio", { name: "Trimestral" }));
-    // START: 3 pagos de $1,100.
-    expect(
-      screen.getAllByText(/3 pagos mensuales domiciliados de/i),
-    ).toHaveLength(6);
-    expect(screen.getAllByText(/\$1,100/).length).toBeGreaterThan(0);
+    // START: $1,100 al mes (3 mensualidades) o un solo pago trimestral de $3,000.
+    expect(screen.getByTestId("price-monthly-START")).toHaveTextContent("$1,100");
+    expect(screen.getAllByText(/3 mensualidades domiciliadas/i)).toHaveLength(6);
+    expect(screen.getAllByText(/o un solo pago trimestral de/i)).toHaveLength(6);
+    // 3 × 1,100 − 3,000 = 300 (9 %) de ahorro por pagar de contado.
+    expect(screen.getAllByText(/Ahorras \$300 \(9%\) vs\. pagar mes a mes/i)).toHaveLength(1);
+    expect(screen.getAllByText(/Ahorras .* vs\. pagar mes a mes/i)).toHaveLength(6);
   });
 
   it("aclara que los precios son más IVA", () => {

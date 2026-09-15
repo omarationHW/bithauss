@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Clock3, Minus, Sparkles } from "lucide-react";
+import { Check, Clock3, Minus } from "lucide-react";
 
 import {
   MEMBERSHIP_BENEFIT_ROWS,
@@ -13,12 +13,13 @@ import {
   getPrepaidAnnualSavingsPct,
   listMembershipPlans,
   type MembershipPeriodKey,
+  type MembershipPeriodPricing,
   type MembershipTierDefinition,
 } from "@bithauss/config";
 
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { ElectricBorder } from "@/components/ui/electric-border";
 
 /**
  * Membership pricing — the six real BitHauss tiers.
@@ -41,8 +42,32 @@ const PERIOD_TAB_LABEL: Record<MembershipPeriodKey, string> = {
   ANUAL_ANTICIPADO: "Anual · pago anticipado",
 };
 
-const BRAND_GRADIENT =
-  "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))";
+const BRAND_COLORS: [string, string] = ["hsl(221 83% 53%)", "hsl(160 84% 39%)"];
+const BRAND_GRADIENT = `linear-gradient(135deg, ${BRAND_COLORS[0]}, ${BRAND_COLORS[1]})`;
+
+/** "o un solo pago trimestral de…" */
+const PERIOD_ADJECTIVE: Record<MembershipPeriodKey, string> = {
+  TRIMESTRAL: "trimestral",
+  SEMESTRAL: "semestral",
+  ANUAL: "anual",
+  ANUAL_ANTICIPADO: "anual",
+};
+
+/**
+ * Lo que se ahorra pagando el periodo completo de una vez en lugar de las
+ * mensualidades domiciliadas (el catálogo cobra más por el esquema mensual).
+ */
+function getInstalmentSavings(pricing: MembershipPeriodPricing): {
+  amount: number;
+  pct: number;
+} {
+  if (pricing.instalmentAmount === null || pricing.instalments === null) {
+    return { amount: 0, pct: 0 };
+  }
+  const monthlyTotal = pricing.instalmentAmount * pricing.instalments;
+  const amount = monthlyTotal - pricing.total;
+  return { amount, pct: Math.round((amount / monthlyTotal) * 100) };
+}
 
 function benefitValue(
   tier: MembershipTierDefinition,
@@ -173,31 +198,23 @@ function TierCard({
   const pricing = tier.plans[period];
   const featured = tier.tier === "PLATINO";
   const savings = getPrepaidAnnualSavings(tier.tier);
+  const instalmentSavings = getInstalmentSavings(pricing);
 
-  return (
+  const card = (
     <div
       className={cn(
-        "relative flex flex-col rounded-2xl border p-6 transition-all duration-300 sm:p-7",
+        "relative flex h-full flex-col rounded-2xl border p-6 transition-all duration-300 sm:p-7",
         featured
-          ? "border-transparent text-white shadow-2xl"
+          ? "border-transparent bg-gradient-to-br from-blue-50/80 via-white to-emerald-50/80"
           : "border-border/50 bg-white hover:-translate-y-1 hover:shadow-lg",
       )}
-      style={featured ? { background: BRAND_GRADIENT } : undefined}
     >
-      {featured && (
-        <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
-          <Badge className="border-0 bg-primary px-4 py-1 text-xs font-semibold text-white shadow-lg">
-            <Sparkles className="mr-1 h-3 w-3" aria-hidden="true" />
-            Membresías acumulables
-          </Badge>
-        </div>
-      )}
 
       <div className="mb-4">
         <h3
           className={cn(
             "text-xl font-bold",
-            featured ? "text-white" : "text-foreground",
+            "text-foreground",
           )}
           style={{ fontFamily: "Barlow, Inter, sans-serif" }}
         >
@@ -206,106 +223,158 @@ function TierCard({
         <p
           className={cn(
             "mt-1 text-sm",
-            featured ? "text-white/80" : "text-muted-foreground",
+            "text-muted-foreground",
           )}
         >
           {tier.description}
         </p>
       </div>
 
-      {/* Precio */}
-      <div className="mb-1">
-        <span
-          data-testid={`price-${tier.tier}`}
-          className={cn(
-            "text-4xl font-bold tabular-nums",
-            featured ? "text-white" : "text-foreground",
-          )}
-        >
-          {formatMembershipPrice(pricing.total)}
-        </span>
-        <span
-          className={cn(
-            "ml-1.5 text-sm",
-            featured ? "text-white/70" : "text-muted-foreground",
-          )}
-        >
-          MXN + IVA
-        </span>
-      </div>
-      <p
-        className={cn(
-          "mb-4 text-sm",
-          featured ? "text-white/70" : "text-muted-foreground",
-        )}
-      >
-        {MEMBERSHIP_PERIOD_LABEL[period]} · {pricing.months} meses
-      </p>
-
-      {/* Mensualidad domiciliada o ahorro del pago anticipado */}
-      <div
-        className={cn(
-          "mb-6 rounded-xl px-3 py-2 text-sm",
-          featured ? "bg-white/15 text-white/90" : "bg-muted text-foreground",
-        )}
-      >
-        {pricing.instalmentAmount !== null ? (
-          <>
-            o {pricing.instalments} pagos mensuales domiciliados de{" "}
-            <strong className="tabular-nums">
+      {/* Precio: la mensualidad manda; el pago por periodo es la opción que conviene */}
+      {pricing.instalmentAmount !== null ? (
+        <>
+          <div className="mb-1 flex items-baseline gap-1.5">
+            <span
+              data-testid={`price-monthly-${tier.tier}`}
+              className={cn(
+                "text-4xl font-bold tabular-nums",
+                "text-foreground",
+              )}
+            >
               {formatMembershipPrice(pricing.instalmentAmount)}
-            </strong>
-          </>
-        ) : (
-          <>
+            </span>
+            <span
+              className={cn(
+                "text-base font-semibold",
+                "text-foreground/80",
+              )}
+            >
+              al mes
+            </span>
+          </div>
+          <p
+            className={cn(
+              "mb-4 text-sm",
+              "text-muted-foreground",
+            )}
+          >
+            {pricing.instalments} mensualidades domiciliadas · MXN + IVA
+          </p>
+
+          <div
+            className={cn(
+              "mb-6 rounded-xl border px-3 py-2.5 text-sm",
+              "border-emerald-200 bg-emerald-50 text-foreground",
+            )}
+          >
+            <p>
+              o un solo pago {PERIOD_ADJECTIVE[period]} de{" "}
+              <strong
+                data-testid={`price-${tier.tier}`}
+                className="text-base tabular-nums"
+              >
+                {formatMembershipPrice(pricing.total)}
+              </strong>
+            </p>
+            <p
+              className={cn(
+                "mt-1 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-bold",
+                "bg-emerald-600 text-white",
+              )}
+            >
+              Ahorras {formatMembershipPrice(instalmentSavings.amount)} (
+              {instalmentSavings.pct}%) vs. pagar mes a mes
+            </p>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="mb-1 flex items-baseline gap-1.5">
+            <span
+              data-testid={`price-${tier.tier}`}
+              className={cn(
+                "text-4xl font-bold tabular-nums",
+                "text-foreground",
+              )}
+            >
+              {formatMembershipPrice(pricing.total)}
+            </span>
+            <span
+              className={cn(
+                "text-sm",
+                "text-muted-foreground",
+              )}
+            >
+              MXN + IVA
+            </span>
+          </div>
+          <p
+            className={cn(
+              "mb-4 text-sm",
+              "text-muted-foreground",
+            )}
+          >
+            Pago único al contratar · equivale a{" "}
+            <strong className="tabular-nums">
+              {formatMembershipPrice(Math.round(pricing.total / pricing.months))}
+            </strong>{" "}
+            al mes
+          </p>
+
+          <div
+            className={cn(
+              "mb-6 rounded-xl border px-3 py-2.5 text-sm",
+              "border-emerald-200 bg-emerald-50 text-foreground",
+            )}
+          >
             Ahorras{" "}
             <strong className="tabular-nums">
               {formatMembershipPrice(savings)}
             </strong>{" "}
             ({getPrepaidAnnualSavingsPct(tier.tier)}%) contra el Plan Anual
-          </>
-        )}
-      </div>
+          </div>
+        </>
+      )}
 
       {/* Beneficios */}
       <ul className="mb-8 space-y-3">
-        <Benefit featured={featured}>
+        <Benefit>
           Publica <strong>{tier.propertyLimit}</strong> propiedades
         </Benefit>
-        <Benefit featured={featured}>
+        <Benefit>
           <strong>{tier.crmSeats}</strong>{" "}
           {tier.crmSeats === 1 ? "cuenta" : "cuentas"} de acceso al CRM
           inmobiliario
         </Benefit>
         {tier.brcDiscountPct > 0 && (
-          <Benefit featured={featured}>
+          <Benefit>
             {tier.brcDiscountPct}% de descuento en la emisión de certificados
             BRC
           </Benefit>
         )}
         {tier.videoDiscountPct > 0 && (
-          <Benefit featured={featured} soon>
+          <Benefit soon>
             {tier.videoDiscountPct}% de descuento en videos de propiedades
           </Benefit>
         )}
         {tier.legalTickets > 0 && (
-          <Benefit featured={featured} soon>
+          <Benefit soon>
             {tier.legalTickets} tickets de consultas jurídicas (sólo con Plan
             Anual pagado por anticipado)
           </Benefit>
         )}
         {tier.certifiedProfessionalsNetwork && (
-          <Benefit featured={featured} soon>
+          <Benefit soon>
             Red de profesionales inmobiliarios certificados
           </Benefit>
         )}
         {tier.notaryNetwork && (
-          <Benefit featured={featured} soon>
+          <Benefit soon>
             Red de notarios con convenio
           </Benefit>
         )}
         {tier.legalFormsLibrary && (
-          <Benefit featured={featured} soon>
+          <Benefit soon>
             Biblioteca jurídica: formatos inmobiliarios
           </Benefit>
         )}
@@ -315,7 +384,8 @@ function TierCard({
         {featured ? (
           <Button
             size="lg"
-            className="w-full bg-white font-semibold text-primary hover:bg-white/90"
+            className="w-full border-0 font-semibold text-white shadow-md hover:opacity-95"
+            style={{ background: BRAND_GRADIENT }}
           >
             Contratar {tier.tier}
           </Button>
@@ -327,15 +397,23 @@ function TierCard({
       </div>
     </div>
   );
+
+  // PLATINO: borde "eléctrico" animado con el degradado de marca (React Bits).
+  if (featured) {
+    return (
+      <ElectricBorder colors={BRAND_COLORS} chaos={0.1} speed={0.9} borderRadius={16} className="h-full">
+        {card}
+      </ElectricBorder>
+    );
+  }
+  return card;
 }
 
 function Benefit({
   children,
-  featured,
   soon = false,
 }: {
   children: React.ReactNode;
-  featured: boolean;
   soon?: boolean;
 }) {
   return (
@@ -343,11 +421,7 @@ function Benefit({
       <div
         className={cn(
           "mt-0.5 shrink-0 rounded-full p-1",
-          featured
-            ? "bg-white/20 text-white"
-            : soon
-              ? "bg-muted text-muted-foreground"
-              : "bg-accent/15 text-accent",
+          soon ? "bg-muted text-muted-foreground" : "bg-accent/15 text-accent",
         )}
       >
         {soon ? (
@@ -359,7 +433,7 @@ function Benefit({
       <span
         className={cn(
           "text-sm",
-          featured ? "text-white/90" : soon ? "text-muted-foreground" : "text-foreground",
+          soon ? "text-muted-foreground" : "text-foreground",
         )}
       >
         {children}
@@ -378,6 +452,7 @@ function Benefit({
 /* ------------------------------------------------------------------ */
 
 function ComparisonTable({ period }: { period: MembershipPeriodKey }) {
+  const isPrepaid = period === "ANUAL_ANTICIPADO";
   return (
     <div className="mt-16">
       <h3
@@ -431,45 +506,58 @@ function ComparisonTable({ period }: { period: MembershipPeriodKey }) {
                 scope="row"
                 className="sticky left-0 z-10 bg-white px-4 py-3 text-left font-semibold text-foreground"
               >
-                {MEMBERSHIP_PERIOD_LABEL[period]}
-              </th>
-              {TIERS.map((tier) => (
-                <td
-                  key={tier.tier}
-                  data-testid={`table-price-${tier.tier}`}
-                  className="px-4 py-3 text-center font-bold tabular-nums text-foreground"
-                >
-                  {formatMembershipPrice(tier.plans[period].total)}
-                </td>
-              ))}
-            </tr>
-
-            <tr className="border-t border-border/60 bg-muted/20">
-              <th
-                scope="row"
-                className="sticky left-0 z-10 bg-muted/20 px-4 py-3 text-left text-muted-foreground"
-              >
-                Pagos mensuales domiciliados
+                {isPrepaid ? "Pago único al contratar" : "Mensualidad domiciliada"}
               </th>
               {TIERS.map((tier) => {
                 const pricing = tier.plans[period];
                 return (
                   <td
                     key={tier.tier}
-                    className="px-4 py-3 text-center tabular-nums text-muted-foreground"
+                    data-testid={isPrepaid ? `table-price-${tier.tier}` : undefined}
+                    className="px-4 py-3 text-center font-bold tabular-nums text-foreground"
                   >
                     {pricing.instalmentAmount !== null ? (
                       <>
-                        {pricing.instalments} ×{" "}
                         {formatMembershipPrice(pricing.instalmentAmount)}
+                        <span className="font-normal text-muted-foreground"> /mes</span>
                       </>
                     ) : (
-                      <span title="Pago total al contratar">Pago único</span>
+                      formatMembershipPrice(pricing.total)
                     )}
                   </td>
                 );
               })}
             </tr>
+
+            {!isPrepaid && (
+              <tr className="border-t border-border/60 bg-emerald-50/60">
+                <th
+                  scope="row"
+                  className="sticky left-0 z-10 bg-emerald-50/60 px-4 py-3 text-left font-medium text-foreground"
+                >
+                  Un solo pago {PERIOD_ADJECTIVE[period]}
+                  <span className="block text-xs font-normal text-emerald-700">
+                    Conviene: ahorras vs. mes a mes
+                  </span>
+                </th>
+                {TIERS.map((tier) => {
+                  const pricing = tier.plans[period];
+                  const saving = getInstalmentSavings(pricing);
+                  return (
+                    <td
+                      key={tier.tier}
+                      data-testid={`table-price-${tier.tier}`}
+                      className="px-4 py-3 text-center tabular-nums text-foreground"
+                    >
+                      <span className="font-bold">{formatMembershipPrice(pricing.total)}</span>
+                      <span className="block text-xs font-semibold text-emerald-700">
+                        −{formatMembershipPrice(saving.amount)} ({saving.pct}%)
+                      </span>
+                    </td>
+                  );
+                })}
+              </tr>
+            )}
 
             {MEMBERSHIP_BENEFIT_ROWS.map((row) => (
               <tr key={row.key} className="border-t border-border/60">

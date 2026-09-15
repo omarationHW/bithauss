@@ -20,6 +20,7 @@
 import { Loader2, Info, CreditCard, AlertCircle } from "lucide-react";
 import { BRC_PAYMENT_NO_REFUND_NOTICE } from "@bithauss/config";
 import { formatMoney, type BrcPriceBreakdown } from "@/lib/brc-pricing";
+import { SpotlightCard } from "@/components/ui/spotlight-card";
 
 const LEGAL_NOTICE_ID = "brc-payment-legal-notice";
 
@@ -103,10 +104,9 @@ export function BrcPriceSummary({
   const ctaDisabled = !stripeConfigured || submitting || disabled;
 
   return (
-    <section
-      aria-labelledby="brc-price-summary-title"
-      className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm"
-    >
+    <section data-tour="brc:pago" aria-labelledby="brc-price-summary-title">
+      <SpotlightCard padding="md">
+      <div className="relative">
       <h3
         id="brc-price-summary-title"
         className="text-lg font-bold text-gray-900"
@@ -206,7 +206,7 @@ export function BrcPriceSummary({
           onClick={onPay}
           disabled={ctaDisabled}
           aria-describedby={LEGAL_NOTICE_ID}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-xl px-8 py-3 text-sm font-semibold text-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 sm:w-auto"
+          className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-8 py-3 text-sm font-semibold text-white shadow-sm transition-[transform,box-shadow] duration-300 hover:shadow-lg motion-safe:hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 sm:w-auto"
           style={{
             background:
               "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
@@ -254,6 +254,8 @@ export function BrcPriceSummary({
           {BRC_PAYMENT_NO_REFUND_NOTICE}
         </p>
       </div>
+      </div>
+      </SpotlightCard>
     </section>
   );
 }

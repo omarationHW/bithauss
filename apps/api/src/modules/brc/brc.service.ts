@@ -80,6 +80,11 @@ export class CertificateTrackingDto {
   cert_result?: string | null;
   @IsOptional() @IsString() @Length(0, 2000) cert_requirement?: string | null;
   @IsOptional() @IsString() @Length(0, 5000) notary_legal_opinion?: string | null;
+  /** Documento entregado por la dependencia (CLG, predial, agua…). */
+  @IsOptional() @IsString() @Length(0, 2048) cert_file_url?: string | null;
+  @IsOptional() @IsString() @Length(0, 255) cert_file_name?: string | null;
+  /** Nombre del dictaminador, capturado por la notaría. */
+  @IsOptional() @IsString() @Length(0, 200) reviewer_name?: string | null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -398,6 +403,12 @@ export class BrcService {
     if ('notary_legal_opinion' in dto) {
       patch.notary_legal_opinion = dto.notary_legal_opinion ?? null;
     }
+    if ('cert_file_url' in dto) {
+      patch.cert_file_url = dto.cert_file_url ?? null;
+      patch.cert_file_name = dto.cert_file_name ?? null;
+      patch.cert_file_uploaded_at = dto.cert_file_url ? new Date().toISOString() : null;
+    }
+    if ('reviewer_name' in dto) patch.reviewer_name = dto.reviewer_name?.trim() || null;
 
     if (Object.keys(patch).length === 0) {
       throw new BadRequestException('No hay cambios que guardar');

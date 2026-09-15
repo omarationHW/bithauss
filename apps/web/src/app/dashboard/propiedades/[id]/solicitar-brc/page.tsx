@@ -26,6 +26,7 @@ import { BrcPriceSummary } from "./brc-price-summary";
 import { useUser } from "@/app/dashboard/_context/user-context";
 import { ShieldBrc } from '@/components/ui/shield-brc'
 import { BrcExclusionNotice } from '@/components/ui/brc-exclusion-notice'
+import { SpotlightCard } from "@/components/ui/spotlight-card";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -720,23 +721,10 @@ export default function SolicitarBrcPage() {
       {/* ============================================================ */}
       {/*  Property Info Card                                           */}
       {/* ============================================================ */}
-      <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-        <div
-          className="absolute inset-x-0 top-0 h-1 rounded-t-2xl opacity-80"
-          style={{
-            background:
-              "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
-          }}
-        />
-        <div className="flex items-center gap-4">
-          <div
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl"
-            style={{
-              background:
-                "linear-gradient(135deg, hsl(221 83% 53% / 0.1), hsl(160 84% 39% / 0.1))",
-            }}
-          >
-            <ShieldBrc className="h-5 w-5" style={{ color: "hsl(221 83% 53%)" }} />
+      <SpotlightCard padding="md">
+        <div className="relative flex items-center gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50">
+            <ShieldBrc className="h-5 w-5 text-blue-600" />
           </div>
           <div className="min-w-0">
             <h3
@@ -753,15 +741,16 @@ export default function SolicitarBrcPage() {
             <p className="text-lg font-bold text-gray-900">
               {formatCurrency(property.price, property.currency)}
             </p>
-            <p className="text-xs text-gray-400">{property.currency}</p>
+            <p className="text-xs text-gray-500">{property.currency}</p>
           </div>
         </div>
-      </div>
+      </SpotlightCard>
 
       {/* ============================================================ */}
       {/*  Documents Upload                                             */}
       {/* ============================================================ */}
-      <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+      <SpotlightCard data-tour="brc:documentos" padding="md">
+        <div className="relative">
         <h3
           className="text-lg font-bold text-gray-900 mb-1"
           style={{ fontFamily: "Barlow, Inter, sans-serif" }}
@@ -773,7 +762,7 @@ export default function SolicitarBrcPage() {
         </p>
 
         <div className="space-y-4">
-          {documentTypes.map((dt) => {
+          {documentTypes.map((dt, dtIndex) => {
             const picked = files[dt.id] ?? [];
             const saved = savedDocs[dt.id] ?? [];
             const total = picked.length + saved.length;
@@ -828,6 +817,7 @@ export default function SolicitarBrcPage() {
                     </div>
                   ) : (
                     <label
+                      data-tour={dtIndex === 0 ? "brc:validacion" : undefined}
                       className={`inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-semibold text-gray-700 transition-all duration-200 hover:bg-gray-50 hover:shadow-sm`}
                     >
                       <Upload className="h-3.5 w-3.5" />
@@ -943,12 +933,14 @@ export default function SolicitarBrcPage() {
             </div>
           )}
         </div>
-      </div>
+        </div>
+      </SpotlightCard>
 
       {/* ============================================================ */}
       {/*  Notes                                                        */}
       {/* ============================================================ */}
-      <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+      <SpotlightCard data-tour="brc:notas" padding="md">
+        <div className="relative">
         <h3
           className="text-lg font-bold text-gray-900 mb-1"
           style={{ fontFamily: "Barlow, Inter, sans-serif" }}
@@ -965,14 +957,15 @@ export default function SolicitarBrcPage() {
           placeholder="Escribe tus notas aqui..."
           className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all"
         />
-      </div>
+        </div>
+      </SpotlightCard>
 
       {/* ============================================================ */}
       {/*  Privacy Notice                                                */}
       {/* ============================================================ */}
-      <div className="rounded-xl border border-blue-200 bg-blue-50 p-5">
+      <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-5">
         <div className="flex items-start gap-3">
-          <ShieldBrc className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
+          <ShieldBrc className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
           <div>
             <p className="text-xs font-semibold text-blue-800 mb-1">
               Aviso de privacidad
@@ -1028,14 +1021,14 @@ export default function SolicitarBrcPage() {
         )}
         <Link
           href={`/dashboard/propiedades/${id}`}
-          className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-6 py-3 text-sm font-semibold text-gray-700 transition-all duration-300 hover:bg-gray-50"
+          className="inline-flex min-h-11 items-center justify-center rounded-xl border border-gray-200 bg-white px-6 py-3 text-sm font-semibold text-gray-700 transition-colors duration-200 hover:border-gray-300 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
         >
           Cancelar
         </Link>
         <button
           onClick={handleSaveDraft}
           disabled={savingDraft || submitting}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-6 py-3 text-sm font-semibold text-gray-700 shadow-sm transition-all duration-300 hover:bg-gray-50 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-6 py-3 text-sm font-semibold text-gray-700 shadow-sm transition-colors duration-200 hover:border-gray-300 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {savingDraft ? (
             <>

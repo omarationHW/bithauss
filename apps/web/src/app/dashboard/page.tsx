@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
@@ -8,8 +8,7 @@ import {
   Building2,
   Users,
   Eye,
-  TrendingUp,
-  ArrowUpRight,
+  ArrowRight,
   Plus,
   CalendarDays,
   Loader2,
@@ -19,7 +18,12 @@ import {
   FileText,
   RefreshCw,
 } from "lucide-react";
-import { ShieldBrc } from '@/components/ui/shield-brc'
+import { ShieldBrc } from "@/components/ui/shield-brc";
+import { SpotlightCard } from "@/components/ui/spotlight-card";
+import { CountUp } from "@/components/ui/count-up";
+import { FirstStepsChecklist } from "@/components/onboarding/first-steps-checklist";
+import { TourReoffer } from "@/components/onboarding/tour-reoffer";
+import { isOnboardingRole } from "@/lib/onboarding/types";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -30,6 +34,10 @@ interface KpiItem {
   value: string;
   change: string;
   icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
+  /** Pantalla a la que lleva la tarjeta al hacer clic (si aplica). */
+  href?: string;
+  /** Texto del enlace, p.ej. "Ver propiedades". */
+  hint?: string;
 }
 
 interface RecentLead {
@@ -60,14 +68,12 @@ const compradorActions = [
   { label: "Buscar Propiedades", icon: Plus, href: "/propiedades", primary: true },
   { label: "Mis Guardadas", icon: Building2, href: "/dashboard/guardadas", primary: false },
   { label: "Mensajes", icon: MessageSquare, href: "/dashboard/mensajes", primary: false },
-  { label: "Mis Documentos", icon: FileText, href: "/dashboard/documentos", primary: false },
 ];
 
 const vendedorActions = [
   { label: "Publicar Propiedad", icon: Plus, href: "/dashboard/propiedades", primary: true },
   { label: "Solicitar BRC", icon: ShieldBrc, href: "/dashboard/expedientes", primary: false },
   { label: "Mensajes", icon: MessageSquare, href: "/dashboard/mensajes", primary: false },
-  { label: "Mis Documentos", icon: FileText, href: "/dashboard/documentos", primary: false },
 ];
 
 const notarioActions = [
@@ -266,24 +272,33 @@ function useDashboardData(userId: string | undefined, role: string) {
           value: String(activeProps ?? 0),
           change: `${propertyIds.length} total`,
           icon: Building2,
+          href: "/dashboard/propiedades",
+          hint: "Ver propiedades",
         },
         {
           label: "Leads Nuevos",
           value: String(newLeadsCount),
           change: "pendientes",
           icon: Users,
+          href: "/dashboard/leads",
+          hint: "Ver leads",
         },
         {
           label: "Total Visitas",
           value: String(totalViews),
           change: "acumuladas",
           icon: Eye,
+          href: "/dashboard/propiedades",
+          hint: "Ver por propiedad",
         },
         {
           label: "BRC Certificados",
           value: String(brcCount ?? 0),
           change: "propiedades",
-          icon: ShieldBrc },
+          icon: ShieldBrc,
+          href: "/dashboard/expedientes",
+          hint: "Ver certificados",
+        },
       ]);
       setRecentLeads(fetchedLeads);
       setChartData(chart);
@@ -325,10 +340,10 @@ function useDashboardData(userId: string | undefined, role: string) {
       if (cancelled) return;
 
       setKpis([
-        { label: "Mis Propiedades", value: String(myProps ?? 0), change: "publicadas", icon: Building2 },
-        { label: "Visitas Recibidas", value: String(totalViews), change: "acumuladas", icon: Eye },
-        { label: "Solicitudes de Compra", value: String(requestCount), change: "recibidas", icon: Users },
-        { label: "BRC Activos", value: String(brcCount ?? 0), change: "certificados", icon: ShieldBrc },
+        { label: "Mis Propiedades", value: String(myProps ?? 0), change: "publicadas", icon: Building2, href: "/dashboard/propiedades", hint: "Ver propiedades" },
+        { label: "Visitas Recibidas", value: String(totalViews), change: "acumuladas", icon: Eye, href: "/dashboard/propiedades", hint: "Ver por propiedad" },
+        { label: "Solicitudes de Compra", value: String(requestCount), change: "recibidas", icon: Users, href: "/dashboard/leads", hint: "Ver solicitudes" },
+        { label: "BRC Activos", value: String(brcCount ?? 0), change: "certificados", icon: ShieldBrc, href: "/dashboard/expedientes", hint: "Ver certificados" },
       ]);
       setChartData([]);
       setRecentLeads([]);
@@ -362,10 +377,10 @@ function useDashboardData(userId: string | undefined, role: string) {
       if (cancelled) return;
 
       setKpis([
-        { label: "Expedientes Asignados", value: String(totalAssigned ?? 0), change: "asignados", icon: ShieldBrc },
-        { label: "En Revision", value: String(enRevision ?? 0), change: "pendientes", icon: Eye },
-        { label: "Certificados Emitidos", value: String(certificados ?? 0), change: "emitidos", icon: Building2 },
-        { label: "Rechazados", value: String(rechazados ?? 0), change: "rechazados", icon: Users },
+        { label: "Expedientes Asignados", value: String(totalAssigned ?? 0), change: "asignados", icon: ShieldBrc, href: "/dashboard/expedientes", hint: "Ver expedientes" },
+        { label: "En Revision", value: String(enRevision ?? 0), change: "pendientes", icon: Eye, href: "/dashboard/expedientes", hint: "Ver pendientes" },
+        { label: "Certificados Emitidos", value: String(certificados ?? 0), change: "emitidos", icon: Building2, href: "/dashboard/expedientes", hint: "Ver certificados" },
+        { label: "Rechazados", value: String(rechazados ?? 0), change: "rechazados", icon: Users, href: "/dashboard/expedientes", hint: "Ver rechazados" },
       ]);
       setChartData([]);
       setRecentLeads([]);
@@ -377,10 +392,10 @@ function useDashboardData(userId: string | undefined, role: string) {
       if (cancelled) return;
 
       setKpis([
-        { label: "Propiedades Guardadas", value: "0", change: "por conectar", icon: Building2 },
-        { label: "Solicitudes Enviadas", value: "0", change: "por conectar", icon: FileText },
+        { label: "Propiedades Guardadas", value: "0", change: "por conectar", icon: Building2, href: "/dashboard/guardadas", hint: "Ver guardadas" },
+        { label: "Solicitudes Enviadas", value: "0", change: "por conectar", icon: FileText, href: "/dashboard/solicitudes", hint: "Ver solicitudes" },
         { label: "Propiedades Visitadas", value: "0", change: "por conectar", icon: Eye },
-        { label: "Mensajes", value: "0", change: "por conectar", icon: MessageSquare },
+        { label: "Mensajes", value: "0", change: "por conectar", icon: MessageSquare, href: "/dashboard/mensajes", hint: "Ver mensajes" },
       ]);
       setChartData([]);
       setRecentLeads([]);
@@ -448,10 +463,10 @@ function useDashboardData(userId: string | undefined, role: string) {
         });
 
         setKpis([
-          { label: "Total Usuarios", value: String(totalUsers ?? 0), change: "plataforma", icon: Users },
-          { label: "Propiedades Publicadas", value: String(totalProps ?? 0), change: "activas", icon: Building2 },
-          { label: "Expedientes Activos", value: String(activeExps ?? 0), change: "en proceso", icon: ShieldBrc },
-          { label: "Notarios Pendientes", value: String(pendingNotaries ?? 0), change: "por verificar", icon: FileText },
+          { label: "Total Usuarios", value: String(totalUsers ?? 0), change: "plataforma", icon: Users, href: "/dashboard/admin/usuarios", hint: "Gestionar usuarios" },
+          { label: "Propiedades Publicadas", value: String(totalProps ?? 0), change: "activas", icon: Building2, href: "/dashboard/propiedades", hint: "Ver propiedades" },
+          { label: "Expedientes Activos", value: String(activeExps ?? 0), change: "en proceso", icon: ShieldBrc, href: "/dashboard/expedientes", hint: "Ver expedientes" },
+          { label: "Notarios Pendientes", value: String(pendingNotaries ?? 0), change: "por verificar", icon: FileText, href: "/dashboard/admin/notarios", hint: "Verificar notarios" },
         ]);
         setChartData(chart);
         setRecentLeads(fetchedLeads);
@@ -472,7 +487,112 @@ function useDashboardData(userId: string | undefined, role: string) {
     };
   }, [userId, role, refreshKey]);
 
-  return { kpis, recentLeads, chartData, loadingStats, refresh };
+  return { kpis, recentLeads, chartData, loadingStats, refresh, refreshKey };
+}
+
+const HEADING_FONT = { fontFamily: "Barlow, Inter, sans-serif" } as const;
+const BRAND_GRADIENT = "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))";
+
+/* ------------------------------------------------------------------ */
+/*  KPI card: clicable cuando tiene destino                            */
+/* ------------------------------------------------------------------ */
+
+function KpiCard({ kpi }: { kpi: KpiItem }) {
+  const clickable = Boolean(kpi.href);
+  const hint = kpi.hint ?? "Ver detalle";
+
+  return (
+    <SpotlightCard
+      href={kpi.href}
+      padding="md"
+      aria-label={clickable ? `${kpi.label}: ${kpi.value}. ${hint}` : undefined}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <span
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 transition-transform duration-300 motion-safe:group-hover:scale-105"
+          aria-hidden
+        >
+          <kpi.icon className="h-5 w-5" />
+        </span>
+        <span className="rounded-full bg-gray-100/80 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+          {kpi.change}
+        </span>
+      </div>
+
+      <p className="mt-5 text-sm font-medium text-gray-500">{kpi.label}</p>
+      <p
+        className="mt-1 text-4xl font-bold tabular-nums tracking-tight text-gray-900"
+        style={HEADING_FONT}
+      >
+        <CountUp value={kpi.value} />
+      </p>
+
+      {clickable && (
+        <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-blue-600">
+          {hint}
+          <ArrowRight
+            className="h-4 w-4 transition-transform duration-300 motion-safe:group-hover:translate-x-0.5"
+            aria-hidden
+          />
+        </span>
+      )}
+    </SpotlightCard>
+  );
+}
+
+function KpiSkeleton() {
+  return (
+    <SpotlightCard padding="md" className="animate-pulse">
+      <div className="flex items-start justify-between gap-3">
+        <div className="h-11 w-11 rounded-xl bg-gray-100" />
+        <div className="h-6 w-20 rounded-full bg-gray-100" />
+      </div>
+      <div className="mt-5 h-4 w-32 rounded-lg bg-gray-100" />
+      <div className="mt-2 h-9 w-16 rounded-lg bg-gray-200" />
+      <div className="mt-4 h-4 w-24 rounded-lg bg-gray-100" />
+    </SpotlightCard>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Cabecera de sección dentro de una tarjeta                          */
+/* ------------------------------------------------------------------ */
+
+function CardHeading({
+  title,
+  subtitle,
+  action,
+}: {
+  title: string;
+  subtitle: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h3 className="text-lg font-bold text-gray-900" style={HEADING_FONT}>
+          {title}
+        </h3>
+        <p className="mt-0.5 text-sm text-gray-500">{subtitle}</p>
+      </div>
+      {action}
+    </div>
+  );
+}
+
+function TextLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="group/link inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-sm font-semibold text-blue-600 transition-colors hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
+    >
+      {children}
+      <ArrowRight
+        className="h-4 w-4 transition-transform duration-300 motion-safe:group-hover/link:translate-x-0.5"
+        aria-hidden
+      />
+    </Link>
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -484,7 +604,7 @@ export default function DashboardPage() {
   const userName = user?.fullName ?? null;
   const userRole = user?.role ?? "COMPRADOR";
 
-  const { kpis, recentLeads, chartData, loadingStats, refresh } = useDashboardData(
+  const { kpis, recentLeads, chartData, loadingStats, refresh, refreshKey } = useDashboardData(
     user?.id,
     userRole,
   );
@@ -506,7 +626,7 @@ export default function DashboardPage() {
       {/* ============================================================ */}
       {/*  Welcome Header                                              */}
       {/* ============================================================ */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           {loadingUser ? (
             <h2 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-gray-900">
@@ -516,7 +636,7 @@ export default function DashboardPage() {
           ) : (
             <h2
               className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl"
-              style={{ fontFamily: "Barlow, Inter, sans-serif" }}
+              style={HEADING_FONT}
             >
               Bienvenido, {userName}
             </h2>
@@ -525,85 +645,43 @@ export default function DashboardPage() {
             Aquí tienes un resumen de tu actividad reciente.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
+            type="button"
             onClick={refresh}
             disabled={loadingStats}
-            className="flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-medium text-gray-500 shadow-sm border border-gray-100 transition-all duration-300 hover:bg-gray-50 hover:shadow-md disabled:opacity-50"
+            className="inline-flex h-11 items-center gap-2 rounded-xl border border-gray-200/70 bg-white px-4 text-sm font-medium text-gray-600 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 disabled:opacity-50"
           >
-            <RefreshCw className={`h-4 w-4 text-gray-400 ${loadingStats ? "animate-spin" : ""}`} />
+            <RefreshCw
+              className={`h-4 w-4 text-gray-400 ${loadingStats ? "animate-spin" : ""}`}
+              aria-hidden
+            />
             Actualizar
           </button>
-          <div className="flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-medium text-gray-500 shadow-sm border border-gray-100">
-            <CalendarDays className="h-4 w-4 text-gray-400" />
+          <div className="inline-flex h-11 items-center gap-2 rounded-xl bg-white/70 px-4 text-sm font-medium text-gray-500 ring-1 ring-gray-200/60">
+            <CalendarDays className="h-4 w-4 text-gray-400" aria-hidden />
             <span className="first-letter:uppercase">{today}</span>
           </div>
         </div>
       </div>
 
       {/* ============================================================ */}
+      {/*  Primeros pasos (solo usuarios que publican, hasta completar) */}
+      {/* ============================================================ */}
+      {user?.id && isOnboardingRole(userRole) && (
+        <>
+          <FirstStepsChecklist userId={user.id} refreshKey={refreshKey} />
+          <TourReoffer userId={user.id} />
+        </>
+      )}
+
+      {/* ============================================================ */}
       {/*  KPI Stat Cards                                              */}
       {/* ============================================================ */}
       <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
         {loadingStats
-          ? Array.from({ length: 4 }).map((_, i) => (
-              <div
-                key={i}
-                className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-sm"
-              >
-                <div
-                  className="absolute inset-x-0 top-0 h-1 opacity-80"
-                  style={{
-                    background:
-                      "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
-                  }}
-                />
-                <div className="flex items-center justify-center py-6">
-                  <Loader2 className="h-6 w-6 animate-spin text-gray-300" />
-                </div>
-              </div>
-            ))
-          : kpis.map((kpi) => (
-              <div
-                key={kpi.label}
-                className="group relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
-              >
-                {/* Subtle gradient accent at top */}
-                <div
-                  className="absolute inset-x-0 top-0 h-1 opacity-80"
-                  style={{
-                    background:
-                      "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
-                  }}
-                />
-
-                <div className="flex items-center justify-between">
-                  <div
-                    className="flex h-12 w-12 items-center justify-center rounded-xl shadow-sm"
-                    style={{
-                      background:
-                        "linear-gradient(135deg, hsl(221 83% 53% / 0.1), hsl(160 84% 39% / 0.1))",
-                    }}
-                  >
-                    <kpi.icon
-                      className="h-5 w-5"
-                      style={{ color: "hsl(221 83% 53%)" }}
-                    />
-                  </div>
-                  <div className="flex items-center gap-1 rounded-lg bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-600">
-                    <TrendingUp className="h-3 w-3" />
-                    {kpi.change}
-                  </div>
-                </div>
-
-                <div className="mt-4">
-                  <p className="text-3xl font-bold text-gray-900">{kpi.value}</p>
-                  <p className="mt-1 text-sm font-medium text-gray-500">
-                    {kpi.label}
-                  </p>
-                </div>
-              </div>
-            ))}
+          ? Array.from({ length: 4 }).map((_, i) => <KpiSkeleton key={i} />)
+          : kpis.map((kpi) => <KpiCard key={kpi.label} kpi={kpi} />)}
       </div>
 
       {/* ============================================================ */}
@@ -612,259 +690,212 @@ export default function DashboardPage() {
       <div className={`grid gap-6 ${isBrokerRole(userRole) ? "lg:grid-cols-3" : ""}`}>
         {/* Leads por Mes Chart - only for broker roles */}
         {isBrokerRole(userRole) && (
-        <div className="lg:col-span-2 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-          <div className="mb-6 flex items-center justify-between">
-            <div>
-              <h3
-                className="text-lg font-bold text-gray-900"
-                style={{ fontFamily: "Barlow, Inter, sans-serif" }}
-              >
-                Leads por Mes
-              </h3>
-              <p className="mt-0.5 text-sm text-gray-500">
-                Últimos 6 meses de actividad
-              </p>
-            </div>
-            <Link
-              href="/dashboard/leads"
-              className="flex items-center gap-1 text-sm font-semibold transition-colors duration-300 hover:opacity-80"
-              style={{ color: "hsl(221 83% 53%)" }}
-            >
-              Ver detalle
-              <ArrowUpRight className="h-3.5 w-3.5" />
-            </Link>
-          </div>
+          <SpotlightCard padding="md" className="lg:col-span-2">
+            <CardHeading
+              title="Leads por Mes"
+              subtitle="Últimos 6 meses de actividad"
+              action={<TextLink href="/dashboard/leads">Ver detalle</TextLink>}
+            />
 
-          {loadingStats ? (
-            <div className="flex items-center justify-center h-52">
-              <Loader2 className="h-6 w-6 animate-spin text-gray-300" />
-            </div>
-          ) : (
-          <div className="flex items-end gap-4 h-52">
-            {chartData.map((bar) => {
-              const height = maxChartValue > 0 ? (bar.value / maxChartValue) * 160 : 4;
-              return (
-                <div
-                  key={bar.month}
-                  className="group flex flex-1 flex-col items-center gap-2"
-                >
-                  <span className="text-xs font-bold text-gray-500 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-                    {bar.value}
-                  </span>
-                  <div
-                    className="w-full rounded-xl transition-all duration-300 group-hover:scale-105 group-hover:shadow-md"
-                    style={{
-                      height: `${height}px`,
-                      background:
-                        "linear-gradient(180deg, hsl(221 83% 53%), hsl(160 84% 39%))",
-                      opacity: 0.85,
-                    }}
-                  />
-                  <span className="text-xs font-semibold text-gray-400">
-                    {bar.month}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-          )}
-        </div>
+            {loadingStats ? (
+              <div className="mt-6 flex h-52 items-center justify-center">
+                <Loader2 className="h-6 w-6 animate-spin text-gray-300" />
+              </div>
+            ) : (
+              <div className="mt-6 flex h-52 items-end gap-3 sm:gap-4" role="img" aria-label="Leads recibidos por mes en los últimos 6 meses">
+                {chartData.map((bar) => {
+                  const height = bar.value > 0 ? Math.max(8, (bar.value / maxChartValue) * 160) : 4;
+                  return (
+                    <div
+                      key={bar.month}
+                      className="group/bar flex flex-1 flex-col items-center gap-2"
+                      title={`${bar.month}: ${bar.value}`}
+                    >
+                      <span className="text-xs font-bold tabular-nums text-gray-600 opacity-0 transition-opacity duration-300 group-hover/bar:opacity-100">
+                        {bar.value}
+                      </span>
+                      <div
+                        className={`w-full rounded-lg transition-[height,background-color] duration-500 ${
+                          bar.value > 0
+                            ? "bg-blue-500/85 group-hover/bar:bg-blue-500"
+                            : "bg-gray-200"
+                        }`}
+                        style={{ height: `${height}px` }}
+                      />
+                      <span className="text-xs font-semibold text-gray-400">{bar.month}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </SpotlightCard>
         )}
 
         {/* Quick Actions */}
-        <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-          <h3
-            className="text-lg font-bold text-gray-900"
-            style={{ fontFamily: "Barlow, Inter, sans-serif" }}
-          >
-            Acciones Rápidas
-          </h3>
-          <p className="mt-0.5 mb-5 text-sm text-gray-500">
-            Accesos directos
-          </p>
+        <SpotlightCard padding="md" data-tour="dash:acciones">
+          <CardHeading title="Acciones Rápidas" subtitle="Accesos directos" />
 
-          <div className="flex flex-col gap-3">
+          <ul className="mt-5 flex flex-col gap-2">
             {getActionsForRole(userRole).map((action) => (
-              <Link
-                key={action.label}
-                href={action.href}
-                className={`group flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md ${
-                  action.primary
-                    ? "text-white shadow-sm"
-                    : "border border-gray-200 bg-white text-gray-700 hover:border-gray-300"
-                }`}
-                style={
-                  action.primary
-                    ? {
-                        background:
-                          "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
-                      }
-                    : undefined
-                }
-              >
-                <action.icon className="h-4 w-4" />
-                {action.label}
-                <ArrowUpRight className="ml-auto h-3.5 w-3.5 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-              </Link>
+              <li key={action.label}>
+                <Link
+                  href={action.href}
+                  className={`group/action flex min-h-12 items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold transition-[background-color,box-shadow,transform] duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 ${
+                    action.primary
+                      ? "text-white shadow-sm hover:shadow-[0_10px_24px_-12px_hsl(221_83%_53%/0.6)] motion-safe:hover:-translate-y-0.5"
+                      : "bg-gray-50/80 text-gray-700 hover:bg-gray-100/80 hover:text-gray-900"
+                  }`}
+                  style={action.primary ? { background: BRAND_GRADIENT } : undefined}
+                >
+                  <span
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                      action.primary ? "bg-white/20 text-white" : "bg-white text-blue-600 shadow-sm"
+                    }`}
+                    aria-hidden
+                  >
+                    <action.icon className="h-4 w-4" />
+                  </span>
+                  {action.label}
+                  <ArrowRight
+                    className={`ml-auto h-4 w-4 transition-transform duration-300 motion-safe:group-hover/action:translate-x-0.5 ${
+                      action.primary ? "text-white/90" : "text-gray-400"
+                    }`}
+                    aria-hidden
+                  />
+                </Link>
+              </li>
             ))}
-          </div>
-        </div>
+          </ul>
+        </SpotlightCard>
       </div>
 
       {/* ============================================================ */}
       {/*  Recent Leads Table (broker only)                            */}
       {/* ============================================================ */}
       {isBrokerRole(userRole) && (
-      <div className="rounded-2xl border border-gray-100 bg-white shadow-sm">
-        <div className="flex flex-col gap-2 p-6 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h3
-              className="text-lg font-bold text-gray-900"
-              style={{ fontFamily: "Barlow, Inter, sans-serif" }}
-            >
-              Leads Recientes
-            </h3>
-            <p className="mt-0.5 text-sm text-gray-500">
-              Últimos leads recibidos en tus propiedades
-            </p>
+        <SpotlightCard padding="none">
+          <div className="p-6 pb-4">
+            <CardHeading
+              title="Leads Recientes"
+              subtitle="Últimos leads recibidos en tus propiedades"
+              action={<TextLink href="/dashboard/leads">Ver todos</TextLink>}
+            />
           </div>
-          <Link
-            href="/dashboard/leads"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition-all duration-300 hover:bg-gray-50 hover:shadow-sm"
-          >
-            Ver todos
-            <ArrowUpRight className="h-3.5 w-3.5" />
-          </Link>
-        </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-t border-gray-100 bg-gray-50/50 text-left">
-                <th className="px-6 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">
-                  Nombre
-                </th>
-                <th className="hidden px-6 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider sm:table-cell">
-                  Propiedad
-                </th>
-                <th className="hidden px-6 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider md:table-cell">
-                  Fecha
-                </th>
-                <th className="px-6 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">
-                  Estado
-                </th>
-                <th className="px-6 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">
-                  Acciones
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {loadingStats ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-10 text-center">
-                    <Loader2 className="mx-auto h-5 w-5 animate-spin text-gray-300" />
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50/70 text-left">
+                  <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    Nombre
+                  </th>
+                  <th className="hidden px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 sm:table-cell">
+                    Propiedad
+                  </th>
+                  <th className="hidden px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 md:table-cell">
+                    Fecha
+                  </th>
+                  <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    Estado
+                  </th>
+                  <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    Acciones
+                  </th>
                 </tr>
-              ) : recentLeads.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={5}
-                    className="px-6 py-10 text-center text-sm text-gray-400"
-                  >
-                    Aún no tienes leads. Se mostrarán aquí cuando lleguen.
-                  </td>
-                </tr>
-              ) : (
-                recentLeads.map((lead, i) => (
-                <tr
-                  key={lead.id}
-                  className={`border-t border-gray-100 transition-colors duration-200 hover:bg-gray-50/80 ${
-                    i === recentLeads.length - 1 ? "" : ""
-                  }`}
-                >
-                  <td className="px-6 py-4 font-semibold text-gray-900">
-                    {lead.nombre}
-                  </td>
-                  <td className="hidden px-6 py-4 text-gray-500 sm:table-cell">
-                    {lead.propiedad}
-                  </td>
-                  <td className="hidden px-6 py-4 text-gray-500 md:table-cell">
-                    {lead.fecha}
-                  </td>
-                  <td className="px-6 py-4">{getEstadoBadge(lead.estado)}</td>
-                  <td className="px-6 py-4">
-                    <Link
-                      href="/dashboard/leads"
-                      className="rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-300 hover:bg-gray-100"
-                      style={{ color: "hsl(221 83% 53%)" }}
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {loadingStats ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-10 text-center">
+                      <Loader2 className="mx-auto h-5 w-5 animate-spin text-gray-300" />
+                    </td>
+                  </tr>
+                ) : recentLeads.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-12 text-center">
+                      <span className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600" aria-hidden>
+                        <Users className="h-5 w-5" />
+                      </span>
+                      <p className="mt-3 text-sm font-semibold text-gray-700">Aún no tienes leads</p>
+                      <p className="mt-1 text-sm text-gray-500">
+                        Se mostrarán aquí cuando lleguen.
+                      </p>
+                    </td>
+                  </tr>
+                ) : (
+                  recentLeads.map((lead) => (
+                    <tr
+                      key={lead.id}
+                      className="transition-colors duration-200 hover:bg-gray-50/80"
                     >
-                      Ver detalle
-                    </Link>
-                  </td>
-                </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                      <td className="px-6 py-4 font-semibold text-gray-900">{lead.nombre}</td>
+                      <td className="hidden px-6 py-4 text-gray-500 sm:table-cell">
+                        {lead.propiedad}
+                      </td>
+                      <td className="hidden px-6 py-4 text-gray-500 md:table-cell">
+                        {lead.fecha}
+                      </td>
+                      <td className="px-6 py-4">{getEstadoBadge(lead.estado)}</td>
+                      <td className="px-6 py-4">
+                        <Link
+                          href="/dashboard/leads"
+                          className="inline-flex min-h-9 items-center rounded-lg px-3 text-xs font-semibold text-blue-600 transition-colors hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
+                        >
+                          Ver detalle
+                        </Link>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </SpotlightCard>
       )}
 
       {/* ============================================================ */}
       {/*  Membresía Card (broker only)                                */}
       {/* ============================================================ */}
       {isBrokerRole(userRole) && (
-      <div
-        className="relative overflow-hidden rounded-2xl p-6 shadow-sm sm:p-8"
-        style={{
-          background:
-            "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
-        }}
-      >
-        {/* Decorative circles */}
-        <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
-        <div className="absolute -bottom-8 -left-8 h-32 w-32 rounded-full bg-white/5" />
-
-        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm">
-              <Crown className="h-7 w-7 text-white" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3
-                  className="text-xl font-bold text-white"
-                  style={{ fontFamily: "Barlow, Inter, sans-serif" }}
-                >
-                  Membresía Broker Pro
-                </h3>
-                <Sparkles className="h-4 w-4 text-yellow-300" />
+        <SpotlightCard padding="lg" spotlightColor="hsl(160 84% 39% / 0.12)">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-4">
+              <span
+                className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600"
+                aria-hidden
+              >
+                <Crown className="h-7 w-7" />
+              </span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xl font-bold text-gray-900" style={HEADING_FONT}>
+                    Membresía Broker Pro
+                  </h3>
+                  <Sparkles className="h-4 w-4 text-amber-500" aria-hidden />
+                </div>
+                <p className="mt-0.5 text-sm text-gray-500">Plan activo - Vence el 15 Abr 2026</p>
               </div>
-              <p className="mt-0.5 text-sm text-white/80">
-                Plan activo - Vence el 15 Abr 2026
-              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <Link
+                href="/dashboard/membresia"
+                className="inline-flex h-11 items-center gap-2 rounded-xl border border-gray-200/70 bg-white px-5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
+              >
+                <FileText className="h-4 w-4 text-gray-400" aria-hidden />
+                Ver detalles
+              </Link>
+              <Link
+                href="/dashboard/membresia"
+                className="inline-flex h-11 items-center gap-2 rounded-xl px-5 text-sm font-bold text-white shadow-sm transition-[box-shadow,transform] duration-300 hover:shadow-[0_10px_24px_-12px_hsl(221_83%_53%/0.6)] motion-safe:hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
+                style={{ background: BRAND_GRADIENT }}
+              >
+                Renovar Plan
+                <ArrowRight className="h-4 w-4" aria-hidden />
+              </Link>
             </div>
           </div>
-
-          <div className="flex items-center gap-3">
-            <Link
-              href="/dashboard/membresia"
-              className="inline-flex items-center gap-2 rounded-xl bg-white/20 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur-sm transition-all duration-300 hover:bg-white/30"
-            >
-              <FileText className="h-4 w-4" />
-              Ver detalles
-            </Link>
-            <Link
-              href="/dashboard/membresia"
-              className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-bold transition-all duration-300 hover:shadow-lg"
-              style={{ color: "hsl(221 83% 53%)" }}
-            >
-              Renovar Plan
-              <ArrowUpRight className="h-3.5 w-3.5" />
-            </Link>
-          </div>
-        </div>
-      </div>
+        </SpotlightCard>
       )}
     </div>
   );

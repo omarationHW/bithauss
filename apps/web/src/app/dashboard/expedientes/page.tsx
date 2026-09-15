@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -22,11 +22,21 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "@/app/dashboard/_context/user-context";
+import { EXPEDIENTES_NUEVA_SOLICITUD_EVENT } from "@/lib/onboarding/tours";
 import {
   BRC_STATUS_BADGE_STYLES,
   BRC_STATUS_SHORT_LABELS,
 } from "@/lib/brc-notarial";
 import { ShieldBrc } from '@/components/ui/shield-brc'
+import { SpotlightCard } from "@/components/ui/spotlight-card";
+
+/** Degradado de marca: reservado a CTAs primarios. */
+const BRAND_GRADIENT =
+  "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))";
+const PRIMARY_BTN =
+  "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-[transform,box-shadow] duration-300 motion-safe:hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2";
+const SECONDARY_BTN =
+  "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition-colors duration-200 hover:border-gray-300 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -154,6 +164,12 @@ export default function ExpedientesPage() {
   const [showNewModal, setShowNewModal] = useState(false);
   const [eligibleProps, setEligibleProps] = useState<EligibleProperty[]>([]);
   const [loadingEligible, setLoadingEligible] = useState(false);
+  /**
+   * Si el usuario tiene al menos una propiedad (no archivada). Sin ella no
+   * hay nada que certificar, así que el estado vacío y el modal lo mandan a
+   * publicar en vez de a elegir propiedad. `null` mientras se consulta.
+   */
+  const [hasProperties, setHasProperties] = useState<boolean | null>(null);
 
   useEffect(() => {
     document.body.style.overflow = selectedExp || showNewModal ? "hidden" : "";
@@ -162,7 +178,9 @@ export default function ExpedientesPage() {
     };
   }, [selectedExp, showNewModal]);
 
-  async function handleOpenNewModal() {
+  const userId = user?.id;
+  const handleOpenNewModal = useCallback(async () => {
+    if (!userId) return;
     setShowNewModal(true);
     setLoadingEligible(true);
     try {
@@ -170,7 +188,7 @@ export default function ExpedientesPage() {
       const { data } = await supabase
         .from("properties")
         .select("id, title, address_line, city, state, price, currency")
-        .eq("owner_id", user!.id)
+        .eq("owner_id", userId)
         .eq("brc_status", "NO_SOLICITADO")
         .order("created_at", { ascending: false });
       setEligibleProps((data as EligibleProperty[]) ?? []);
@@ -179,9 +197,39 @@ export default function ExpedientesPage() {
     } finally {
       setLoadingEligible(false);
     }
-  }
+  }, [userId]);
 
   const isNotario = user?.role === "NOTARIO";
+
+  /* ---- ¿Tiene propiedades? (solo dueños) ---- */
+  useEffect(() => {
+    if (!user || user.role === "NOTARIO") return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await createClient()
+        .from("properties")
+        .select("id")
+        .eq("owner_id", user.id)
+        .neq("status", "ARCHIVADO")
+        .limit(1);
+      if (cancelled) return;
+      // Ante un error asumimos que sí tiene, para no esconder el flujo normal.
+      setHasProperties(error ? true : (data?.length ?? 0) > 0);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  /* ---- El recorrido guiado abre el modal "Nueva Solicitud" con un evento ---- */
+  useEffect(() => {
+    if (isNotario) return;
+    const handler = () => {
+      void handleOpenNewModal();
+    };
+    window.addEventListener(EXPEDIENTES_NUEVA_SOLICITUD_EVENT, handler);
+    return () => window.removeEventListener(EXPEDIENTES_NUEVA_SOLICITUD_EVENT, handler);
+  }, [isNotario, handleOpenNewModal]);
 
   /* ---- Fetch expedientes ---- */
   useEffect(() => {
@@ -240,6 +288,9 @@ export default function ExpedientesPage() {
     fetchExpedientes();
   }, [user]);
 
+  /** Dueño sin ninguna propiedad (no archivada): hay que publicar antes. */
+  const needsProperty = !isNotario && hasProperties === false;
+
   /* ---- Stats ---- */
   const stats = [
     {
@@ -248,6 +299,7 @@ export default function ExpedientesPage() {
       icon: FileText,
       color: "hsl(221 83% 53%)",
       bgColor: "hsl(221 83% 53% / 0.1)",
+      glow: "hsl(221 83% 53% / 0.12)",
     },
     {
       label: "En Revision",
@@ -263,6 +315,7 @@ export default function ExpedientesPage() {
       icon: Clock,
       color: "hsl(45 93% 47%)",
       bgColor: "hsl(45 93% 47% / 0.1)",
+      glow: "hsl(45 93% 47% / 0.12)",
     },
     {
       label: "Certificados",
@@ -272,6 +325,7 @@ export default function ExpedientesPage() {
       icon: CheckCircle2,
       color: "hsl(160 84% 39%)",
       bgColor: "hsl(160 84% 39% / 0.1)",
+      glow: "hsl(160 84% 39% / 0.12)",
     },
     {
       label: "Rechazados",
@@ -281,6 +335,7 @@ export default function ExpedientesPage() {
       icon: XCircle,
       color: "hsl(0 72% 51%)",
       bgColor: "hsl(0 72% 51% / 0.1)",
+      glow: "hsl(0 72% 51% / 0.12)",
     },
   ];
 
@@ -303,7 +358,7 @@ export default function ExpedientesPage() {
             className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl"
             style={{ fontFamily: "Barlow, Inter, sans-serif" }}
           >
-            {isNotario ? "Expedientes Asignados" : "Expedientes BRC"}
+            {isNotario ? "Expedientes Asignados" : "Certificados BRC"}
           </h2>
           <p className="mt-1 text-sm text-gray-500">
             {isNotario
@@ -313,12 +368,11 @@ export default function ExpedientesPage() {
         </div>
         {!isNotario && (
           <button
+            type="button"
+            data-tour="exp:nueva"
             onClick={handleOpenNewModal}
-            className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg"
-            style={{
-              background:
-                "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
-            }}
+            className={PRIMARY_BTN}
+            style={{ background: BRAND_GRADIENT }}
           >
             <Plus className="h-4 w-4" />
             Nueva Solicitud
@@ -329,34 +383,31 @@ export default function ExpedientesPage() {
       {/* ============================================================ */}
       {/*  Stats Cards                                                 */}
       {/* ============================================================ */}
-      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+      <div data-tour="exp:resumen" className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map((stat) => (
-          <div
+          <SpotlightCard
             key={stat.label}
-            className="group relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
+            padding="md"
+            spotlightColor={stat.glow}
           >
-            <div
-              className="absolute inset-x-0 top-0 h-1 opacity-80"
-              style={{
-                background:
-                  "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
-              }}
-            />
-            <div className="flex items-center justify-between">
+            <div className="relative flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-gray-500">{stat.label}</p>
+                <p
+                  className="mt-2 text-3xl font-bold tracking-tight text-gray-900"
+                  style={{ fontFamily: "Barlow, Inter, sans-serif" }}
+                >
+                  {stat.value}
+                </p>
+              </div>
               <div
-                className="flex h-12 w-12 items-center justify-center rounded-xl shadow-sm"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
                 style={{ background: stat.bgColor }}
               >
                 <stat.icon className="h-5 w-5" style={{ color: stat.color }} />
               </div>
             </div>
-            <div className="mt-4">
-              <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
-              <p className="mt-1 text-sm font-medium text-gray-500">
-                {stat.label}
-              </p>
-            </div>
-          </div>
+          </SpotlightCard>
         ))}
       </div>
 
@@ -364,33 +415,55 @@ export default function ExpedientesPage() {
       {/*  Empty State                                                 */}
       {/* ============================================================ */}
       {expedientes.length === 0 && (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-gray-100 bg-white py-16 shadow-sm">
-          <Inbox className="h-16 w-16 text-gray-200 mb-4" />
+        <SpotlightCard
+          data-tour="exp:lista"
+          padding="none"
+          className="flex flex-col items-center justify-center px-6 py-16 text-center"
+        >
+          <div className="relative mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50">
+            <Inbox className="h-7 w-7 text-blue-500" />
+          </div>
           <h3
-            className="text-lg font-bold text-gray-900 mb-1"
+            className="relative mb-1 text-lg font-bold text-gray-900"
             style={{ fontFamily: "Barlow, Inter, sans-serif" }}
           >
-            {isNotario ? "Sin expedientes asignados" : "Sin expedientes"}
+            {isNotario
+              ? "Sin expedientes asignados"
+              : needsProperty
+                ? "Primero publica una propiedad"
+                : "Sin expedientes"}
           </h3>
-          <p className="text-sm text-gray-500 mb-6 text-center max-w-sm">
+          <p className="relative mb-6 max-w-sm text-sm text-gray-500">
             {isNotario
               ? "Aun no tienes expedientes asignados para revision."
-              : "Aun no tienes solicitudes de certificacion BRC. Comienza seleccionando una propiedad para certificar."}
+              : needsProperty
+                ? "El certificado BRC se emite sobre una propiedad publicada. Publica la tuya y después solicita aquí su certificación."
+                : "Aun no tienes solicitudes de certificacion BRC. Comienza seleccionando una propiedad para certificar."}
           </p>
-          {!isNotario && (
-            <button
-              onClick={handleOpenNewModal}
-              className="inline-flex items-center gap-2 rounded-xl px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg"
-              style={{
-                background:
-                  "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
-              }}
-            >
-              <Plus className="h-4 w-4" />
-              Crear mi primera solicitud
-            </button>
-          )}
-        </div>
+          {!isNotario &&
+            (needsProperty ? (
+              <Link
+                href="/dashboard/propiedades/nueva"
+                data-tour="exp:vacio-cta"
+                className={`${PRIMARY_BTN} relative px-6`}
+                style={{ background: BRAND_GRADIENT }}
+              >
+                <Plus className="h-4 w-4" />
+                Publicar mi primera propiedad
+              </Link>
+            ) : (
+              <button
+                type="button"
+                data-tour="exp:vacio-cta"
+                onClick={handleOpenNewModal}
+                className={`${PRIMARY_BTN} relative px-6`}
+                style={{ background: BRAND_GRADIENT }}
+              >
+                <Plus className="h-4 w-4" />
+                Crear mi primera solicitud
+              </button>
+            ))}
+        </SpotlightCard>
       )}
 
       {/* ============================================================ */}
@@ -398,14 +471,11 @@ export default function ExpedientesPage() {
       {/* ============================================================ */}
       {isNotario ? (
         /* ── Notary Table View ── */
-        <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
+        <SpotlightCard padding="none">
+          <div className="relative overflow-x-auto">
             <table className="w-full min-w-[900px] text-left">
               <thead>
-                <tr
-                  className="text-[11px] font-bold text-white uppercase tracking-wider"
-                  style={{ background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(210 80% 45%))" }}
-                >
+                <tr className="border-b border-gray-100 bg-gray-50/70 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
                   <th className="px-5 py-3">Propiedad</th>
                   <th className="px-4 py-3">Solicitante</th>
                   <th className="px-4 py-3">Fecha</th>
@@ -443,13 +513,8 @@ export default function ExpedientesPage() {
                     <tr key={exp.id} className="text-sm hover:bg-gray-50/50 transition-colors">
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
-                          <div
-                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
-                            style={{
-                              background: "linear-gradient(135deg, hsl(221 83% 53% / 0.1), hsl(160 84% 39% / 0.1))",
-                            }}
-                          >
-                            <ShieldBrc className="h-4 w-4" style={{ color: "hsl(221 83% 53%)" }} />
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50">
+                            <ShieldBrc className="h-4 w-4 text-blue-600" />
                           </div>
                           <p className="font-bold text-gray-900 truncate max-w-[200px]" style={{ fontFamily: "Barlow, Inter, sans-serif" }}>
                             {propertyTitle}
@@ -519,8 +584,8 @@ export default function ExpedientesPage() {
                       <td className="px-4 py-4 text-center">
                         <Link
                           href={`/dashboard/expedientes/${exp.id}`}
-                          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-bold text-white transition-all hover:opacity-90 hover:shadow-sm"
-                          style={{ background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))" }}
+                          className="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold text-white shadow-sm transition-[opacity,box-shadow] hover:opacity-90 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
+                          style={{ background: BRAND_GRADIENT }}
                         >
                           Revisar
                           <ArrowUpRight className="h-3 w-3" />
@@ -532,10 +597,13 @@ export default function ExpedientesPage() {
               </tbody>
             </table>
           </div>
-        </div>
+        </SpotlightCard>
       ) : (
         /* ── Owner Card View ── */
-        <div className="space-y-4">
+        <div
+          data-tour={expedientes.length > 0 ? "exp:lista" : undefined}
+          className="space-y-4"
+        >
           {expedientes.map((exp) => {
             const docProgress = getProgressFromDocs(exp.brc_documents);
             const progreso = getStatusProgress(exp.status, docProgress);
@@ -545,26 +613,14 @@ export default function ExpedientesPage() {
             const propertyTitle = exp.properties?.title ?? "Propiedad";
 
             return (
-              <div
-                key={exp.id}
-                className="rounded-2xl border border-gray-100 bg-white shadow-sm transition-all duration-300 hover:shadow-md"
-              >
+              <SpotlightCard key={exp.id} padding="none" interactive>
                 {/* Main row */}
-                <div className="p-6">
+                <div className="relative p-6">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     {/* Left: Property + Date */}
                     <div className="flex items-center gap-4 min-w-0">
-                      <div
-                        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl"
-                        style={{
-                          background:
-                            "linear-gradient(135deg, hsl(221 83% 53% / 0.1), hsl(160 84% 39% / 0.1))",
-                        }}
-                      >
-                        <ShieldBrc
-                          className="h-5 w-5"
-                          style={{ color: "hsl(221 83% 53%)" }}
-                        />
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50">
+                        <ShieldBrc className="h-5 w-5 text-blue-600" />
                       </div>
                       <div className="min-w-0">
                         <h4
@@ -609,17 +665,25 @@ export default function ExpedientesPage() {
                       {/* Actions */}
                       <div className="flex items-center gap-2">
                         <button
+                          type="button"
                           onClick={() => setSelectedExp(exp)}
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-semibold text-gray-700 transition-all duration-300 hover:bg-gray-50 hover:shadow-sm"
+                          className={`${SECONDARY_BTN} text-xs`}
                         >
                           Ver Expediente
                           <ArrowUpRight className="h-3 w-3" />
                         </button>
                         <button
+                          type="button"
+                          aria-expanded={expandedId === exp.id}
+                          aria-label={
+                            expandedId === exp.id
+                              ? "Ocultar checklist de documentos"
+                              : "Mostrar checklist de documentos"
+                          }
                           onClick={() =>
                             setExpandedId(expandedId === exp.id ? null : exp.id)
                           }
-                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-400 transition-all duration-300 hover:bg-gray-50 hover:text-gray-600"
+                          className="flex h-11 w-11 items-center justify-center rounded-xl border border-gray-200 text-gray-500 transition-colors duration-200 hover:bg-gray-50 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
                         >
                           {expandedId === exp.id ? (
                             <ChevronUp className="h-4 w-4" />
@@ -634,7 +698,7 @@ export default function ExpedientesPage() {
 
                 {/* Expanded: Document Checklist */}
                 {expandedId === exp.id && (
-                  <div className="border-t border-gray-100 bg-gray-50/50 px-6 py-4">
+                  <div className="relative border-t border-gray-100 bg-gray-50/60 px-6 py-4">
                     <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
                       Checklist de Documentos
                     </p>
@@ -676,7 +740,7 @@ export default function ExpedientesPage() {
                     </div>
                   </div>
                 )}
-              </div>
+              </SpotlightCard>
             );
           })}
         </div>
@@ -697,10 +761,7 @@ export default function ExpedientesPage() {
             {/* Header */}
             <div
               className="p-6 text-white"
-              style={{
-                background:
-                  "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
-              }}
+              style={{ background: BRAND_GRADIENT }}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -720,8 +781,10 @@ export default function ExpedientesPage() {
                   </div>
                 </div>
                 <button
+                  type="button"
+                  aria-label="Cerrar"
                   onClick={() => setShowNewModal(false)}
-                  className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors"
+                  className="flex h-11 w-11 items-center justify-center rounded-full bg-white/20 transition-colors hover:bg-white/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
                 >
                   <X className="h-4 w-4 text-white" />
                 </button>
@@ -733,6 +796,26 @@ export default function ExpedientesPage() {
               {loadingEligible ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+                </div>
+              ) : eligibleProps.length === 0 && needsProperty ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <Building2 className="h-12 w-12 text-blue-200 mb-3" />
+                  <p className="text-sm font-semibold text-gray-700 mb-1">
+                    Primero publica una propiedad
+                  </p>
+                  <p className="text-sm text-gray-500 max-w-xs">
+                    El certificado BRC se emite sobre una propiedad publicada.
+                    Publica la tuya y vuelve aquí para solicitar su certificación.
+                  </p>
+                  <Link
+                    href="/dashboard/propiedades/nueva"
+                    onClick={() => setShowNewModal(false)}
+                    className={`${PRIMARY_BTN} mt-5 px-6`}
+                    style={{ background: BRAND_GRADIENT }}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Publicar mi primera propiedad
+                  </Link>
                 </div>
               ) : eligibleProps.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -755,20 +838,12 @@ export default function ExpedientesPage() {
                           `/dashboard/propiedades/${prop.id}/solicitar-brc`
                         );
                       }}
-                      className="w-full text-left rounded-xl border border-gray-100 bg-white p-4 transition-all duration-200 hover:border-gray-200 hover:shadow-md hover:-translate-y-0.5 group"
+                      type="button"
+                      className="group w-full rounded-xl border border-gray-200/70 bg-white p-4 text-left transition-[border-color,box-shadow,transform] duration-200 hover:border-blue-200/80 hover:shadow-[0_8px_20px_-12px_rgba(37,99,235,0.35)] motion-safe:hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
                     >
                       <div className="flex items-center gap-4">
-                        <div
-                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
-                          style={{
-                            background:
-                              "linear-gradient(135deg, hsl(221 83% 53% / 0.1), hsl(160 84% 39% / 0.1))",
-                          }}
-                        >
-                          <Building2
-                            className="h-5 w-5"
-                            style={{ color: "hsl(221 83% 53%)" }}
-                          />
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 transition-colors group-hover:bg-blue-100/80">
+                          <Building2 className="h-5 w-5 text-blue-600" />
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="font-semibold text-gray-900 truncate text-sm">
@@ -827,10 +902,7 @@ export default function ExpedientesPage() {
               {/* Header */}
               <div
                 className="p-6 text-white sticky top-0 z-10"
-                style={{
-                  background:
-                    "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
-                }}
+                style={{ background: BRAND_GRADIENT }}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -838,17 +910,24 @@ export default function ExpedientesPage() {
                       <ShieldBrc className="h-5 w-5 text-white" />
                     </div>
                     <div>
-                      <h3 className="text-lg font-bold">{propertyTitle}</h3>
+                      <h3
+                        className="text-lg font-bold"
+                        style={{ fontFamily: "Barlow, Inter, sans-serif" }}
+                      >
+                        {propertyTitle}
+                      </h3>
                       <p className="text-sm text-white/70">
                         Expediente BRC #{selectedExp.id.slice(0, 8)}
                       </p>
                     </div>
                   </div>
                   <button
+                    type="button"
+                    aria-label="Cerrar"
                     onClick={() => setSelectedExp(null)}
-                    className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors"
+                    className="flex h-11 w-11 items-center justify-center rounded-full bg-white/20 transition-colors hover:bg-white/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
                   >
-                    <XCircle className="h-4 w-4 text-white" />
+                    <X className="h-4 w-4 text-white" />
                   </button>
                 </div>
               </div>
@@ -1020,8 +1099,9 @@ export default function ExpedientesPage() {
                 {/* Actions */}
                 <div className="flex gap-3 pt-2">
                   <button
+                    type="button"
                     onClick={() => setSelectedExp(null)}
-                    className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-700 transition-all hover:bg-gray-50"
+                    className={`${SECONDARY_BTN} flex-1`}
                   >
                     Cerrar
                   </button>
@@ -1029,11 +1109,8 @@ export default function ExpedientesPage() {
                       where documents are reviewed and corrected. */}
                   <Link
                     href={`/dashboard/expedientes/${selectedExp.id}`}
-                    className="flex flex-1 items-center justify-center rounded-xl py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90"
-                    style={{
-                      background:
-                        "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
-                    }}
+                    className={`${PRIMARY_BTN} flex-1`}
+                    style={{ background: BRAND_GRADIENT }}
                   >
                     {selectedExp.brc_documents.some(
                       (d) => d.status === "RECHAZADO",

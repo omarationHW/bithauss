@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useUser } from "../../_context/user-context";
 import Image from "next/image";
 import { ShieldBrc } from '@/components/ui/shield-brc'
+import { SpotlightCard } from "@/components/ui/spotlight-card";
 import {
   Search,
   Loader2,
@@ -220,36 +221,29 @@ export default function NotariosVerificacionPage() {
             accent: "hsl(160 84% 39%)",
           },
         ].map((kpi) => (
-          <div
+          <SpotlightCard
             key={kpi.label}
-            className="group relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
+            padding="md"
+            spotlightColor={`${kpi.accent.slice(0, -1)} / 0.12)`}
           >
-            <div
-              className="absolute inset-x-0 top-0 h-1 opacity-80"
-              style={{
-                background:
-                  "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
-              }}
-            />
-            <div className="flex items-center justify-between">
+            <div className="relative flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-gray-500">{kpi.label}</p>
+                <p
+                  className="mt-2 text-3xl font-bold tracking-tight text-gray-900"
+                  style={{ fontFamily: "Barlow, Inter, sans-serif" }}
+                >
+                  {loading ? "..." : kpi.value}
+                </p>
+              </div>
               <div
-                className="flex h-12 w-12 items-center justify-center rounded-xl shadow-sm"
-                style={{
-                  background: `${kpi.accent}15`,
-                }}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+                style={{ background: `${kpi.accent.slice(0, -1)} / 0.1)` }}
               >
                 <kpi.icon className="h-5 w-5" style={{ color: kpi.accent }} />
               </div>
             </div>
-            <div className="mt-4">
-              <p className="text-3xl font-bold text-gray-900">
-                {loading ? "..." : kpi.value}
-              </p>
-              <p className="mt-1 text-sm font-medium text-gray-500">
-                {kpi.label}
-              </p>
-            </div>
-          </div>
+          </SpotlightCard>
         ))}
       </div>
 
@@ -316,16 +310,18 @@ export default function NotariosVerificacionPage() {
           <p className="mt-3 text-sm text-gray-400">Cargando notarios...</p>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-gray-100 bg-white py-20 shadow-sm">
-          <ShieldBrc className="h-12 w-12 text-gray-200" />
-          <p className="mt-4 text-sm font-medium text-gray-500">
+        <SpotlightCard padding="none" className="flex flex-col items-center justify-center px-6 py-20 text-center">
+          <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50">
+            <ShieldBrc className="h-7 w-7 text-blue-500" />
+          </div>
+          <p className="relative mt-4 text-sm font-medium text-gray-500">
             {searchQuery
               ? "No se encontraron notarios con esa busqueda."
               : activeTab === "pendientes"
               ? "No hay notarios pendientes de verificacion."
               : "No hay notarios verificados aun."}
           </p>
-        </div>
+        </SpotlightCard>
       ) : (
         <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((notary) => {
@@ -335,21 +331,15 @@ export default function NotariosVerificacionPage() {
             const isUpdating = updatingId === notary.id;
 
             return (
-              <div
+              <SpotlightCard
                 key={notary.id}
-                className="group relative overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
+                padding="none"
+                interactive
+                spotlightColor={
+                  np?.is_verified ? "hsl(160 84% 39% / 0.12)" : "hsl(38 92% 50% / 0.14)"
+                }
               >
-                {/* Gradient top bar */}
-                <div
-                  className="h-1"
-                  style={{
-                    background: np?.is_verified
-                      ? "linear-gradient(135deg, hsl(160 84% 39%), hsl(142 76% 36%))"
-                      : "linear-gradient(135deg, hsl(38 92% 50%), hsl(25 95% 53%))",
-                  }}
-                />
-
-                <div className="p-6">
+                <div className="relative p-6">
                   {/* Header: avatar + name + badge */}
                   <div className="flex items-start gap-4">
                     {notary.avatar_url ? (
@@ -362,13 +352,7 @@ export default function NotariosVerificacionPage() {
                         unoptimized
                       />
                     ) : (
-                      <div
-                        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
-                        style={{
-                          background:
-                            "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
-                        }}
-                      >
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-50 text-sm font-bold text-blue-700">
                         {initials}
                       </div>
                     )}
@@ -440,7 +424,7 @@ export default function NotariosVerificacionPage() {
                       href={np.license_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100"
+                      className="mt-4 inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-blue-50 px-3.5 py-2 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
                     >
                       <ExternalLink className="h-3 w-3" />
                       Ver licencia
@@ -451,9 +435,10 @@ export default function NotariosVerificacionPage() {
                   {!np?.is_verified && (
                     <div className="mt-5 flex items-center gap-3 border-t border-gray-100 pt-5">
                       <button
+                        type="button"
                         onClick={() => handleVerify(notary.id)}
                         disabled={isUpdating}
-                        className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-300 hover:shadow-md disabled:opacity-50"
+                        className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-[box-shadow,opacity] duration-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 disabled:opacity-50"
                         style={{
                           background:
                             "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
@@ -467,9 +452,10 @@ export default function NotariosVerificacionPage() {
                         Verificar
                       </button>
                       <button
+                        type="button"
                         onClick={() => handleReject(notary.id)}
                         disabled={isUpdating}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-600 transition-all duration-300 hover:bg-red-50 disabled:opacity-50"
+                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-600 transition-colors duration-200 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 focus-visible:ring-offset-2 disabled:opacity-50"
                       >
                         {isUpdating ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -481,7 +467,7 @@ export default function NotariosVerificacionPage() {
                     </div>
                   )}
                 </div>
-              </div>
+              </SpotlightCard>
             );
           })}
         </div>

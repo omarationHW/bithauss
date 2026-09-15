@@ -438,3 +438,103 @@
   --color-sidebar-border: hsl(217 33% 17%);
   --color-sidebar-ring: hsl(217 91% 60%);
 }
+
+/* ------------------------------------------------------------------ */
+/*  SpotlightCard (React Bits): halo que sigue al cursor              */
+/* ------------------------------------------------------------------ */
+.spotlight-card {
+  --spot-x: 50%;
+  --spot-y: 0%;
+}
+.spotlight-card__glow {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    420px circle at var(--spot-x) var(--spot-y),
+    var(--spotlight-color, hsl(221 83% 53% / 0.14)),
+    transparent 65%
+  );
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.spotlight-card:hover .spotlight-card__glow,
+.spotlight-card:focus-visible .spotlight-card__glow {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .spotlight-card__glow {
+    transition: none;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  ElectricBorder (React Bits) con degradado de marca                */
+/* ------------------------------------------------------------------ */
+.electric-border {
+  position: relative;
+  border-radius: inherit;
+  overflow: visible;
+  isolation: isolate;
+}
+.eb-canvas-container {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 2;
+}
+.eb-canvas {
+  display: block;
+}
+.eb-content {
+  position: relative;
+  border-radius: inherit;
+  z-index: 1;
+}
+.eb-layers {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+}
+.eb-glow-1,
+.eb-glow-2,
+.eb-background-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+/* Anillos de resplandor con degradado: fondo + máscara que recorta el centro. */
+.eb-glow-1,
+.eb-glow-2 {
+  padding: 2px;
+  background: linear-gradient(135deg, var(--eb-from), var(--eb-to));
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+.eb-glow-1 {
+  opacity: 0.6;
+  filter: blur(1px);
+}
+.eb-glow-2 {
+  filter: blur(4px);
+}
+.eb-background-glow {
+  z-index: -1;
+  transform: scale(1.1);
+  filter: blur(32px);
+  opacity: 0.3;
+  background: linear-gradient(-30deg, var(--eb-to), transparent, var(--eb-from));
+}

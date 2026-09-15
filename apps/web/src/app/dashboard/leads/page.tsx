@@ -10,7 +10,6 @@ import {
   Eye,
   Phone,
   Download,
-  TrendingUp,
   XCircle,
   MessageSquare,
   Loader2,
@@ -25,6 +24,7 @@ import { createClient } from "@/lib/supabase/client";
 import { logError } from "@/lib/log";
 import { useUser } from "../_context/user-context";
 import { HistorialTimeline } from "@/components/dashboard/historial-timeline";
+import { SpotlightCard } from "@/components/ui/spotlight-card";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -275,18 +275,36 @@ export default function LeadsPage() {
   };
 
   /* ---- KPIs from real data ---- */
-  const kpis = [
+  /* Cada KPI aplica el filtro de estado del listado al hacer clic. */
+  const kpis: {
+    label: string;
+    value: string;
+    change: string;
+    icon: typeof Users;
+    filtro: "todos" | LeadEstado;
+    iconBg: string;
+    iconColor: string;
+    glow: string;
+  }[] = [
     {
       label: "Total Leads",
       value: leads.length.toString(),
-      change: `${leads.length} total`,
+      change: "todos los estados",
       icon: Users,
+      filtro: "todos",
+      iconBg: "bg-blue-50",
+      iconColor: "text-blue-600",
+      glow: "hsl(221 83% 53% / 0.12)",
     },
     {
       label: "Nuevos",
       value: leads.filter((l) => l.dbStatus === "NUEVO").length.toString(),
-      change: "pendientes",
+      change: "pendientes de contacto",
       icon: UserPlus,
+      filtro: "Nuevo",
+      iconBg: "bg-blue-50",
+      iconColor: "text-blue-600",
+      glow: "hsl(221 83% 53% / 0.12)",
     },
     {
       label: "Contactados",
@@ -295,6 +313,10 @@ export default function LeadsPage() {
         .length.toString(),
       change: "en seguimiento",
       icon: Handshake,
+      filtro: "Contactado",
+      iconBg: "bg-amber-50",
+      iconColor: "text-amber-600",
+      glow: "hsl(45 93% 47% / 0.12)",
     },
     {
       label: "Convertidos",
@@ -303,6 +325,10 @@ export default function LeadsPage() {
         .length.toString(),
       change: "cerrados",
       icon: CheckCircle2,
+      filtro: "Convertido",
+      iconBg: "bg-emerald-50",
+      iconColor: "text-emerald-600",
+      glow: "hsl(160 84% 39% / 0.12)",
     },
   ];
 
@@ -438,12 +464,12 @@ export default function LeadsPage() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => fetchLeads()}
-            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-all duration-300 hover:bg-gray-50 hover:shadow-md"
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-colors duration-200 hover:border-gray-300 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
           >
             <RefreshCw className="h-4 w-4" />
             Actualizar
           </button>
-          <button className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-all duration-300 hover:bg-gray-50 hover:shadow-md">
+          <button className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-colors duration-200 hover:border-gray-300 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2">
             <Download className="h-4 w-4" />
             Exportar CSV
           </button>
@@ -454,50 +480,47 @@ export default function LeadsPage() {
       {/*  KPI Cards                                                    */}
       {/* ============================================================ */}
       <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-        {kpis.map((kpi) => (
-          <div
-            key={kpi.label}
-            className="group relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
-          >
-            <div
-              className="absolute inset-x-0 top-0 h-1 opacity-80"
-              style={{
-                background:
-                  "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))",
-              }}
-            />
-            <div className="flex items-center justify-between">
-              <div
-                className="flex h-12 w-12 items-center justify-center rounded-xl shadow-sm"
-                style={{
-                  background:
-                    "linear-gradient(135deg, hsl(221 83% 53% / 0.1), hsl(160 84% 39% / 0.1))",
-                }}
+        {kpis.map((kpi) => {
+          const active = filtroEstado === kpi.filtro;
+          return (
+            <SpotlightCard
+              key={kpi.label}
+              padding="none"
+              interactive
+              spotlightColor={kpi.glow}
+              className={active ? "border-blue-300 ring-1 ring-blue-200" : undefined}
+            >
+              <button
+                type="button"
+                aria-pressed={active}
+                onClick={() => setFiltroEstado(kpi.filtro)}
+                className="relative flex w-full items-start justify-between gap-4 rounded-2xl p-6 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-300"
               >
-                <kpi.icon
-                  className="h-5 w-5"
-                  style={{ color: "hsl(221 83% 53%)" }}
-                />
-              </div>
-              <div className="flex items-center gap-1 rounded-lg bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-600">
-                <TrendingUp className="h-3 w-3" />
-                {kpi.change}
-              </div>
-            </div>
-            <div className="mt-4">
-              <p className="text-3xl font-bold text-gray-900">{kpi.value}</p>
-              <p className="mt-1 text-sm font-medium text-gray-500">
-                {kpi.label}
-              </p>
-            </div>
-          </div>
-        ))}
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-500">{kpi.label}</p>
+                  <p
+                    className="mt-2 text-3xl font-bold tracking-tight text-gray-900"
+                    style={{ fontFamily: "Barlow, Inter, sans-serif" }}
+                  >
+                    {kpi.value}
+                  </p>
+                  <p className="mt-1 text-xs text-gray-400">{kpi.change}</p>
+                </div>
+                <div
+                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${kpi.iconBg}`}
+                >
+                  <kpi.icon className={`h-5 w-5 ${kpi.iconColor}`} />
+                </div>
+              </button>
+            </SpotlightCard>
+          );
+        })}
       </div>
 
       {/* ============================================================ */}
       {/*  Chart                                                        */}
       {/* ============================================================ */}
-      <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+      <SpotlightCard padding="md">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
           <div>
             <h3 className="text-lg font-bold text-gray-900" style={{ fontFamily: "Barlow, Inter, sans-serif" }}>
@@ -550,12 +573,12 @@ export default function LeadsPage() {
             );
           })}
         </div>
-      </div>
+      </SpotlightCard>
 
       {/* ============================================================ */}
       {/*  Filters                                                      */}
       {/* ============================================================ */}
-      <div className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-3 rounded-2xl border border-gray-200/70 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-16px_rgba(15,23,42,0.18)] sm:flex-row sm:items-center">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
@@ -585,22 +608,30 @@ export default function LeadsPage() {
       {/*  Empty state (no leads at all)                                */}
       {/* ============================================================ */}
       {leads.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-gray-100 bg-white py-20 shadow-sm">
-          <Users className="mb-4 h-12 w-12 text-gray-300" />
-          <h3 className="text-lg font-semibold text-gray-700">
+        <SpotlightCard
+          padding="none"
+          className="flex flex-col items-center justify-center px-6 py-20 text-center"
+        >
+          <div className="relative mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50">
+            <Users className="h-7 w-7 text-blue-500" />
+          </div>
+          <h3
+            className="relative text-lg font-bold text-gray-900"
+            style={{ fontFamily: "Barlow, Inter, sans-serif" }}
+          >
             Aún no tienes leads
           </h3>
-          <p className="mt-1 max-w-sm text-center text-sm text-gray-400">
+          <p className="relative mt-1 max-w-sm text-sm text-gray-500">
             Cuando alguien se interese en tus propiedades, sus datos aparecerán
             aquí.
           </p>
-        </div>
+        </SpotlightCard>
       ) : (
         /* ============================================================ */
         /*  Leads Table                                                  */
         /* ============================================================ */
-        <div className="rounded-2xl border border-gray-100 bg-white shadow-sm">
-          <div className="overflow-x-auto">
+        <SpotlightCard padding="none">
+          <div className="relative overflow-x-auto">
             {filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16">
                 <Users className="mb-3 h-10 w-10 text-gray-300" />
@@ -667,18 +698,20 @@ export default function LeadsPage() {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-1">
                           <button
+                            type="button"
+                            aria-label={`Ver detalle de ${lead.nombre}`}
                             onClick={() => setSelectedLead(lead)}
-                            className="rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-300 hover:bg-gray-100"
-                            style={{ color: "hsl(221 83% 53%)" }}
+                            className="flex h-11 w-11 items-center justify-center rounded-xl text-blue-600 transition-colors duration-200 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
                           >
-                            <Eye className="h-3.5 w-3.5" />
+                            <Eye className="h-4 w-4" />
                           </button>
                           {lead.telefono && (
                             <a
                               href={`tel:${lead.telefono.replace(/\s/g, "")}`}
-                              className="rounded-lg px-3 py-1.5 text-xs font-semibold text-emerald-600 transition-all duration-300 hover:bg-emerald-50"
+                              aria-label={`Llamar a ${lead.nombre}`}
+                              className="flex h-11 w-11 items-center justify-center rounded-xl text-emerald-600 transition-colors duration-200 hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
                             >
-                              <Phone className="h-3.5 w-3.5" />
+                              <Phone className="h-4 w-4" />
                             </a>
                           )}
                         </div>
@@ -691,10 +724,10 @@ export default function LeadsPage() {
           </div>
 
           {/* Footer count */}
-          <div className="border-t border-gray-100 px-6 py-3 text-sm text-gray-500">
+          <div className="relative border-t border-gray-100 px-6 py-3 text-sm text-gray-500">
             Mostrando {filtered.length} de {leads.length} leads
           </div>
-        </div>
+        </SpotlightCard>
       )}
 
       {/* ============================================================ */}

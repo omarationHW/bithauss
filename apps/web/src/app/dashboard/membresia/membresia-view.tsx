@@ -35,6 +35,7 @@ import {
   type MembershipHolding,
   type UsageSnapshot,
 } from "@/lib/membership";
+import { SpotlightCard } from "@/components/ui/spotlight-card";
 
 const BRAND_GRADIENT =
   "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))";
@@ -202,7 +203,7 @@ export function MembresiaView({
               </span>
               <button
                 type="button"
-                className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-bold transition-all duration-300 hover:shadow-lg"
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-bold shadow-sm transition-[transform,box-shadow] duration-300 hover:shadow-lg motion-safe:hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-blue-600"
                 style={{ color: "hsl(221 83% 53%)" }}
               >
                 Renovar plan
@@ -299,17 +300,15 @@ export function MembresiaView({
 
       {/* ── Descuentos vigentes ────────────────────────────── */}
 
-      <section
-        aria-label="Descuentos vigentes"
-        className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm"
-      >
+      <section aria-label="Descuentos vigentes">
+        <SpotlightCard padding="md">
         <h3
-          className="text-lg font-bold text-gray-900"
+          className="relative text-lg font-bold text-gray-900"
           style={{ fontFamily: "Barlow, Inter, sans-serif" }}
         >
           Descuentos vigentes
         </h3>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <div className="relative mt-4 grid gap-4 sm:grid-cols-2">
           <DiscountRow
             label="Emisión de certificados BRC"
             pct={entitlements.brcDiscountPct}
@@ -322,7 +321,7 @@ export function MembresiaView({
             testId="discount-video"
           />
         </div>
-        <div className="mt-4 grid gap-2 text-sm text-gray-600 sm:grid-cols-3">
+        <div className="relative mt-4 grid gap-2 text-sm text-gray-600 sm:grid-cols-3">
           <PerkRow
             enabled={entitlements.hasCertifiedProfessionalsNetwork}
             label="Red de profesionales certificados"
@@ -336,6 +335,7 @@ export function MembresiaView({
             label="Formatos inmobiliarios"
           />
         </div>
+        </SpotlightCard>
       </section>
 
       {/* ── Camino de upgrade ──────────────────────────────── */}
@@ -382,19 +382,25 @@ function UsageCard({
   testId: string;
 }) {
   return (
-    <div
+    <SpotlightCard
       data-testid={testId}
-      className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-sm"
+      padding="md"
+      spotlightColor={warn ? "hsl(0 72% 51% / 0.1)" : undefined}
     >
-      <div
-        className="absolute inset-x-0 top-0 h-1 opacity-80"
-        style={{ background: BRAND_GRADIENT }}
-      />
-      <p className="flex items-center gap-2 text-sm font-medium text-gray-500">
-        {icon}
+      <p className="relative flex items-center gap-2 text-sm font-medium text-gray-500">
+        <span
+          className={`flex h-8 w-8 items-center justify-center rounded-lg ${
+            warn ? "bg-red-50 text-red-600" : "bg-blue-50 text-blue-600"
+          }`}
+        >
+          {icon}
+        </span>
         {label}
       </p>
-      <p className="mt-2 text-2xl font-bold tabular-nums text-gray-900">
+      <p
+        className="relative mt-3 text-2xl font-bold tabular-nums tracking-tight text-gray-900"
+        style={{ fontFamily: "Barlow, Inter, sans-serif" }}
+      >
         {new Intl.NumberFormat("es-MX").format(used)}
         <span className="text-sm font-medium text-gray-400">
           /{new Intl.NumberFormat("es-MX").format(limit)}
@@ -402,7 +408,7 @@ function UsageCard({
       </p>
 
       <div
-        className="mt-4 h-2 w-full overflow-hidden rounded-full bg-gray-100"
+        className="relative mt-4 h-2 w-full overflow-hidden rounded-full bg-gray-100"
         role="progressbar"
         aria-valuenow={percent}
         aria-valuemin={0}
@@ -417,10 +423,10 @@ function UsageCard({
           }}
         />
       </div>
-      <p className="mt-2 text-xs text-gray-400">
+      <p className="relative mt-2 text-xs text-gray-500">
         {note ?? `${percent}% utilizado`}
       </p>
-    </div>
+    </SpotlightCard>
   );
 }
 
@@ -500,12 +506,17 @@ function UpgradePath({ current }: { current: MembershipTierKey }) {
           {upgrades.map((tier) => {
             const def = getPlan(tier);
             return (
-              <div
+              <SpotlightCard
                 key={tier}
                 data-testid={`upgrade-${tier}`}
-                className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
+                padding="none"
+                interactive
+                className="p-5"
               >
-                <h4 className="text-base font-bold text-gray-900">
+                <h4
+                  className="relative text-base font-bold text-gray-900"
+                  style={{ fontFamily: "Barlow, Inter, sans-serif" }}
+                >
                   {def.name}
                 </h4>
                 <p className="mt-1 text-sm text-gray-500">
@@ -519,17 +530,17 @@ function UpgradePath({ current }: { current: MembershipTierKey }) {
                 </p>
                 <button
                   type="button"
-                  className="mt-4 w-full rounded-xl px-4 py-2.5 text-sm font-bold text-white transition-all duration-300 hover:-translate-y-0.5"
+                  className="relative mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-xl px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-[transform,box-shadow] duration-300 hover:shadow-lg motion-safe:hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
                   style={{ background: BRAND_GRADIENT }}
                 >
                   Subir a {tier}
                 </button>
-              </div>
+              </SpotlightCard>
             );
           })}
         </div>
       ) : (
-        <p className="rounded-2xl border border-gray-100 bg-white p-5 text-sm text-gray-600">
+        <p className="rounded-2xl border border-gray-200/70 bg-white p-5 text-sm text-gray-600 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-16px_rgba(15,23,42,0.18)]">
           Ya cuentas con {currentDef.name}, el nivel más alto. Puedes contratar
           membresías adicionales para acumular propiedades y beneficios.
         </p>
