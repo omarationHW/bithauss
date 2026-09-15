@@ -14,6 +14,7 @@ import {
   Save,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { describeOcrFailure } from "@/lib/ocr-validate";
 import { logError } from "@/lib/log";
 import { isDocumentRequired } from "@/lib/brc-documents";
 import {
@@ -361,14 +362,16 @@ export default function SolicitarBrcPage() {
       });
 
       if (!res.ok) {
-        // If OCR service is unavailable, accept file with warning
+        // El archivo se acepta igual (revisión manual), pero explicamos el
+        // motivo real: tamaño, formato, sesión, límite de peticiones…
+        const body: unknown = await res.json().catch(() => null);
         addFile(docTypeId, file, multiple);
         setOcrResults((prev) => ({
           ...prev,
           [docTypeId]: {
             valid: true,
             confidence: "low",
-            message: "No se pudo validar automáticamente. Se aceptó para revisión manual.",
+            message: describeOcrFailure(res.status, body, file),
             detectedType: "No verificado",
             extractedData: {},
           },

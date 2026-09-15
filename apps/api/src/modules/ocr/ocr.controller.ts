@@ -14,6 +14,9 @@ import { MagicBytesValidator } from '../../common/validators/magic-bytes.validat
 import { Roles } from '../../common/decorators/roles.decorator';
 import { OcrService, EscrituraCrossCheckInput } from './ocr.service';
 
+/** Tamaño máximo aceptado para validación OCR (30 MB). */
+const OCR_MAX_FILE_BYTES = 30 * 1024 * 1024;
+
 /**
  * BH-14: these endpoints bill BitHauss per call (Azure Document Intelligence +
  * Azure OpenAI). Being merely authenticated used to be enough, so anyone with
@@ -34,7 +37,10 @@ export class OcrController {
     @UploadedFile(
       new ParseFilePipe({
         validators: [
-          new MaxFileSizeValidator({ maxSize: 15 * 1024 * 1024 }),
+          // Escrituras escaneadas de decenas de páginas superan fácilmente
+          // 15 MB; Document Intelligence acepta mucho más. Mantener en sync
+          // con OCR_MAX_FILE_MB en apps/web/src/lib/ocr-validate.ts.
+          new MaxFileSizeValidator({ maxSize: OCR_MAX_FILE_BYTES }),
           new MagicBytesValidator({ allowed: ['pdf', 'jpeg', 'png'] }),
         ],
       }),
