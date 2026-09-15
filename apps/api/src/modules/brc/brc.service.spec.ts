@@ -663,6 +663,8 @@ describe('BrcService.issueBrc', () => {
   // The BRC price list is only real if issuance actually checks the charge:
   // migration 026 wrote `payment_status` and nothing ever read it.
   it('refuses to issue the BRC when the fee has not been collected', async () => {
+    // Con Stripe configurado los pagos NO están pausados: aplica la puerta.
+    process.env.STRIPE_SECRET_KEY = 'sk_test_gate';
     const mock = makeSupabase(
       readyForBrc({
         brc_expedientes: {
@@ -682,6 +684,31 @@ describe('BrcService.issueBrc', () => {
     );
     // Nothing may be written when the gate closes.
     expect(mock.insertCalls.find((c) => c.table === 'brc_certificates')).toBeUndefined();
+    delete process.env.STRIPE_SECRET_KEY;
+  });
+
+  it('issues the BRC while online payments are paused and waives the fee with a log', async () => {
+    delete process.env.STRIPE_SECRET_KEY;
+    const mock = makeSupabase(
+      readyForBrc({
+        brc_expedientes: {
+          select: {
+            data: {
+              ...baseExpediente,
+              status: 'PENDIENTE_EMISION_BRC',
+              payment_status: 'PENDIENTE',
+            },
+          },
+        },
+      }),
+    );
+    const service = makeService(mock);
+    await expect(service.issueBrc(EXP_ID, OPERATOR_ID, {})).resolves.toBeDefined();
+    expect(mock.insertCalls.find((c) => c.table === 'brc_certificates')).toBeDefined();
+    const waiver = mock.insertCalls.find(
+      (c) => c.table === 'brc_expediente_logs' && (c.payload as { action?: string }).action === 'PAGO_EXENTO_PAGOS_PAUSADOS',
+    );
+    expect(waiver).toBeDefined();
   });
 
   it('issues the BRC for a dossier waived as EXENTO', async () => {

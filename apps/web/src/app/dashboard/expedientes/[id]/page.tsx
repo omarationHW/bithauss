@@ -33,6 +33,7 @@ import {
   Download,
   FileText,
   Loader2,
+  AlertTriangle,
   MapPin,
   BedDouble,
   Bath,
@@ -265,6 +266,11 @@ export default function ExpedienteDetailPage() {
   const [certificateId, setCertificateId] = useState<string | null>(null);
 
   const isNotario = user?.role === "NOTARIO";
+  /** Paso B del flujo: BitHauss (admin u operador BRC) emite el BRC. */
+  const canIssueBrc = user?.role === "ADMIN" || user?.role === "OPERADOR_BRC";
+  const [brcIssuing, setBrcIssuing] = useState(false);
+  const [brcIssueError, setBrcIssueError] = useState<string | null>(null);
+  const [brcIssuedNumber, setBrcIssuedNumber] = useState<string | null>(null);
   /** The owner who filed the request: the only one who can fix documents. */
   const isRequester = !!user && expediente?.requested_by === user.id;
   const supabase = useMemo(() => createClient(), []);
@@ -785,6 +791,41 @@ export default function ExpedienteDetailPage() {
   }
 
   /** Opens the Certificado Notarial through a short-lived signed URL. */
+  /**
+   * Emite el certificado BRC desde el expediente (mismo endpoint que el panel
+   * /admin/brc). El API valida el Certificado Notarial vigente y la puerta de
+   * pago (exenta mientras los pagos en línea estén pausados).
+   */
+  async function handleIssueBrc() {
+    if (!expediente) return;
+    setBrcIssuing(true);
+    setBrcIssueError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "";
+      const res = await fetch(`${apiBase}/api/v1/brc/expedientes/${expediente.id}/issue-brc`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({}),
+      });
+      const body = (await res.json().catch(() => null)) as
+        | { certificate_number?: string; message?: string }
+        | null;
+      if (!res.ok) {
+        throw new Error(body?.message ?? "No se pudo emitir el certificado BRC.");
+      }
+      setBrcIssuedNumber(body?.certificate_number ?? null);
+      await fetchData();
+    } catch (err) {
+      setBrcIssueError(err instanceof Error ? err.message : "No se pudo emitir el certificado BRC.");
+    } finally {
+      setBrcIssuing(false);
+    }
+  }
+
   async function openNotarialCertificate() {
     if (!notarialCert) return;
     const signed = await getSignedDocumentUrl(supabase, notarialCert.file_url);
@@ -1307,6 +1348,45 @@ export default function ExpedienteDetailPage() {
                 <Download className="h-3.5 w-3.5" />
                 Ver Certificado Notarial
               </button>
+            </div>
+          )}
+
+          {/* ---- Emisión del BRC (admin / operador BRC) ---- */}
+          {canIssueBrc && notarialCert && expediente.status === BRC_STATUS.PENDIENTE_EMISION_BRC && (
+            <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-6 shadow-sm">
+              <h3
+                className="mb-1 text-sm font-bold uppercase tracking-wider text-emerald-900"
+                style={{ fontFamily: "Barlow, Inter, sans-serif" }}
+              >
+                Emitir certificado BRC
+              </h3>
+              <p className="text-xs leading-relaxed text-emerald-900/80">
+                El Certificado Notarial ya está emitido. Al emitir el BRC, la
+                propiedad recibe el sello en su publicación y el certificado
+                queda disponible para consulta pública.
+              </p>
+              {brcIssueError && (
+                <p className="mt-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>{brcIssueError}</span>
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={handleIssueBrc}
+                disabled={brcIssuing}
+                className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+                style={{ background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))" }}
+              >
+                {brcIssuing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldBrc className="h-4 w-4" />}
+                {brcIssuing ? "Emitiendo…" : "Emitir BRC"}
+              </button>
+            </div>
+          )}
+          {canIssueBrc && brcIssuedNumber && expediente.status === BRC_STATUS.CERTIFICADO && (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 shadow-sm" role="status">
+              <p className="text-sm font-bold text-emerald-900">Certificado BRC emitido</p>
+              <p className="mt-1 text-xs text-emerald-900/80">Folio {brcIssuedNumber}. El sello ya aparece en la publicación.</p>
             </div>
           )}
 

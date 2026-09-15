@@ -99,6 +99,16 @@ export class CertificateTrackingDto {
  */
 const PAID_PAYMENT_STATUSES = ['PAGADO', 'EXENTO'];
 
+/**
+ * Mientras Stripe no esté configurado los pagos en línea están pausados y el
+ * cobro se coordina fuera de la plataforma; la web muestra el mismo aviso
+ * (ver brc-price-summary.tsx). Se lee en tiempo de ejecución para que los
+ * tests puedan simular ambos modos.
+ */
+function paymentsPaused(): boolean {
+  return !(process.env.STRIPE_SECRET_KEY ?? '').trim();
+}
+
 const BRC_ISSUER_ROLES = ['ADMIN', 'OPERADOR_BRC'];
 
 /** Matches `exp: "90d"` in the certificate's signable payload. */
@@ -807,9 +817,27 @@ export class BrcService {
     // BRC price list decorative — a dossier could reach CERTIFICADO unpaid.
     const paymentStatus = expediente.payment_status ?? 'PENDIENTE';
     if (!PAID_PAYMENT_STATUSES.includes(paymentStatus)) {
-      throw new BadRequestException(
-        'El expediente no tiene acreditado el pago de la certificación BRC',
-      );
+      // Pagos en línea pausados (sin STRIPE_SECRET_KEY): el cobro se acuerda
+      // fuera de la plataforma, así que la emisión no se bloquea. El expediente
+      // queda EXENTO y el historial deja constancia de por qué.
+      if (!paymentsPaused()) {
+        throw new BadRequestException(
+          'El expediente no tiene acreditado el pago de la certificación BRC',
+        );
+      }
+      await supabase
+        .from('brc_expedientes')
+        .update({ payment_status: 'EXENTO' })
+        .eq('id', expedienteId);
+      await supabase.from('brc_expediente_logs').insert({
+        expediente_id: expedienteId,
+        action: 'PAGO_EXENTO_PAGOS_PAUSADOS',
+        performed_by: userId,
+        metadata: {
+          previous_payment_status: paymentStatus,
+          reason: 'Pagos en línea pausados; cobro acordado fuera de la plataforma',
+        },
+      });
     }
 
     const { data: notarial } = await supabase
