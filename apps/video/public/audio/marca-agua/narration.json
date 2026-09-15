@@ -1,0 +1,74 @@
+[
+  {
+    "id": "intro",
+    "file": "audio/marca-agua/intro.wav",
+    "text": "Bienvenido a BitHauss. En este tutorial aprenderás a cambiar la marca de agua de las fotos de tus propiedades en menos de dos minutos.",
+    "seconds": 8.077292
+  },
+  {
+    "id": "01",
+    "file": "audio/marca-agua/01.wav",
+    "text": "Desde tu panel, entra a Configuración en el menú lateral.",
+    "seconds": 3.584542
+  },
+  {
+    "id": "02",
+    "file": "audio/marca-agua/02.wav",
+    "text": "Busca la sección Marca de agua. Aquí proteges tus fotos incrustando tu logo o tu foto de perfil.",
+    "seconds": 6.184813
+  },
+  {
+    "id": "03",
+    "file": "audio/marca-agua/03.wav",
+    "text": "Activa la marca de agua con el interruptor.",
+    "seconds": 2.586354
+  },
+  {
+    "id": "04",
+    "file": "audio/marca-agua/04.wav",
+    "text": "Elige la imagen de tu marca: sube tu logo, de preferencia un PNG con fondo transparente, o usa tu foto de perfil.",
+    "seconds": 7.99675
+  },
+  {
+    "id": "05",
+    "file": "audio/marca-agua/05.wav",
+    "text": "Selecciona la posición: en cualquiera de las esquinas, al centro, o en mosaico para cubrir toda la foto.",
+    "seconds": 7.021063
+  },
+  {
+    "id": "06",
+    "file": "audio/marca-agua/06.wav",
+    "text": "Ajusta la opacidad y el tamaño. Una opacidad media mantiene la foto atractiva sin perder la protección.",
+    "seconds": 6.858833
+  },
+  {
+    "id": "07",
+    "file": "audio/marca-agua/07.wav",
+    "text": "La vista previa muestra al instante cómo se verá tu marca sobre una foto real. Tus cambios se guardan automáticamente.",
+    "seconds": 7.461958
+  },
+  {
+    "id": "08",
+    "file": "audio/marca-agua/08.wav",
+    "text": "Para actualizar las fotos que ya publicaste, pulsa Aplicar a existentes. BitHauss guarda una copia original de cada foto, así que puedes cambiar la marca las veces que quieras.",
+    "seconds": 11.726083
+  },
+  {
+    "id": "09",
+    "file": "audio/marca-agua/09.wav",
+    "text": "En segundos, tus propiedades publicadas se reprocesan con la nueva configuración.",
+    "seconds": 5.349771
+  },
+  {
+    "id": "10",
+    "file": "audio/marca-agua/10.wav",
+    "text": "Y listo: todas las fotos de tus propiedades ya muestran tu marca. Las fotos nuevas que subas la llevarán automáticamente.",
+    "seconds": 7.822146
+  },
+  {
+    "id": "outro",
+    "file": "audio/marca-agua/outro.wav",
+    "text": "Protege tu trabajo y haz que tu marca acompañe cada propiedad. BitHauss, Bienes Raíces Certificados.",
+    "seconds": 6.826667
+  }
+]

@@ -85,3 +85,9 @@ OCR_API_INVESTIGACION.md
 # Misc
 .cache/
 tmp/
+
+# Assets pesados de los videos (apps/video): se regeneran con
+# `pnpm capture`, `scripts/capture-marca-agua.ts` y `scripts/generate-narration.mjs`.
+# Los .json (pasos/narración) sí se versionan porque la composición los importa.
+apps/video/public/screenshots/**/*.png
+apps/video/public/audio/**/*.wav

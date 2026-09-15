@@ -1,0 +1,14 @@
+[
+  { "id": "intro", "text": "Bienvenido a BitHauss. En este tutorial aprenderás a cambiar la marca de agua de las fotos de tus propiedades en menos de dos minutos." },
+  { "id": "01", "text": "Desde tu panel, entra a Configuración en el menú lateral." },
+  { "id": "02", "text": "Busca la sección Marca de agua. Aquí proteges tus fotos incrustando tu logo o tu foto de perfil." },
+  { "id": "03", "text": "Activa la marca de agua con el interruptor." },
+  { "id": "04", "text": "Elige la imagen de tu marca: sube tu logo, de preferencia un PNG con fondo transparente, o usa tu foto de perfil." },
+  { "id": "05", "text": "Selecciona la posición: en cualquiera de las esquinas, al centro, o en mosaico para cubrir toda la foto." },
+  { "id": "06", "text": "Ajusta la opacidad y el tamaño. Una opacidad media mantiene la foto atractiva sin perder la protección." },
+  { "id": "07", "text": "La vista previa muestra al instante cómo se verá tu marca sobre una foto real. Tus cambios se guardan automáticamente." },
+  { "id": "08", "text": "Para actualizar las fotos que ya publicaste, pulsa Aplicar a existentes. BitHauss guarda una copia original de cada foto, así que puedes cambiar la marca las veces que quieras." },
+  { "id": "09", "text": "En segundos, tus propiedades publicadas se reprocesan con la nueva configuración." },
+  { "id": "10", "text": "Y listo: todas las fotos de tus propiedades ya muestran tu marca. Las fotos nuevas que subas la llevarán automáticamente." },
+  { "id": "outro", "text": "Protege tu trabajo y haz que tu marca acompañe cada propiedad. BitHauss, Bienes Raíces Certificados." }
+]

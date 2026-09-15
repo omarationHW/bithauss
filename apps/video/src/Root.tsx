@@ -2,6 +2,7 @@ import React from 'react';
 import { Composition } from 'remotion';
 import { Reel20 } from './compositions/Reel20';
 import { Demo90 } from './compositions/Demo90';
+import { TutorialMarcaAgua, tutorialDurationInFrames } from './compositions/TutorialMarcaAgua';
 
 const FPS = 30;
 
@@ -23,6 +24,16 @@ export const Root: React.FC = () => (
       id="Demo90"
       component={Demo90}
       durationInFrames={78 * FPS}
+      fps={FPS}
+      width={1920}
+      height={1080}
+    />
+    <Composition
+      id="TutorialMarcaAgua"
+      component={TutorialMarcaAgua}
+      // Real length is derived from narration.json in calculateMetadata.
+      durationInFrames={tutorialDurationInFrames(FPS)}
+      calculateMetadata={() => ({ durationInFrames: tutorialDurationInFrames(FPS) })}
       fps={FPS}
       width={1920}
       height={1080}

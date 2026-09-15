@@ -6,6 +6,7 @@
     "dev": "remotion studio",
     "build:reel": "remotion render Reel20 out/reel-20s.mp4",
     "build:demo": "remotion render Demo90 out/demo-90s.mp4",
+    "build:tutorial-marca-agua": "remotion render TutorialMarcaAgua out/tutorial-marca-agua.mp4",
     "capture": "tsx scripts/capture-screenshots.ts",
     "typecheck": "tsc --noEmit"
   },
