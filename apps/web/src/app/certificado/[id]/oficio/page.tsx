@@ -32,6 +32,11 @@ interface CertificateRecord {
   certificate_number: string;
   qr_code_url: string | null;
   pdf_url: string | null;
+  /* Foto del inmueble tomada al emitir (migración 039). */
+  deed_number?: string | null;
+  folio_real?: string | null;
+  land_area_m2?: number | null;
+  built_area_m2?: number | null;
   issued_at: string;
   expires_at: string;
   created_at: string;
@@ -44,6 +49,8 @@ interface CertificateRecord {
     price: number;
     currency: string;
     featured_image_url: string | null;
+    area_total?: number | null;
+    area_built?: number | null;
   } | null;
   issued_by_profile: {
     first_name: string;
@@ -125,13 +132,27 @@ export default function CertificadoOficioPage() {
     async function fetchCertificate() {
       if (!certificateId) return;
 
-      const { data: certData, error: certError } = await supabase
+      const BASE_COLS =
+        "id, certificate_number, qr_code_url, pdf_url, issued_at, issued_by, expires_at, created_at, property_id, expediente_id";
+      // Columnas de la migración 039 (foto del inmueble). Si la base aún no
+      // las tiene, PostgREST rechaza toda la consulta: se reintenta sin ellas
+      // y esos campos quedan en blanco en lugar de "certificado no encontrado".
+      const SNAPSHOT_COLS = ", deed_number, folio_real, land_area_m2, built_area_m2";
+      type CertRow = Record<string, unknown> | null;
+      let certRes: { data: unknown; error: { message?: string } | null } = await supabase
         .from("brc_certificates")
-        .select(
-          "id, certificate_number, qr_code_url, pdf_url, issued_at, issued_by, expires_at, created_at, property_id, expediente_id",
-        )
+        .select(BASE_COLS + SNAPSHOT_COLS)
         .eq("id", certificateId)
         .maybeSingle();
+      if (certRes.error && /column|schema cache/i.test(certRes.error.message ?? "")) {
+        certRes = await supabase
+          .from("brc_certificates")
+          .select(BASE_COLS)
+          .eq("id", certificateId)
+          .maybeSingle();
+      }
+      const certData = certRes.data as CertRow;
+      const certError = certRes.error;
 
       if (!certData || certError) {
         logError("Cert fetch error:", certError);
@@ -163,7 +184,7 @@ export default function CertificadoOficioPage() {
         const { data: pData } = await supabase
           .from("properties")
           .select(
-            "id, title, address_line, city, state, price, currency, featured_image_url",
+            "id, title, address_line, city, state, price, currency, featured_image_url, area_total, area_built",
           )
           .eq("id", certData.property_id)
           .maybeSingle();
@@ -208,6 +229,13 @@ export default function CertificadoOficioPage() {
   }, [loading]);
 
   /* ------------ PDF download ------------ */
+  /**
+   * Descarga = impresión nativa a PDF. html2canvas rasterizaba el documento y
+   * perdía los candados de seguridad (guilloché con blur, microimpresión,
+   * patrón VOID en SVG, tiras iridiscentes, marca estegano…): el motor de
+   * impresión del navegador sí los reproduce, en vectores y a tamaño Oficio.
+   * La hoja de estilo `@media print` en oficio-cert.css aísla el certificado.
+   */
   const handleDownload = useCallback(async () => {
     if (!certRef.current || downloading) return;
     setDownloading(true);
@@ -215,36 +243,12 @@ export default function CertificadoOficioPage() {
       if (typeof document !== "undefined" && document.fonts) {
         await document.fonts.ready;
       }
-
-      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
-        import("html2canvas"),
-        import("jspdf"),
-      ]);
-
-      // Give QR + security strip a tick to settle.
+      // Da un instante a QR y tira de seguridad para asentarse.
       await new Promise((r) => setTimeout(r, 150));
-
-      const canvas = await html2canvas(certRef.current, {
-        scale: 3,
-        useCORS: true,
-        allowTaint: false,
-        backgroundColor: "#E8EDE5",
-        logging: false,
-        imageTimeout: 15000,
-        windowWidth: certRef.current.scrollWidth,
-        windowHeight: certRef.current.scrollHeight,
-      });
-
-      const imgData = canvas.toDataURL("image/jpeg", 0.98);
-      const pdf = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: [216, 356],
-        compress: true,
-      });
-      pdf.addImage(imgData, "JPEG", 0, 0, 216, 356, undefined, "SLOW");
-      const filename = `certificado-brc-${certificate?.certificate_number ?? "documento"}.pdf`;
-      pdf.save(filename);
+      const previousTitle = document.title;
+      document.title = `certificado-brc-${certificate?.certificate_number ?? "documento"}`;
+      window.print();
+      document.title = previousTitle;
     } catch (err) {
       logError("Download error:", err);
     } finally {
@@ -295,6 +299,14 @@ export default function CertificadoOficioPage() {
       .join(", ") || "[Calle, Número, Colonia, Municipio, Estado, C.P.]";
 
   const { serie, folio } = splitCertNumber(certificate.certificate_number);
+  const fmtArea = (v: number | null | undefined) =>
+    v && v > 0 ? new Intl.NumberFormat("es-MX", { maximumFractionDigits: 2 }).format(v) : "";
+  // Certificados anteriores a la migración 039 no traen la foto: se cae a la
+  // propiedad (pública) para las superficies; escritura/folio quedan en blanco.
+  const deedNumber = certificate.deed_number ?? "";
+  const folioReal = certificate.folio_real ?? "";
+  const landArea = fmtArea(certificate.land_area_m2 ?? certificate.properties?.area_total);
+  const builtArea = fmtArea(certificate.built_area_m2 ?? certificate.properties?.area_built);
   const notaryName = certificate.issued_by_profile
     ? `${certificate.issued_by_profile.first_name} ${certificate.issued_by_profile.last_name}`
     : "";
@@ -334,9 +346,9 @@ export default function CertificadoOficioPage() {
           </Button>
         </div>
 
-        <div ref={wrapperRef} className="w-full">
+        <div ref={wrapperRef} className="w-full cert-print-area">
           <div
-            className="mx-auto shadow-2xl"
+            className="mx-auto shadow-2xl cert-print-frame"
             style={{
               width: 816 * scale,
               height: 1344 * scale,
@@ -344,6 +356,7 @@ export default function CertificadoOficioPage() {
             }}
           >
             <div
+              className="cert-print-scale"
               style={{
                 transform: `scale(${scale})`,
                 transformOrigin: "top left",
@@ -357,6 +370,10 @@ export default function CertificadoOficioPage() {
                 certNumber={certificate.certificate_number}
                 serie={serie}
                 folio={folio}
+                deedNumber={deedNumber}
+                folioReal={folioReal}
+                landArea={landArea}
+                builtArea={builtArea}
                 address={address}
                 notaryName={notaryName}
                 notaryNumber={notaryNumber}
@@ -387,6 +404,10 @@ interface CertificateDocumentProps {
   certNumber: string;
   serie: string;
   folio: string;
+  deedNumber: string;
+  folioReal: string;
+  landArea: string;
+  builtArea: string;
   address: string;
   notaryName: string;
   notaryNumber: string;
@@ -402,6 +423,10 @@ const CertificateDocument = ({
   certNumber,
   serie,
   folio,
+  deedNumber,
+  folioReal,
+  landArea,
+  builtArea,
   address,
   notaryName,
   notaryNumber,
@@ -419,17 +444,17 @@ const CertificateDocument = ({
       serie,
       folio,
       direccion: address,
-      escritura: "",
-      folioReal: "",
-      supTerreno: "",
-      supConstruida: "",
+      escritura: deedNumber,
+      folioReal,
+      supTerreno: landArea,
+      supConstruida: builtArea,
       lugar: issuedPlace,
       dia: issuedDay,
       mes: issuedMonth,
       anio: issuedYear,
       numCert: certNumber,
     }),
-    [serie, folio, address, issuedPlace, issuedDay, issuedMonth, issuedYear, certNumber],
+    [serie, folio, deedNumber, folioReal, landArea, builtArea, address, issuedPlace, issuedDay, issuedMonth, issuedYear, certNumber],
   );
 
   /* Compute the 13 security artifacts once data is bound */
@@ -543,16 +568,16 @@ const CertificateDocument = ({
         <div className="abs address">{addressWithZwMark}</div>
 
         <div className="abs field-row field-row-1">
-          Con número de escritura pública: <span className="ln ln-long"></span>
+          Con número de escritura pública: <span className="ln ln-long">{deedNumber}</span>
         </div>
         <div className="abs field-row field-row-2">
-          Inscrito en el Registro Público de la Propiedad bajo el folio Real No: <span className="ln ln-short"></span>
+          Inscrito en el Registro Público de la Propiedad bajo el folio Real No: <span className="ln ln-short">{folioReal}</span>
         </div>
         <div className="abs field-row field-row-3">
-          Superficie total del terreno: <span className="ln ln-num"></span> m²
+          Superficie total del terreno: <span className="ln ln-num">{landArea}</span> m²
         </div>
         <div className="abs field-row field-row-4">
-          Superficie construida: <span className="ln ln-num"></span> m²
+          Superficie construida: <span className="ln ln-num">{builtArea}</span> m²
         </div>
 
         <p className="abs validation-text">

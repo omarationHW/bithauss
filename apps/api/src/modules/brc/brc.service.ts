@@ -735,6 +735,73 @@ export class BrcService {
     );
   }
 
+  /**
+   * Datos del inmueble que el certificado impreso muestra (escritura, folio
+   * real, superficies). Se copian al emitir porque la página pública del
+   * certificado no puede leer el expediente. Fuente: OCR de la escritura
+   * (corregido por la notaría si lo hubo), constancia de folio real y la
+   * propiedad. Cualquier dato ausente queda null y el documento lo deja en
+   * blanco; nunca se inventa.
+   */
+  private async propertySnapshotForCertificate(
+    expedienteId: string,
+    propertyId: string,
+  ): Promise<{
+    deed_number: string | null;
+    folio_real: string | null;
+    land_area_m2: number | null;
+    built_area_m2: number | null;
+  }> {
+    const supabase = this.supabaseConfig.getAdminClient();
+    const [{ data: docs }, { data: property }] = await Promise.all([
+      supabase
+        .from('brc_documents')
+        .select(
+          'ocr_extracted_data, ocr_corrected_data, created_at, brc_document_types ( name )',
+        )
+        .eq('expediente_id', expedienteId)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('properties')
+        .select('area_total, area_built')
+        .eq('id', propertyId)
+        .maybeSingle(),
+    ]);
+
+    type Doc = {
+      ocr_extracted_data: Record<string, unknown> | null;
+      ocr_corrected_data: Record<string, unknown> | null;
+      brc_document_types: { name: string } | { name: string }[] | null;
+    };
+    const typeName = (d: Doc) => {
+      const t = d.brc_document_types;
+      return (Array.isArray(t) ? t[0]?.name : t?.name) ?? '';
+    };
+    const dataOf = (d: Doc | undefined) =>
+      d ? { ...(d.ocr_extracted_data ?? {}), ...(d.ocr_corrected_data ?? {}) } : {};
+    const text = (v: unknown): string | null => {
+      if (v == null) return null;
+      const s = String(v).trim();
+      return s && s.toLowerCase() !== 'null' ? s : null;
+    };
+    const num = (v: unknown): number | null => {
+      if (v == null || v === '') return null;
+      const n = typeof v === 'number' ? v : parseFloat(String(v).replace(/[^0-9.,]/g, '').replace(',', '.'));
+      return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : null;
+    };
+
+    const list = (docs ?? []) as Doc[];
+    const escritura = dataOf(list.find((d) => /^escritura de propiedad/i.test(typeName(d))));
+    const folioDoc = dataOf(list.find((d) => /^folio real/i.test(typeName(d))));
+
+    return {
+      deed_number: text(escritura.numeroEscritura),
+      folio_real: text(escritura.folioReal) ?? text(folioDoc.folioReal),
+      land_area_m2: num(property?.area_total) ?? num(escritura.superficieTerreno) ?? num(escritura.superficie),
+      built_area_m2: num(property?.area_built) ?? num(escritura.superficieConstruida),
+    };
+  }
+
   private async insertCertificateWithNumber(payload: {
     expediente_id: string;
     property_id: string;
@@ -745,6 +812,10 @@ export class BrcService {
     notarial_certificate_id: string | null;
     issued_at: string;
     expires_at: string;
+    deed_number: string | null;
+    folio_real: string | null;
+    land_area_m2: number | null;
+    built_area_m2: number | null;
   }): Promise<{ id: string; certificate_number: string }> {
     const supabase = this.supabaseConfig.getAdminClient();
     const year = new Date(payload.issued_at).getFullYear();
@@ -865,6 +936,11 @@ export class BrcService {
     const expiresAt = new Date(issuedAt);
     expiresAt.setDate(expiresAt.getDate() + CERTIFICATE_VALIDITY_DAYS);
 
+    const snapshot = await this.propertySnapshotForCertificate(
+      expedienteId,
+      expediente.property_id,
+    );
+
     const cert = await this.insertCertificateWithNumber({
       expediente_id: expedienteId,
       property_id: expediente.property_id,
@@ -875,6 +951,7 @@ export class BrcService {
       notarial_certificate_id: notarial.id,
       issued_at: issuedAt.toISOString(),
       expires_at: expiresAt.toISOString(),
+      ...snapshot,
     });
 
     // The public verification URL is only knowable once the row exists.

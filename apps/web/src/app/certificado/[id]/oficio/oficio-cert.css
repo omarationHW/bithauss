@@ -593,3 +593,49 @@
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
+
+
+/* ------------------------------------------------------------------ */
+/*  Exportación a PDF por impresión nativa (Descargar certificado)     */
+/*  Aísla el certificado, quita el escalado de pantalla y fija la hoja */
+/*  a tamaño Oficio sin márgenes. Todos los candados se conservan.      */
+/* ------------------------------------------------------------------ */
+@media print {
+  @page {
+    size: 215.9mm 355.6mm;
+    margin: 0;
+  }
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+  /* Oculta todo salvo el certificado. */
+  body * {
+    visibility: hidden !important;
+  }
+  .cert-print-area,
+  .cert-print-area * {
+    visibility: visible !important;
+  }
+  .cert-print-area {
+    position: absolute !important;
+    inset: 0 auto auto 0 !important;
+    width: 215.9mm !important;
+    margin: 0 !important;
+  }
+  .cert-print-frame {
+    width: 215.9mm !important;
+    height: 355.6mm !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+  }
+  .cert-print-scale {
+    transform: none !important;
+  }
+  .cert-page {
+    box-shadow: none !important;
+    page-break-after: avoid;
+    break-inside: avoid;
+  }
+}
