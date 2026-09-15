@@ -18,6 +18,29 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export const SIGNED_URL_TTL_SECONDS = 60;
 
 /**
+ * Nombre seguro para una clave de Supabase Storage. Storage rechaza acentos y
+ * otros caracteres no ASCII ("Invalid key"), así que se normaliza: sin
+ * diacríticos, espacios y símbolos → "-", extensión en minúsculas. El nombre
+ * original se guarda aparte (columna file_name) para mostrarlo al usuario.
+ *
+ *   "ANEXO 2 Identificación ÉRIKA.pdf" → "ANEXO-2-Identificacion-ERIKA.pdf"
+ */
+export function safeStorageFileName(name: string): string {
+  const dot = name.lastIndexOf(".");
+  const base = dot > 0 ? name.slice(0, dot) : name;
+  const ext = dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
+  const ascii = base
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9._-]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^[-.]+|[-.]+$/g, "");
+  const safeBase = ascii || "archivo";
+  const safeExt = ext.replace(/[^a-z0-9]/g, "");
+  return safeExt ? `${safeBase}.${safeExt}` : safeBase;
+}
+
+/**
  * Extracts the object path from a Supabase Storage URL, whether it is a
  * public, signed or authenticated one. Returns null when the URL does not
  * belong to `bucket`.

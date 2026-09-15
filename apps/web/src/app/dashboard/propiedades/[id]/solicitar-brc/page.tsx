@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { describeOcrFailure } from "@/lib/ocr-validate";
+import { safeStorageFileName } from "@/lib/private-storage";
 import { logError } from "@/lib/log";
 import { isDocumentRequired } from "@/lib/brc-documents";
 import {
@@ -528,7 +529,7 @@ export default function SolicitarBrcPage() {
 
     for (const [docTypeId, file] of pending) {
       const docType = documentTypes.find((dt) => dt.id === docTypeId);
-      const filePath = `${expedienteId}/${docTypeId}/${file.name}`;
+      const filePath = `${expedienteId}/${docTypeId}/${safeStorageFileName(file.name)}`;
 
       const { error: uploadError } = await supabase.storage
         .from("brc-documents")

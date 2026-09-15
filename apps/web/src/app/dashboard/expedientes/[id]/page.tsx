@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
-import { getSignedDocumentUrl } from "@/lib/private-storage";
+import { getSignedDocumentUrl, safeStorageFileName } from "@/lib/private-storage";
 import { runOcrValidation, ocrColumns } from "@/lib/ocr-validate";
 import { useUser } from "@/app/dashboard/_context/user-context";
 import { ShieldBrc } from '@/components/ui/shield-brc'
@@ -516,7 +516,7 @@ export default function ExpedienteDetailPage() {
     if (!expediente) return;
     setUploadingCertDocId(docId);
     try {
-      const path = `certificates/${expediente.id}/recabados/${docId}/${Date.now()}-${file.name}`;
+      const path = `certificates/${expediente.id}/recabados/${docId}/${Date.now()}-${safeStorageFileName(file.name)}`;
       const { error: uploadError } = await supabase.storage
         .from("brc-documents")
         .upload(path, file, { upsert: false });
@@ -648,7 +648,7 @@ export default function ExpedienteDetailPage() {
         allDocumentTypes.find((dt) => dt.id === documentTypeId)?.name ?? "";
       const ocr = await runOcrValidation(file, docTypeName);
 
-      const path = `${expediente.id}/${documentTypeId}/${Date.now()}-${file.name}`;
+      const path = `${expediente.id}/${documentTypeId}/${Date.now()}-${safeStorageFileName(file.name)}`;
       const { error: uploadError } = await supabase.storage
         .from("brc-documents")
         .upload(path, file, { upsert: true });
@@ -730,7 +730,7 @@ export default function ExpedienteDetailPage() {
     try {
       // Storage write stays client-side; storage RLS (migración 021/024) is
       // what decides whether this notary may write into the folder.
-      const fileName = `certificates/${expedienteId}/notarial-${Date.now()}-${certPdfFile.name}`;
+      const fileName = `certificates/${expedienteId}/notarial-${Date.now()}-${safeStorageFileName(certPdfFile.name)}`;
       const { error: uploadError } = await supabase.storage
         .from("brc-documents")
         .upload(fileName, certPdfFile, { upsert: true });
