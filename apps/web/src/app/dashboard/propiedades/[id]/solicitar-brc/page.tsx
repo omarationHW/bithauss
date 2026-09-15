@@ -121,6 +121,8 @@ export default function SolicitarBrcPage() {
    *  flagged `allows_multiple` can hold several (one ID per co-owner). */
   const [files, setFiles] = useState<Record<string, File[]>>({});
   const [validatingDocId, setValidatingDocId] = useState<string | null>(null);
+  /** Tarjeta de documento sobre la que se está arrastrando un archivo. */
+  const [dragOverDocId, setDragOverDocId] = useState<string | null>(null);
   const [ocrResults, setOcrResults] = useState<Record<string, { valid: boolean; confidence: string; message: string; detectedType: string; extractedData: Record<string, unknown>; standaloneChecks?: Array<{ rule: string; label: string; status: string; message: string }> }>>({});
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(true);
@@ -300,6 +302,23 @@ export default function SolicitarBrcPage() {
       ...prev,
       [docTypeId]: multiple ? [...(prev[docTypeId] ?? []), file] : [file],
     }));
+  }
+
+  const ACCEPTED_DROP_TYPES = ["application/pdf", "image/jpeg", "image/png"];
+
+  /** Soltar un archivo sobre la tarjeta equivale a elegirlo con "Subir archivo". */
+  function handleDrop(docTypeId: string, e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setDragOverDocId(null);
+    if (validatingDocId) return;
+    const file = Array.from(e.dataTransfer.files).find((f) =>
+      ACCEPTED_DROP_TYPES.includes(f.type) || /\.(pdf|jpe?g|png)$/i.test(f.name),
+    );
+    if (!file) {
+      window.alert("Solo se aceptan archivos PDF, JPG o PNG.");
+      return;
+    }
+    handleFileChange(docTypeId, file);
   }
 
   async function handleFileChange(docTypeId: string, file: File | null) {
@@ -758,7 +777,7 @@ export default function SolicitarBrcPage() {
           Documentos
         </h3>
         <p className="text-sm text-gray-500 mb-6">
-          Sube los documentos necesarios para la certificacion. Los formatos aceptados son PDF, JPG y PNG.
+          Sube los documentos necesarios para la certificación. Los formatos aceptados son PDF, JPG y PNG. También puedes arrastrar y soltar cada archivo sobre su documento.
         </p>
 
         <div className="space-y-4">
@@ -775,14 +794,43 @@ export default function SolicitarBrcPage() {
             return (
               <div
                 key={dt.id}
-                className={`rounded-xl border p-4 transition-all duration-200 ${
-                  ocrRejected
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                  setDragOverDocId(dt.id);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "copy";
+                  if (dragOverDocId !== dt.id) setDragOverDocId(dt.id);
+                }}
+                onDragLeave={(e) => {
+                  // Solo al salir de la tarjeta, no al pasar sobre sus hijos.
+                  if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                    setDragOverDocId((cur) => (cur === dt.id ? null : cur));
+                  }
+                }}
+                onDrop={(e) => handleDrop(dt.id, e)}
+                className={`relative rounded-xl border p-4 transition-all duration-200 ${
+                  dragOverDocId === dt.id
+                    ? "border-blue-400 border-dashed bg-blue-50/60 ring-2 ring-blue-200"
+                    : ocrRejected
                     ? "border-red-200 bg-red-50/30"
                     : ocrResult?.valid && ocrResult.confidence === "high"
                     ? "border-emerald-200 bg-emerald-50/20"
                     : "border-gray-100 hover:border-gray-200"
                 }`}
               >
+                {dragOverDocId === dt.id && (
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-blue-50/80 text-sm font-semibold text-blue-700"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Upload className="h-4 w-4" />
+                      Suelta aquí para subir {dt.name}
+                    </span>
+                  </div>
+                )}
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
