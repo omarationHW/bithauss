@@ -4,3 +4,7 @@ dist
 out
 # Screenshots are captured from the live site — keep them out of git
 public/screenshots
+
+# La composición del tutorial importa este JSON; sí se versiona (los PNG no).
+!public/screenshots/marca-agua/
+public/screenshots/marca-agua/*.png

@@ -1,0 +1,108 @@
+{
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "steps": [
+    {
+      "file": "01-dashboard.png",
+      "title": "Entra a Configuración desde el menú lateral",
+      "focus": {
+        "x": 12,
+        "y": 410,
+        "w": 248,
+        "h": 44
+      }
+    },
+    {
+      "file": "02-seccion.png",
+      "title": "Busca la sección \"Marca de agua\"",
+      "focus": {
+        "x": 304,
+        "y": 224,
+        "w": 1584,
+        "h": 927
+      }
+    },
+    {
+      "file": "03-activar.png",
+      "title": "Activa la marca de agua con el interruptor",
+      "focus": {
+        "x": 1819,
+        "y": 253,
+        "w": 44,
+        "h": 24
+      }
+    },
+    {
+      "file": "04-imagen.png",
+      "title": "Elige la imagen: sube tu logo o usa tu foto de perfil",
+      "focus": {
+        "x": 329,
+        "y": 354,
+        "w": 127,
+        "h": 38
+      }
+    },
+    {
+      "file": "05-posicion.png",
+      "title": "Elige la posición: esquinas, centro o mosaico",
+      "focus": {
+        "x": 329,
+        "y": 502,
+        "w": 755,
+        "h": 76
+      }
+    },
+    {
+      "file": "06-ajustes.png",
+      "title": "Ajusta opacidad y tamaño; la vista previa cambia al instante",
+      "focus": {
+        "x": 329,
+        "y": 598,
+        "w": 755,
+        "h": 48
+      }
+    },
+    {
+      "file": "07-preview.png",
+      "title": "Revisa la vista previa sobre una foto real",
+      "focus": {
+        "x": 1108,
+        "y": 468,
+        "w": 755,
+        "h": 566
+      }
+    },
+    {
+      "file": "08-aplicar.png",
+      "title": "Pulsa \"Aplicar a fotos existentes\" para re-procesar tus propiedades publicadas",
+      "focus": {
+        "x": 1655,
+        "y": 1040,
+        "w": 192,
+        "h": 40
+      }
+    },
+    {
+      "file": "09-resultado.png",
+      "title": "Listo: tus fotos ya llevan la nueva marca de agua",
+      "focus": {
+        "x": 305,
+        "y": 272,
+        "w": 1582,
+        "h": 860
+      }
+    },
+    {
+      "file": "10-propiedades.png",
+      "title": "Las fotos de tus propiedades ya muestran tu marca",
+      "focus": {
+        "x": 272,
+        "y": 64,
+        "w": 1648,
+        "h": 681
+      }
+    }
+  ]
+}
