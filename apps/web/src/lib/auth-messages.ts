@@ -31,8 +31,9 @@ export const LOGIN_ACCOUNT_DISABLED =
 
 /**
  * Registration: shown whether the address was free or already taken. If it was
- * taken, Supabase sends a "someone tried to register with your address" email
- * to the real owner — that is the channel where the ambiguity is resolved.
+ * taken, the signup page sends a password-recovery email to the real owner
+ * (Supabase itself sends nothing in that case) — that is the channel where
+ * the ambiguity is resolved.
  */
 export const SIGNUP_CHECK_YOUR_EMAIL =
   "Revisa tu correo electrónico: te enviamos las instrucciones para continuar con el registro.";
