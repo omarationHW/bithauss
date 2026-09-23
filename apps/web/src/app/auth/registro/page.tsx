@@ -249,9 +249,23 @@ export default function RegistroPage() {
       if (signUpError) {
         // BH-21: an "already registered" answer turns this form into an
         // account-existence oracle. Present it as the ordinary success path;
-        // Supabase emails the real owner of the address instead.
+        // The real owner of the address gets the disambiguation by email.
+        // Supabase does NOT send anything on its own here (with email
+        // confirmation off it just returns "User already registered"), so
+        // the notice used to promise an email that never arrived. A
+        // recovery link is the useful message for the owner: it lets them
+        // back into the account they forgot they had.
         const message = signupErrorMessage(signUpError.message);
         if (message === null) {
+          const { error: recoveryError } =
+            await supabase.auth.resetPasswordForEmail(email, {
+              redirectTo: `${window.location.origin}/auth/callback?next=/dashboard/configuracion`,
+            });
+          // Not surfaced to the user: any difference in the UI would bring
+          // the account-existence oracle back.
+          if (recoveryError) {
+            logError("signup: recovery email for existing account failed", recoveryError);
+          }
           setNotice(SIGNUP_CHECK_YOUR_EMAIL);
         } else {
           setError(message);
