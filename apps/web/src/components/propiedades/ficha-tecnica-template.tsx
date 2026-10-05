@@ -19,10 +19,20 @@
  *     height-capped and the description is truncated.
  *
  * Intentionally excludes any broker / owner / company info — the sheet is
- * meant to circulate as a property fact sheet without revealing the agent.
+ * meant to circulate as a property fact sheet without revealing the agent:
+ * otro corredor la comparte con su cliente, y un logo o un teléfono de la
+ * inmobiliaria le permitiría al cliente saltarse al corredor. Sólo se permite
+ * la marca BitHauss. Eso incluye las fotos: la marca de agua de la
+ * inmobiliaria va horneada en el JPEG publicado, así que la ficha usa el
+ * original archivado cuando existe (ver lib/clean-photo.ts).
+ *
+ * Photos are painted as `background-image` + `background-size: cover`, never
+ * as <img style="object-fit: cover">: html2canvas 1.4.1 ignores object-fit and
+ * draws the bitmap stretched to the box, which is what distorted the hero in
+ * the PDF. It does implement background-size: cover.
  */
 
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Ruler,
   BedDouble,
@@ -40,6 +50,7 @@ import {
 } from "./ficha-options";
 import { propertyOperationLabel } from "./property-operations";
 import { getPropertyFieldLabel, isFieldVisible } from "@/lib/property-fields";
+import { originalPhotoUrl, resolveCleanPhotoUrls } from "@/lib/clean-photo";
 
 export interface FichaProperty {
   id: string;
@@ -198,38 +209,41 @@ function truncate(text: string, max: number): string {
  * only ever bounded by character truncation (which ends with a visible "…"),
  * and the layout reserves room for the extra line the clone may add.
  *
- * Measured heights on a real listing (long title + long description):
- * portrait  1123 - 96 padding = 1027 usable; header 73 + footer 32 -> 922 body;
- *           minus 24 safety   = 898 available.
- *           hero 264 + title block 109 + price 54 + specs 56 +
- *           description 147 + gallery strip 118 + 5 gaps x 14 = 70   => 818,
- *           leaving ~80 px for the clone's re-wrapping (an extra title line is
- *           31 px, an extra description line 20 px, a wrapped price row 33 px).
- * landscape 794 - 72 padding = 722 usable; header 73 + footer 32 -> 617 body;
- *           minus 24 safety  = 593 available.
- *           left  hero 320 + gap 14 + gallery strip 238               => 572.
- *           right title 109 + price 54 + specs 112 + description 107 +
- *                 QR block 88 + 5 gaps x 12 = 60                      => 530,
- *           leaving ~63 px of the same re-wrapping headroom.
+ * Heights on a real listing (long title + long description). The hero is a
+ * square on the RIGHT of the data since the stretched full-width banner was
+ * dropped:
+ * portrait  1123 - 96 padding = 1027 usable; header 81 + footer 32 -> 914 body;
+ *           minus 24 safety   = 890 available.
+ *           top row max(hero 300, title 140 + price 54 + specs 2x2 106 +
+ *           2 gaps 28 = 328) + description ~260 + gallery strip 118 +
+ *           3 gaps x 14 = 42                                          => ~748,
+ *           leaving ~140 px for the clone's re-wrapping (an extra title line
+ *           is 31 px, an extra description line 20 px, a wrapped price 33 px).
+ * landscape 794 - 72 padding = 722 usable; header 81 + footer 32 -> 609 body;
+ *           minus 24 safety  = 585 available.
+ *           left  title 109 + price 54 + specs 112 + description 107 +
+ *                 QR block 88 + 5 gaps x 12 = 60                      => 530.
+ *           right hero 340 + gap 14 + gallery 2x3 strip (24 + 2x78 + 10) => 544,
+ *           leaving ~40-55 px of the same re-wrapping headroom.
  */
 const SINGLE_LAYOUT = {
   portrait: {
-    heroHeight: 264,
+    heroSize: 300,
     thumbCols: 4,
     thumbCount: 4,
     thumbHeight: 90,
     qrSize: 88,
     gap: 14,
     specCount: 4,
-    titleChars: 100,
+    titleChars: 90,
     addressChars: 84,
-    descriptionChars: 500,
+    descriptionChars: 900,
   },
   landscape: {
-    heroHeight: 320,
+    heroSize: 340,
     thumbCols: 3,
     thumbCount: 6,
-    thumbHeight: 100,
+    thumbHeight: 78,
     qrSize: 72,
     gap: 12,
     specCount: 6,
@@ -244,25 +258,31 @@ const SINGLE_BOTTOM_SAFETY_PX = 24;
 
 /**
  * Space available for the description on the "Detalles" page, in rendered
- * lines. Everything else on that page is fixed: address + datos block (~138 px),
- * QR card (140 px) and, when present, the amenities grid. Budget (body height
- * 922 px portrait / 617 px landscape, line 21.5 px at 13px/1.65) minus a ~20 %
- * margin for html2canvas re-wrapping the text a bit wider than the DOM.
+ * lines. Ubicación, datos generales and the QR moved to the cover, so the page
+ * holds only the description and, when present, the amenities grid. Budget
+ * (body height 914 px portrait / 609 px landscape, line 23 px at 14px/1.65)
+ * minus a ~20 % margin for html2canvas re-wrapping the text a bit wider than
+ * the DOM.
  */
 const DETAILS_TEXT = {
   portrait: {
-    charsPerLine: 92,
-    linesWithAmenities: 14,
-    linesWithoutAmenities: 22,
+    charsPerLine: 85,
+    linesWithAmenities: 21,
+    linesWithoutAmenities: 29,
     maxAmenities: 14,
   },
   landscape: {
-    charsPerLine: 140,
-    linesWithAmenities: 6,
-    linesWithoutAmenities: 10,
+    charsPerLine: 128,
+    linesWithAmenities: 13,
+    linesWithoutAmenities: 18,
     maxAmenities: 9,
   },
 } as const;
+
+/** Side of the square cover photo on page 1 of the full sheet. */
+const COVER_SIZE = { portrait: 320, landscape: 300 } as const;
+/** Specs shown next to the cover photo; the rest go in a row below. */
+const COVER_SPECS = { portrait: 4, landscape: 6 } as const;
 
 /**
  * Trims text to a number of rendered lines. Honours the explicit line breaks
@@ -324,12 +344,13 @@ function PageHeader({ title }: { title: string }) {
       }}
     >
       {/* Served from Azure Front Door — the local /public/images/ folder is
-          gitignored, so /images/... 404s in production. */}
+          gitignored, so /images/... 404s in production. 2634x768 master: the
+          311x66 "Texto-Negro" PNG came out soft at html2canvas' 2x scale. */}
       <img
-        src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Logo-BitHauss-Texto-Negro.png"
+        src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Logo-BitHauss.png"
         alt="BitHauss"
         crossOrigin="anonymous"
-        style={{ height: "32px", width: "auto" }}
+        style={{ height: "40px", width: "auto" }}
       />
       <span
         style={{
@@ -385,34 +406,7 @@ function PageFooter({
   );
 }
 
-function StatTile({ icon: Icon, label, value }: Omit<Spec, "key">) {
-  return (
-    <div
-      style={{
-        // Basis instead of `1 1 0`: with six tiles a zero basis squeezed each
-        // one to ~100 px and broke "600 m²" across two lines.
-        flex: "1 1 150px",
-        border: "1px solid #e2e8f0",
-        borderRadius: "14px",
-        padding: "14px 16px",
-        display: "flex",
-        flexDirection: "column",
-        gap: "8px",
-        background: "#f8fafc",
-      }}
-    >
-      <Icon size={20} color="#3b82f6" />
-      <div style={{ fontSize: "10px", color: "#64748b", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-        {label}
-      </div>
-      <div style={{ fontSize: "18px", fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap" }}>
-        {value}
-      </div>
-    </div>
-  );
-}
-
-/** Compact horizontal variant of StatTile used by the 1-page sheet. */
+/** Compact horizontal spec card (icon + label + value). */
 function SpecChip({ icon: Icon, label, value }: Omit<Spec, "key">) {
   return (
     <div
@@ -573,28 +567,89 @@ function HeroBadges({
   );
 }
 
-function Thumbnail({ photo, index }: { photo: FichaMedia; index: number }) {
+/**
+ * A photo cropped to fill its box without distortion. See the file header:
+ * html2canvas ignores `object-fit`, so this is a background, not an <img>.
+ * html2canvas loads background images itself (with `useCORS`) and waits for
+ * them before drawing.
+ */
+function CoverImage({
+  src,
+  alt,
+  style,
+  children,
+}: {
+  src: string;
+  alt: string;
+  style?: React.CSSProperties;
+  children?: React.ReactNode;
+}) {
   return (
     <div
+      role="img"
+      aria-label={alt}
+      data-cover-src={src}
       style={{
-        // Must fill the sized wrapper: with `height: auto` the inner <img>
-        // falls back to its intrinsic height and spills below the grid row.
+        position: "relative",
+        overflow: "hidden",
+        backgroundColor: "#e2e8f0",
+        backgroundImage: `url("${src.replace(/"/g, "%22")}")`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+        ...style,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function Thumbnail({ photo, index }: { photo: FichaMedia; index: number }) {
+  return (
+    <CoverImage
+      src={photo.url}
+      alt={photo.alt_text ?? `Foto ${index + 1}`}
+      style={{
+        // Must fill the sized wrapper, or the grid row collapses.
         height: "100%",
         minWidth: 0,
         minHeight: 0,
         borderRadius: "10px",
-        overflow: "hidden",
         border: "1px solid #e2e8f0",
-        background: "#f1f5f9",
+      }}
+    />
+  );
+}
+
+/** Square cover photo (1:1, cropped, never stretched) with the badges. */
+function SquareCover({
+  src,
+  alt,
+  size,
+  operation,
+  isBrcCertified,
+}: {
+  src: string;
+  alt: string;
+  size: number;
+  operation: string;
+  isBrcCertified: boolean;
+}) {
+  return (
+    <CoverImage
+      src={src}
+      alt={alt}
+      style={{
+        flexShrink: 0,
+        width: `${size}px`,
+        height: `${size}px`,
+        aspectRatio: "1 / 1",
+        borderRadius: "16px",
       }}
     >
-      <img
-        src={photo.url}
-        alt={photo.alt_text ?? `Foto ${index + 1}`}
-        crossOrigin="anonymous"
-        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-      />
-    </div>
+      <HeroBadges operation={operation} isBrcCertified={isBrcCertified} />
+    </CoverImage>
   );
 }
 
@@ -648,6 +703,36 @@ export function FichaTecnicaTemplate({
   const isLandscape = orientation === "landscape";
   const isBrcCertified = property.brc_status === "CERTIFICADO";
   const PAGE_STYLE = useMemo(() => pageStyle(orientation), [orientation]);
+
+  // Fotos sin la marca de agua de la inmobiliaria. Mientras se comprueba que
+  // el original archivado exista se pinta ya el original (nunca la versión
+  // estampada); si resulta que no existe, se cae a la URL publicada.
+  const photoSources = useMemo(() => {
+    const urls = [property.featured_image_url, ...media.map((m) => m.url)];
+    return Array.from(new Set(urls.filter((u): u is string => !!u)));
+  }, [property.featured_image_url, media]);
+  const photoSourcesKey = photoSources.join("\n");
+  const [cleanUrls, setCleanUrls] = useState<Map<string, string>>(
+    () => new Map(),
+  );
+  useEffect(() => {
+    let cancelled = false;
+    resolveCleanPhotoUrls(photoSources).then((resolved) => {
+      if (!cancelled) setCleanUrls(resolved);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // photoSourcesKey stands in for the array identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photoSourcesKey]);
+  const cleanUrl = useCallback(
+    (url: string) => cleanUrls.get(url) ?? originalPhotoUrl(url) ?? url,
+    [cleanUrls],
+  );
+  const coverUrl = property.featured_image_url
+    ? cleanUrl(property.featured_image_url)
+    : null;
 
   const location = useMemo(() => {
     const parts = [property.neighborhood, property.city, property.state].filter(
@@ -767,8 +852,9 @@ export function FichaTecnicaTemplate({
         out.push(m);
       }
     }
-    return out.slice(1); // featured already shows on page 1
-  }, [property.featured_image_url, media]);
+    // featured already shows on page 1
+    return out.slice(1).map((m) => ({ ...m, url: cleanUrl(m.url) }));
+  }, [property.featured_image_url, media, cleanUrl]);
 
   // 6 photos per gallery page in portrait (2x3), 8 in landscape (4x2).
   const galleryPerPage = isLandscape ? 8 : 6;
@@ -794,6 +880,48 @@ export function FichaTecnicaTemplate({
   );
   const hiddenAmenities = (property.amenities?.length ?? 0) - shownAmenities.length;
 
+  // Full sheet, page 1: the specs that fit next to the square photo, the rest
+  // in a row below it.
+  const coverSize = isLandscape ? COVER_SIZE.landscape : COVER_SIZE.portrait;
+  const coverSpecCount = isLandscape
+    ? COVER_SPECS.landscape
+    : COVER_SPECS.portrait;
+  const coverSpecs = specs.slice(0, coverSpecCount);
+  const extraSpecs = specs.slice(coverSpecCount);
+
+  const qrCard = (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "18px",
+        padding: "18px",
+        background: "#f8fafc",
+        borderRadius: "14px",
+        border: "1px solid #e2e8f0",
+      }}
+    >
+      {qrDataUrl && (
+        <img
+          src={qrDataUrl}
+          alt="QR code"
+          style={{ width: "96px", height: "96px", display: "block", flexShrink: 0 }}
+        />
+      )}
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: "11px", color: "#64748b", marginBottom: "4px", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600 }}>
+          Ver en línea
+        </div>
+        <div style={{ fontSize: "13px", color: "#0f172a", fontWeight: 600, wordBreak: "break-all" }}>
+          {publicUrl}
+        </div>
+        <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "8px", lineHeight: 1.45 }}>
+          Escanea el código para ver la propiedad completa y todas las fotografías.
+        </div>
+      </div>
+    </div>
+  );
+
   const wrapperStyle: React.CSSProperties = {
     position: "absolute",
     left: "-10000px",
@@ -809,26 +937,14 @@ export function FichaTecnicaTemplate({
       ? truncate(property.description, L.descriptionChars)
       : null;
 
-    const heroNode = property.featured_image_url ? (
-      <div
-        style={{
-          flexShrink: 0,
-          width: "100%",
-          height: `${L.heroHeight}px`,
-          borderRadius: "16px",
-          overflow: "hidden",
-          position: "relative",
-          background: "#e2e8f0",
-        }}
-      >
-        <img
-          src={property.featured_image_url}
-          alt={property.title}
-          crossOrigin="anonymous"
-          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-        />
-        <HeroBadges operation={property.operation} isBrcCertified={isBrcCertified} />
-      </div>
+    const heroNode = coverUrl ? (
+      <SquareCover
+        src={coverUrl}
+        alt={property.title}
+        size={L.heroSize}
+        operation={property.operation}
+        isBrcCertified={isBrcCertified}
+      />
     ) : null;
 
     const titleNode = (
@@ -897,9 +1013,11 @@ export function FichaTecnicaTemplate({
       <div
         style={{
           flexShrink: 0,
-          display: "flex",
+          display: "grid",
+          gridTemplateColumns: isLandscape
+            ? "repeat(3, minmax(0, 1fr))"
+            : "repeat(2, minmax(0, 1fr))",
           gap: "10px",
-          flexWrap: "wrap",
         }}
       >
         {specs.slice(0, L.specCount).map((s) => (
@@ -960,25 +1078,10 @@ export function FichaTecnicaTemplate({
                 paddingBottom: `${SINGLE_BOTTOM_SAFETY_PX}px`,
               }}
             >
-              {/* Left: hero + thumbnails. No `overflow: hidden` on the columns:
-                  html2canvas draws glyphs a couple of px lower than the DOM, so
-                  a clip right under the last line shaves it off. The parent row
-                  clips instead, 24 px further down. */}
-              <div
-                style={{
-                  width: "470px",
-                  flexShrink: 0,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "14px",
-                  minHeight: 0,
-                }}
-              >
-                {heroNode}
-                {thumbsNode}
-              </div>
-
-              {/* Right: data + description + QR */}
+              {/* Left: data + description + QR. No `overflow: hidden` on the
+                  columns: html2canvas draws glyphs a couple of px lower than
+                  the DOM, so a clip right under the last line shaves it off.
+                  The parent row clips instead, 24 px further down. */}
               <div
                 style={{
                   flex: 1,
@@ -1028,6 +1131,21 @@ export function FichaTecnicaTemplate({
                   </div>
                 </div>
               </div>
+
+              {/* Right: square hero + thumbnails */}
+              <div
+                style={{
+                  width: `${L.heroSize}px`,
+                  flexShrink: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "14px",
+                  minHeight: 0,
+                }}
+              >
+                {heroNode}
+                {thumbsNode}
+              </div>
             </div>
           ) : (
             <div
@@ -1041,10 +1159,30 @@ export function FichaTecnicaTemplate({
                 paddingBottom: `${SINGLE_BOTTOM_SAFETY_PX}px`,
               }}
             >
-              {heroNode}
-              {titleNode}
-              {priceNode}
-              {specsNode}
+              {/* Data on the left, square photo on the right. */}
+              <div
+                style={{
+                  flexShrink: 0,
+                  display: "flex",
+                  gap: "24px",
+                  alignItems: "flex-start",
+                }}
+              >
+                <div
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: `${L.gap}px`,
+                  }}
+                >
+                  {titleNode}
+                  {priceNode}
+                  {specsNode}
+                </div>
+                {heroNode}
+              </div>
               {descriptionNode}
               {/* Follows the description instead of being pinned to the bottom:
                   the spare height reserved for text growth then shows up as a
@@ -1076,105 +1214,182 @@ export function FichaTecnicaTemplate({
       <section data-page="1" style={PAGE_STYLE}>
         <PageHeader title="Ficha técnica" />
 
-        {/* Hero image */}
-        {property.featured_image_url && (
+        {/* Data on the left, square cover photo on the right. The page has a
+            fixed A4 width, so the two columns hold on any screen the PDF is
+            opened on (a phone simply scales the whole page). */}
+        <div
+          style={{
+            flexShrink: 0,
+            display: "flex",
+            gap: "28px",
+            alignItems: "flex-start",
+          }}
+        >
           <div
             style={{
-              width: "100%",
-              height: isLandscape ? "230px" : "280px",
-              borderRadius: "16px",
-              overflow: "hidden",
-              marginBottom: "24px",
-              position: "relative",
-              background: "#e2e8f0",
+              flex: 1,
+              minWidth: 0,
+              display: "flex",
+              flexDirection: "column",
+              gap: "18px",
             }}
           >
-            <img
-              src={property.featured_image_url}
-              alt={property.title}
-              crossOrigin="anonymous"
+            <div>
+              <div
+                style={{
+                  fontSize: "12px",
+                  letterSpacing: "0.14em",
+                  textTransform: "uppercase",
+                  color: "#3b82f6",
+                  fontWeight: 600,
+                  marginBottom: "8px",
+                }}
+              >
+                {typeLabel(property.type)}
+              </div>
+              <h1
+                style={{
+                  fontSize: "28px",
+                  fontWeight: 700,
+                  lineHeight: 1.25,
+                  margin: 0,
+                  color: "#0f172a",
+                }}
+              >
+                {truncate(property.title, 110)}
+              </h1>
+              <div
+                style={{
+                  marginTop: "10px",
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: "6px",
+                  color: "#64748b",
+                  fontSize: "14px",
+                  lineHeight: 1.45,
+                }}
+              >
+                <span style={{ flexShrink: 0, paddingTop: "2px" }}>
+                  <MapPin size={15} />
+                </span>
+                <span>{location}</span>
+              </div>
+            </div>
+
+            <div
               style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                display: "block",
+                display: "flex",
+                alignItems: "baseline",
+                gap: "12px",
+                paddingBottom: "18px",
+                borderBottom: "1px solid #e2e8f0",
+                flexWrap: "wrap",
               }}
+            >
+              <PriceBlock property={property} />
+            </div>
+
+            {coverSpecs.length > 0 && (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isLandscape
+                    ? "repeat(3, minmax(0, 1fr))"
+                    : "repeat(2, minmax(0, 1fr))",
+                  gap: "10px",
+                }}
+              >
+                {coverSpecs.map((s) => (
+                  <SpecChip key={s.key} icon={s.icon} label={s.label} value={s.value} />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {coverUrl && (
+            <SquareCover
+              src={coverUrl}
+              alt={property.title}
+              size={coverSize}
+              operation={property.operation}
+              isBrcCertified={isBrcCertified}
             />
-            <HeroBadges operation={property.operation} isBrcCertified={isBrcCertified} />
+          )}
+        </div>
+
+        {/* Specs that did not fit next to the photo */}
+        {extraSpecs.length > 0 && (
+          <div
+            style={{
+              flexShrink: 0,
+              marginTop: "20px",
+              display: "grid",
+              gridTemplateColumns: isLandscape
+                ? "repeat(5, minmax(0, 1fr))"
+                : "repeat(4, minmax(0, 1fr))",
+              gap: "10px",
+            }}
+          >
+            {extraSpecs.map((s) => (
+              <SpecChip key={s.key} icon={s.icon} label={s.label} value={s.value} />
+            ))}
           </div>
         )}
 
-        {/* Title + location */}
-        <div style={{ marginBottom: "20px" }}>
-          <div
-            style={{
-              fontSize: "11px",
-              letterSpacing: "0.14em",
-              textTransform: "uppercase",
-              color: "#3b82f6",
-              fontWeight: 600,
-              marginBottom: "6px",
-            }}
-          >
-            {typeLabel(property.type)}
-          </div>
-          <h1
-            style={{
-              fontSize: "26px",
-              fontWeight: 700,
-              lineHeight: 1.3,
-              margin: 0,
-              color: "#0f172a",
-            }}
-          >
-            {property.title}
-          </h1>
-          <div
-            style={{
-              marginTop: "10px",
-              display: "flex",
-              alignItems: "flex-start",
-              gap: "6px",
-              color: "#64748b",
-              fontSize: "13px",
-              lineHeight: 1.45,
-            }}
-          >
-            <span style={{ flexShrink: 0, paddingTop: "2px" }}>
-              <MapPin size={14} />
-            </span>
-            <span>{location}</span>
-          </div>
-        </div>
-
-        {/* Price */}
+        {/* Ubicación + datos generales + QR. Used to live on page 2 and left
+            the cover two-thirds empty. */}
         <div
           style={{
-            display: "flex",
-            alignItems: "baseline",
-            gap: "12px",
-            marginBottom: "24px",
-            paddingBottom: "20px",
-            borderBottom: "1px solid #e2e8f0",
-            flexWrap: "wrap",
+            flexShrink: 0,
+            marginTop: "24px",
+            display: "grid",
+            gridTemplateColumns: isLandscape ? "1fr 1fr 1.2fr" : "1fr 1fr",
+            gap: "24px",
           }}
         >
-          <PriceBlock property={property} />
+          <div>
+            <h2 style={{ ...SECTION_TITLE_STYLE, marginBottom: "10px" }}>
+              Ubicación
+            </h2>
+            <p style={{ fontSize: "13px", color: "#334155", lineHeight: 1.6, margin: 0 }}>
+              {fullAddress}
+            </p>
+          </div>
+          <div>
+            <h2 style={{ ...SECTION_TITLE_STYLE, marginBottom: "10px" }}>
+              Datos generales
+            </h2>
+            <dl style={{ fontSize: "13px", color: "#334155", margin: 0 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px dashed #e2e8f0" }}>
+                <dt style={{ color: "#64748b" }}>Tipo</dt>
+                <dd style={{ margin: 0, fontWeight: 600 }}>{typeLabel(property.type)}</dd>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px dashed #e2e8f0" }}>
+                <dt style={{ color: "#64748b" }}>Operación</dt>
+                <dd style={{ margin: 0, fontWeight: 600 }}>{propertyOperationLabel(property.operation)}</dd>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px dashed #e2e8f0" }}>
+                <dt style={{ color: "#64748b" }}>Estado BRC</dt>
+                <dd style={{ margin: 0, fontWeight: 600 }}>
+                  {isBrcCertified ? "Certificada" : "No certificada"}
+                </dd>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}>
+                <dt style={{ color: "#64748b" }}>Cripto</dt>
+                <dd style={{ margin: 0, fontWeight: 600 }}>
+                  {property.accepts_crypto ? "Aceptado" : "No aceptado"}
+                </dd>
+              </div>
+            </dl>
+          </div>
+          {isLandscape && qrCard}
         </div>
 
-        {/* Specs grid */}
-        <div
-          style={{
-            display: "flex",
-            gap: "12px",
-            marginBottom: "20px",
-            flexWrap: "wrap",
-          }}
-        >
-          {specs.map((s) => (
-            <StatTile key={s.key} icon={s.icon} label={s.label} value={s.value} />
-          ))}
-        </div>
+        {!isLandscape && (
+          <div style={{ flexShrink: 0, marginTop: "auto", paddingTop: "24px" }}>
+            {qrCard}
+          </div>
+        )}
 
         <PageFooter
           pageNum={1}
@@ -1187,14 +1402,14 @@ export function FichaTecnicaTemplate({
       <section data-page="2" style={PAGE_STYLE}>
         <PageHeader title="Detalles" />
 
-        {/* Description — bounded so the QR card and the footer below always fit;
-            a description longer than the page used to push them out of it. */}
+        {/* Description — bounded so the footer below always fits; a
+            description longer than the page used to push it out of it. */}
         {property.description && (
           <div style={{ marginBottom: "24px" }}>
             <h2 style={SECTION_TITLE_STYLE}>Descripción</h2>
             <p
               style={{
-                fontSize: "13px",
+                fontSize: "14px",
                 lineHeight: 1.65,
                 color: "#334155",
                 whiteSpace: "pre-wrap",
@@ -1231,101 +1446,22 @@ export function FichaTecnicaTemplate({
                     display: "flex",
                     alignItems: "center",
                     gap: "8px",
-                    fontSize: "12px",
+                    fontSize: "13px",
                     color: "#334155",
                   }}
                 >
-                  <CheckCircle2 size={14} color="#16a34a" />
+                  <CheckCircle2 size={15} color="#16a34a" />
                   <span>{a}</span>
                 </div>
               ))}
             </div>
             {hiddenAmenities > 0 && (
-              <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "10px" }}>
+              <div style={{ fontSize: "12px", color: "#94a3b8", marginTop: "10px" }}>
                 y {hiddenAmenities} amenidad{hiddenAmenities === 1 ? "" : "es"} más
               </div>
             )}
           </div>
         )}
-
-        {/* Address + metadata */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "20px",
-            marginBottom: "24px",
-          }}
-        >
-          <div>
-            <h2 style={{ ...SECTION_TITLE_STYLE, marginBottom: "10px" }}>
-              Ubicación
-            </h2>
-            <p style={{ fontSize: "12px", color: "#334155", lineHeight: 1.6, margin: 0 }}>
-              {fullAddress}
-            </p>
-          </div>
-          <div>
-            <h2 style={{ ...SECTION_TITLE_STYLE, marginBottom: "10px" }}>
-              Datos generales
-            </h2>
-            <dl style={{ fontSize: "12px", color: "#334155", margin: 0 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px dashed #e2e8f0" }}>
-                <dt style={{ color: "#64748b" }}>Tipo</dt>
-                <dd style={{ margin: 0, fontWeight: 600 }}>{typeLabel(property.type)}</dd>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px dashed #e2e8f0" }}>
-                <dt style={{ color: "#64748b" }}>Operación</dt>
-                <dd style={{ margin: 0, fontWeight: 600 }}>{propertyOperationLabel(property.operation)}</dd>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px dashed #e2e8f0" }}>
-                <dt style={{ color: "#64748b" }}>Estado BRC</dt>
-                <dd style={{ margin: 0, fontWeight: 600 }}>
-                  {isBrcCertified ? "Certificada" : "No certificada"}
-                </dd>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}>
-                <dt style={{ color: "#64748b" }}>Cripto</dt>
-                <dd style={{ margin: 0, fontWeight: 600 }}>
-                  {property.accepts_crypto ? "Aceptado" : "No aceptado"}
-                </dd>
-              </div>
-            </dl>
-          </div>
-        </div>
-
-        {/* QR + URL */}
-        <div
-          style={{
-            marginTop: "auto",
-            display: "flex",
-            alignItems: "center",
-            gap: "20px",
-            padding: "20px",
-            background: "#f8fafc",
-            borderRadius: "14px",
-            border: "1px solid #e2e8f0",
-          }}
-        >
-          {qrDataUrl && (
-            <img
-              src={qrDataUrl}
-              alt="QR code"
-              style={{ width: "100px", height: "100px", display: "block" }}
-            />
-          )}
-          <div>
-            <div style={{ fontSize: "11px", color: "#64748b", marginBottom: "4px", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600 }}>
-              Ver en línea
-            </div>
-            <div style={{ fontSize: "13px", color: "#0f172a", fontWeight: 600, wordBreak: "break-all" }}>
-              {publicUrl}
-            </div>
-            <div style={{ fontSize: "10px", color: "#94a3b8", marginTop: "8px", maxWidth: "320px" }}>
-              Escanea el código para abrir esta propiedad en el sitio. La información del corredor se proporciona a solicitud expresa desde la plataforma.
-            </div>
-          </div>
-        </div>
 
         <PageFooter
           pageNum={2}
@@ -1351,28 +1487,16 @@ export function FichaTecnicaTemplate({
               }}
             >
               {chunk.map((m, mIdx) => (
-                <div
+                <CoverImage
                   key={m.id ?? `m-${mIdx}`}
+                  src={m.url}
+                  alt={m.alt_text ?? `Foto ${mIdx + 1}`}
                   style={{
                     minHeight: 0,
                     borderRadius: "12px",
-                    overflow: "hidden",
                     border: "1px solid #e2e8f0",
-                    background: "#f1f5f9",
-                    position: "relative",
                   }}
                 >
-                  <img
-                    src={m.url}
-                    alt={m.alt_text ?? `Foto ${mIdx + 1}`}
-                    crossOrigin="anonymous"
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "cover",
-                      display: "block",
-                    }}
-                  />
                   {m.alt_text && (
                     <span
                       style={{
@@ -1389,7 +1513,7 @@ export function FichaTecnicaTemplate({
                       {m.alt_text}
                     </span>
                   )}
-                </div>
+                </CoverImage>
               ))}
             </div>
             <PageFooter

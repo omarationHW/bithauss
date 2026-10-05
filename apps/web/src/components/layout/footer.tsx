@@ -21,11 +21,13 @@ export function Footer() {
           {/* Company info */}
           <div className="space-y-4">
             <Link href="/" className="inline-flex items-center">
+              {/* Versión de 2634x768: la de "Texto-Blanco" mide 311x66 y a
+                  48 px de alto en pantallas retina se veía pixelada. */}
               <Image
-                src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Logo-BitHauss-Texto-Blanco.png"
+                src="https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Logo-BitHauss-blanco.png"
                 alt="BitHauss"
-                width={200}
-                height={52}
+                width={2634}
+                height={768}
                 className="h-12 w-auto"
               />
             </Link>
