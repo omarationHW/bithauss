@@ -39,32 +39,39 @@ export function hasBakedWatermark(url: string | null | undefined): boolean {
 }
 
 /**
- * Comprueba en el navegador que el original exista y sea una imagen
- * decodificable. `crossOrigin` igual que la ficha, para que el resultado
- * quede en caché con la misma política CORS que usará html2canvas.
+ * ¿Existe el original archivado? Un HEAD basta: descargar el original
+ * completo (PNG de varios MB, hasta 45 a la vez) agotaba el tiempo y la ficha
+ * caía a la foto con la marca de la inmobiliaria.
+ *
+ * "unknown" (red lenta, CORS, tiempo agotado) se trata como que SÍ existe:
+ * todo lo que sigue el esquema `wm/` se archivó al subir, y mostrar el logo
+ * de la inmobiliaria es justo lo que hay que evitar.
  */
-function probeImage(url: string, timeoutMs = 8000): Promise<boolean> {
-  return new Promise((resolve) => {
-    if (typeof Image === "undefined") return resolve(false);
-    const img = new Image();
-    const timer = setTimeout(() => finish(false), timeoutMs);
-    function finish(ok: boolean) {
-      clearTimeout(timer);
-      img.onload = null;
-      img.onerror = null;
-      resolve(ok);
-    }
-    img.crossOrigin = "anonymous";
-    img.onload = () => finish(img.naturalWidth > 0);
-    img.onerror = () => finish(false);
-    img.src = url;
-  });
+async function originalExists(
+  url: string,
+  timeoutMs = 8000,
+): Promise<"yes" | "no" | "unknown"> {
+  if (typeof fetch === "undefined") return "unknown";
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const r = await fetch(url, { method: "HEAD", signal: controller.signal });
+    if (!r.ok) return r.status === 404 || r.status === 400 ? "no" : "unknown";
+    // `.orig` se sube con el content-type del archivo original; un
+    // octet-stream significa que no hay copia limpia utilizable.
+    const type = r.headers.get("content-type") ?? "";
+    return type.startsWith("image/") ? "yes" : "no";
+  } catch {
+    return "unknown";
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**
  * Resuelve (en el navegador) la mejor URL limpia para cada foto: el original
- * archivado cuando existe; si no, la URL tal cual (puede traer la marca: ver
- * la nota del encabezado).
+ * archivado salvo que conste que no existe; en ese caso, la URL tal cual
+ * (puede traer la marca: ver la nota del encabezado).
  */
 export async function resolveCleanPhotoUrls(
   urls: readonly string[],
@@ -73,7 +80,10 @@ export async function resolveCleanPhotoUrls(
   await Promise.all(
     urls.map(async (url) => {
       const original = originalPhotoUrl(url);
-      out.set(url, original && (await probeImage(original)) ? original : url);
+      out.set(
+        url,
+        original && (await originalExists(original)) !== "no" ? original : url,
+      );
     }),
   );
   return out;

@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { hasBakedWatermark, originalPhotoUrl } from "./clean-photo";
+import { hasBakedWatermark, originalPhotoUrl, resolveCleanPhotoUrls } from "./clean-photo";
 
 const SUPA = "https://abc.supabase.co/storage/v1/object/public/properties";
 
@@ -23,5 +23,55 @@ describe("originalPhotoUrl", () => {
     expect(hasBakedWatermark(`${SUPA}/u1/p1/0-wm.jpg`)).toBe(true);
     expect(hasBakedWatermark(`${SUPA}/u1/p1/wm/a-0abc123-wm.jpg?v=1`)).toBe(true);
     expect(hasBakedWatermark(`${SUPA}/u1/p1/a.jpg`)).toBe(false);
+  });
+});
+
+describe("resolveCleanPhotoUrls", () => {
+  const WM =
+    "https://x.supabase.co/storage/v1/object/public/properties/u1/p1/wm/k1-abc12-wm.jpg?v=abc12";
+  const ORIG = "https://x.supabase.co/storage/v1/object/public/properties/u1/p1/originals/k1.orig";
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function stubHead(impl: () => Promise<Response>) {
+    const fetchMock = vi.fn(impl);
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  it("usa el original cuando existe, con un HEAD (sin descargar la imagen)", async () => {
+    const fetchMock = stubHead(async () =>
+      new Response(null, { status: 200, headers: { "content-type": "image/png" } }),
+    );
+    const map = await resolveCleanPhotoUrls([WM]);
+    expect(map.get(WM)).toBe(ORIG);
+    expect(fetchMock).toHaveBeenCalledWith(ORIG, expect.objectContaining({ method: "HEAD" }));
+  });
+
+  it("cae a la foto publicada solo si consta que el original no existe", async () => {
+    stubHead(async () => new Response(null, { status: 404 }));
+    expect((await resolveCleanPhotoUrls([WM])).get(WM)).toBe(WM);
+  });
+
+  it("un original que no es imagen no sirve", async () => {
+    stubHead(async () =>
+      new Response(null, { status: 200, headers: { "content-type": "application/octet-stream" } }),
+    );
+    expect((await resolveCleanPhotoUrls([WM])).get(WM)).toBe(WM);
+  });
+
+  it("si la red falla o tarda, se queda con el original (nunca el logo)", async () => {
+    stubHead(async () => {
+      throw new TypeError("network");
+    });
+    expect((await resolveCleanPhotoUrls([WM])).get(WM)).toBe(ORIG);
+  });
+
+  it("deja igual una foto sin marca", async () => {
+    stubHead(async () => new Response(null, { status: 200 }));
+    const plain = "https://x.supabase.co/storage/v1/object/public/properties/u1/p1/foto.jpg";
+    expect((await resolveCleanPhotoUrls([plain])).get(plain)).toBe(plain);
   });
 });
