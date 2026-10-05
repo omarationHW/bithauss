@@ -4,6 +4,7 @@ import {
   citiesMatch,
   namesMatch,
   addressesMatch,
+  spanishNumberWords,
   cuentasPredialMatch,
   cuentaAguaMatch,
   parseFlexibleDate,
@@ -116,6 +117,39 @@ describe('addressesMatch', () => {
         'Reforma 9, Tlatelolco',
       ),
     ).toBe(false);
+  });
+});
+
+describe('addressesMatch · escrituras contra recibos', () => {
+  it('entiende números escritos con letra', () => {
+    expect(
+      addressesMatch(
+        'Avenida Jesús del Monte número doscientos sesenta y ocho, colonia Jesús del Monte, código postal 52764',
+        'AVE JESUS DEL MONTE 268 COL JESUS DEL MONTE',
+      ),
+    ).toBe(true);
+  });
+  it('no se deja engañar por palabras genéricas como "colonia" o "Ciudad de México"', () => {
+    expect(
+      addressesMatch(
+        'Calle Norte 72 número 6008, colonia Aragón Inguarán, Ciudad de México',
+        'Colorado número treinta y seis, colonia Nápoles, Ciudad de México',
+      ),
+    ).toBe(false);
+  });
+});
+
+describe('spanishNumberWords', () => {
+  it.each([
+    [36, 'treinta y seis'],
+    [268, 'doscientos sesenta y ocho'],
+    [100, 'cien'],
+    [101, 'ciento uno'],
+    [22, 'veintidos'],
+    [1500, 'mil quinientos'],
+    [2024, 'dos mil veinticuatro'],
+  ])('%i → %s', (n, words) => {
+    expect(spanishNumberWords(n)).toBe(words);
   });
 });
 

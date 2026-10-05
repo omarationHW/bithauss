@@ -64,6 +64,17 @@ export class HttpExceptionFilter implements ExceptionFilter {
       errorResponse.code = (exceptionResponse as { code: string }).code;
     }
 
+    // Structured details for the client to render (e.g. the cross-check
+    // failures that block the Certificado Notarial). Client errors only.
+    if (
+      typeof exceptionResponse === 'object' &&
+      exceptionResponse !== null &&
+      'details' in exceptionResponse &&
+      status < HttpStatus.INTERNAL_SERVER_ERROR
+    ) {
+      errorResponse.details = (exceptionResponse as { details: unknown }).details;
+    }
+
     // Log server errors at error level, client errors at warn level.
     // Forward 5xx to Sentry when DSN is configured.
     if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {

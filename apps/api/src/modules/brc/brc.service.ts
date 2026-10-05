@@ -31,6 +31,7 @@ import {
   certificateNumberPrefix,
   nextCertificateNumber,
 } from './certificate-number';
+import { loadExpedienteCrossCheck } from './expediente-crosscheck';
 
 /* ------------------------------------------------------------------ */
 /*  DTOs                                                               */
@@ -59,6 +60,12 @@ export class IssueNotarialCertificateDto {
   @IsOptional() @IsInt() @Min(1) @Max(50 * 1024 * 1024) file_size?: number;
   @IsOptional() @IsString() @Length(0, 128) mime_type?: string;
   @IsOptional() @IsString() @Length(0, 5000) observations?: string;
+  /**
+   * Required when the cross-check of the expediente has failures: the notary
+   * states why the certificate is issued anyway. It is logged with the
+   * failures it overrides.
+   */
+  @IsOptional() @IsString() @Length(20, 2000) crosscheck_override_reason?: string;
 }
 
 /**
@@ -349,6 +356,17 @@ export class BrcService {
     return { id: documentId, status: 'RECHAZADO', reviewed_at: now, reviewer_name: reviewerName };
   }
 
+  /* ----- Validación cruzada del expediente (notaría / BitHauss) ----- */
+  async getCrossCheck(expedienteId: string, userId: string) {
+    const expediente = await this.assertNotaryOnExpediente(expedienteId, userId);
+    const result = await loadExpedienteCrossCheck(
+      this.supabaseConfig.getAdminClient(),
+      expedienteId,
+      expediente.property_id,
+    );
+    return result ?? { checks: [], summary: { pass: 0, fail: 0, warn: 0, skip: 0 }, missing_escritura: true };
+  }
+
   /* ----- Correct OCR-extracted data for a single document ----- */
   async updateOcrCorrection(documentId: string, userId: string, dto: OcrCorrectionDto) {
     const supabase = this.supabaseConfig.getAdminClient();
@@ -608,7 +626,39 @@ export class BrcService {
     // (or by BitHauss staff, who can also approve).
     await this.assertReviewedByStaff(rows, property, expediente.assigned_notary_id);
 
+    // Candado: the cross-check between documents (and against the captured
+    // address) must be clean, or the notary must justify each override.
+    const crossCheck = await loadExpedienteCrossCheck(
+      supabase,
+      expedienteId,
+      expediente.property_id,
+    );
+    const failures = crossCheck?.checks.filter((c) => c.status === 'fail') ?? [];
+    const overrideReason = dto.crosscheck_override_reason?.trim();
+    if (failures.length > 0 && !overrideReason) {
+      throw new ConflictException({
+        code: 'CROSSCHECK_FAILED',
+        message:
+          'La validación cruzada de los documentos tiene diferencias. Corrige los datos del OCR o justifica por qué se emite el Certificado Notarial de todos modos.',
+        details: failures.map((f) => ({ rule: f.rule, label: f.label, message: f.message })),
+      });
+    }
+
     const now = new Date().toISOString();
+
+    if (failures.length > 0) {
+      await supabase.from('brc_expediente_logs').insert({
+        expediente_id: expedienteId,
+        action: 'VALIDACION_CRUZADA_EXCEPCION',
+        performed_by: userId,
+        old_status: expediente.status,
+        new_status: expediente.status,
+        metadata: {
+          reason: overrideReason,
+          failures: failures.map((f) => ({ rule: f.rule, message: f.message })),
+        },
+      });
+    }
 
     // A re-issued certificate supersedes the previous one instead of deleting
     // it: the partial unique index only allows one live row per expediente,

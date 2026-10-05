@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   Param,
   Patch,
   Post,
@@ -60,6 +61,17 @@ export class BrcController {
     @Body() dto: CertificateTrackingDto,
   ) {
     return this.brcService.updateCertificateTracking(id, userId, dto);
+  }
+
+  /** Validación cruzada de los documentos del expediente (y de la dirección
+   *  capturada del inmueble). Solo la notaría/operador asignados y admin. */
+  @Roles('NOTARIO', 'ADMIN', 'OPERADOR_BRC')
+  @Get('expedientes/:id/cross-check')
+  getCrossCheck(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.brcService.getCrossCheck(id, userId);
   }
 
   /**

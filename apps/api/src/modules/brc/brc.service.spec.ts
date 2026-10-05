@@ -453,6 +453,66 @@ describe('BrcService.issueNotarialCertificate', () => {
     ).rejects.toThrow(/Uso de Suelo/);
   });
 
+  /* Validación cruzada: the escritura says another address. */
+  const mismatchedDeed = {
+    brc_documents: {
+      select: {
+        data: [
+          {
+            id: 'd1',
+            document_type_id: 'dt-1',
+            status: 'VALIDADO',
+            reviewed_by: NOTARY_ID,
+            created_at: '2026-08-01T00:00:00.000Z',
+            brc_document_types: { name: 'Escritura de Propiedad del Inmueble a Certificar' },
+            ocr_extracted_data: { direccionInmueble: 'Calle Falsa 123, Col. Centro, Guadalajara' },
+            ocr_corrected_data: null,
+          },
+        ],
+      },
+    },
+    properties: {
+      select: {
+        data: {
+          type: 'CASA',
+          operation: 'VENTA',
+          street: 'Av. Paseo de la Reforma',
+          exterior_number: '222',
+          neighborhood: 'Juárez',
+          zip_code: '06600',
+          city: 'Cuauhtémoc',
+          state: 'Ciudad de México',
+        },
+      },
+    },
+  };
+
+  it('refuses when the cross-check has failures and no justification', async () => {
+    const mock = makeSupabase(readyForNotarialCertificate(mismatchedDeed));
+    const service = makeService(mock);
+    await expect(
+      service.issueNotarialCertificate(EXP_ID, NOTARY_ID, notarialDto),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(mock.insertCalls.some((c) => c.table === 'brc_notarial_certificates')).toBe(false);
+  });
+
+  it('issues with a justification and logs the overridden failures', async () => {
+    const mock = makeSupabase(readyForNotarialCertificate(mismatchedDeed));
+    const service = makeService(mock);
+    const result = await service.issueNotarialCertificate(EXP_ID, NOTARY_ID, {
+      ...notarialDto,
+      crosscheck_override_reason: 'La escritura usa la nomenclatura anterior de la calle; verificado en el RPP.',
+    });
+    expect(result).toMatchObject({ status: 'PENDIENTE_EMISION_BRC' });
+    const log = mock.insertCalls.find(
+      (c) =>
+        c.table === 'brc_expediente_logs' &&
+        (c.payload as { action?: string }).action === 'VALIDACION_CRUZADA_EXCEPCION',
+    );
+    expect(log).toBeDefined();
+    expect(JSON.stringify(log!.payload)).toContain('direccion_capturada_escritura');
+  });
+
   it('leaves the expediente PENDING BRC ISSUANCE, never CERTIFICADO', async () => {
     const mock = makeSupabase(readyForNotarialCertificate());
     const service = makeService(mock);

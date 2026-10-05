@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { getSignedDocumentUrl, safeStorageFileName } from "@/lib/private-storage";
 import { runOcrValidation, ocrColumns } from "@/lib/ocr-validate";
 import { describeBrcDuplicates, fetchBrcDuplicates } from "@/lib/brc-duplicates";
+import { CrossCheckPanel, type CrossCheckItem } from "@/components/brc/cross-check-panel";
 import { useUser } from "@/app/dashboard/_context/user-context";
 import { ShieldBrc } from '@/components/ui/shield-brc'
 import { type OcrStandaloneCheck } from '@/components/brc/ocr-document-review'
@@ -256,6 +257,11 @@ export default function ExpedienteDetailPage() {
   const [certPdfFile, setCertPdfFile] = useState<File | null>(null);
   const [certSubmitting, setCertSubmitting] = useState(false);
   const [certError, setCertError] = useState<string | null>(null);
+  /** Diferencias de la validación cruzada que bloquearon la emisión. */
+  const [certCrossFailures, setCertCrossFailures] = useState<CrossCheckItem[]>([]);
+  const [certOverrideReason, setCertOverrideReason] = useState("");
+  /** Sube tras cada recarga para recalcular la validación cruzada. */
+  const [crossCheckKey, setCrossCheckKey] = useState(0);
   /** The Certificado Notarial in force, when the notary already issued it. */
   const [notarialCert, setNotarialCert] = useState<NotarialCertificate | null>(null);
   /** Document whose "certificados recabados" block is being saved. */
@@ -269,6 +275,9 @@ export default function ExpedienteDetailPage() {
   const [certificateId, setCertificateId] = useState<string | null>(null);
 
   const isNotario = user?.role === "NOTARIO";
+  /** Quien revisa el expediente: notaría, operador BRC o admin. */
+  const isReviewer =
+    isNotario || user?.role === "ADMIN" || user?.role === "OPERADOR_BRC";
   /**
    * Paso B del flujo: emite el BRC BitHauss (admin u operador BRC) o la
    * notaría asignada, una vez emitido su Certificado Notarial.
@@ -311,6 +320,7 @@ export default function ExpedienteDetailPage() {
       tariff_currency: tariffData?.currency ?? null,
     };
     setExpediente(mappedExp as Expediente);
+    setCrossCheckKey((k) => k + 1);
     fetchBrcDuplicates(supabase, expedienteId).then((rows) =>
       setDuplicateMessage(describeBrcDuplicates(rows))
     );
@@ -778,12 +788,20 @@ export default function ExpedienteDetailPage() {
             file_size: certPdfFile.size,
             mime_type: certPdfFile.type || "application/pdf",
             observations: certObservations.trim() || undefined,
+            crosscheck_override_reason: certOverrideReason.trim() || undefined,
           }),
         },
       );
 
       if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { message?: string } | null;
+        const body = (await res.json().catch(() => null)) as {
+          message?: string;
+          code?: string;
+          details?: Array<Pick<CrossCheckItem, "rule" | "label" | "message">>;
+        } | null;
+        if (body?.code === "CROSSCHECK_FAILED" && Array.isArray(body.details)) {
+          setCertCrossFailures(body.details.map((d) => ({ ...d, status: "fail" as const })));
+        }
         throw new Error(
           body?.message ?? "No se pudo emitir el Certificado Notarial.",
         );
@@ -792,6 +810,8 @@ export default function ExpedienteDetailPage() {
       setShowCertModal(false);
       setCertPdfFile(null);
       setCertObservations("");
+      setCertCrossFailures([]);
+      setCertOverrideReason("");
       await fetchData();
     } catch (err) {
       setCertError(
@@ -1342,6 +1362,10 @@ export default function ExpedienteDetailPage() {
             )}
           </div>
 
+          {isReviewer && expediente && (
+            <CrossCheckPanel expedienteId={expediente.id} refreshKey={crossCheckKey} />
+          )}
+
           {/* ---- Certificado Notarial (basis for the BRC) ---- */}
           {notarialCert && (
             <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-6 shadow-sm">
@@ -1673,6 +1697,32 @@ export default function ExpedienteDetailPage() {
                 </p>
               )}
 
+              {certCrossFailures.length > 0 && (
+                <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                  <ul className="space-y-1 text-xs text-amber-900">
+                    {certCrossFailures.map((f) => (
+                      <li key={f.rule}>
+                        <span className="font-semibold">{f.label}:</span> {f.message}
+                      </li>
+                    ))}
+                  </ul>
+                  <label htmlFor="cert-override" className="block text-xs font-semibold text-amber-900">
+                    Justificación para emitir de todos modos (mínimo 20 caracteres)
+                  </label>
+                  <textarea
+                    id="cert-override"
+                    rows={3}
+                    value={certOverrideReason}
+                    onChange={(e) => setCertOverrideReason(e.target.value)}
+                    placeholder="Ej. La escritura usa la nomenclatura anterior de la calle; verificado en el RPP."
+                    className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm"
+                  />
+                  <p className="text-[11px] text-amber-800">
+                    Queda registrada en el historial del expediente junto con las diferencias.
+                  </p>
+                </div>
+              )}
+
               {/* Actions */}
               <div className="flex gap-3 pt-2">
                 <button
@@ -1684,7 +1734,11 @@ export default function ExpedienteDetailPage() {
                 </button>
                 <button
                   onClick={handleIssueNotarialCertificate}
-                  disabled={certSubmitting || !certPdfFile}
+                  disabled={
+                    certSubmitting ||
+                    !certPdfFile ||
+                    (certCrossFailures.length > 0 && certOverrideReason.trim().length < 20)
+                  }
                   className="flex-1 rounded-xl py-2.5 text-sm font-bold text-white transition-all hover:opacity-90 disabled:opacity-50"
                   style={{ background: "linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))" }}
                 >

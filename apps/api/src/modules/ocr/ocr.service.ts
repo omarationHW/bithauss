@@ -522,6 +522,15 @@ export class OcrService {
 
   /* ---- Cross-check: Escritura de Propiedad against supporting docs ---- */
   crossCheckEscritura(payload: EscrituraCrossCheckInput): EscrituraCrossCheckResult {
+    return crossCheckEscritura(payload);
+  }
+}
+
+/**
+ * Pure: no Azure call, no config. Exported so the BRC module can run it over
+ * the documents already stored in an expediente.
+ */
+export function crossCheckEscritura(payload: EscrituraCrossCheckInput): EscrituraCrossCheckResult {
     const checks: EscrituraCheck[] = [];
     const e = payload.escritura ?? {};
     const ine = payload.identificacion ?? null;
@@ -679,7 +688,6 @@ export class OcrService {
     );
 
     return { checks, summary };
-  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -869,17 +877,73 @@ export function namesMatch(a?: unknown, b?: unknown): boolean {
   return wa.every((w) => wb.includes(w)) || wb.every((w) => wa.includes(w));
 }
 
+/* Spanish number words, so "número treinta y seis" matches "36". */
+const UNITS = ['cero', 'uno', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve'];
+const TEENS = ['diez', 'once', 'doce', 'trece', 'catorce', 'quince', 'dieciseis', 'diecisiete', 'dieciocho', 'diecinueve'];
+const TWENTIES = ['veinte', 'veintiuno', 'veintidos', 'veintitres', 'veinticuatro', 'veinticinco', 'veintiseis', 'veintisiete', 'veintiocho', 'veintinueve'];
+const TENS = ['', '', '', 'treinta', 'cuarenta', 'cincuenta', 'sesenta', 'setenta', 'ochenta', 'noventa'];
+const HUNDREDS = ['', 'ciento', 'doscientos', 'trescientos', 'cuatrocientos', 'quinientos', 'seiscientos', 'setecientos', 'ochocientos', 'novecientos'];
+
+/** 0–9999 written the way escrituras do, without accents ("doscientos sesenta y ocho"). */
+export function spanishNumberWords(n: number): string {
+  if (!Number.isInteger(n) || n < 0 || n > 9999) return String(n);
+  if (n < 10) return UNITS[n]!;
+  if (n < 20) return TEENS[n - 10]!;
+  if (n < 30) return TWENTIES[n - 20]!;
+  if (n < 100) {
+    const u = n % 10;
+    return u ? `${TENS[Math.floor(n / 10)]} y ${UNITS[u]}` : TENS[n / 10]!;
+  }
+  if (n < 1000) {
+    if (n === 100) return 'cien';
+    const rest = n % 100;
+    const h = HUNDREDS[Math.floor(n / 100)]!;
+    return rest ? `${h} ${spanishNumberWords(rest)}` : h;
+  }
+  const th = Math.floor(n / 1000);
+  const rest = n % 1000;
+  const head = th === 1 ? 'mil' : `${spanishNumberWords(th)} mil`;
+  return rest ? `${head} ${spanishNumberWords(rest)}` : head;
+}
+
+/** Words that say nothing about WHICH place an address is. */
+const ADDRESS_STOPWORDS = new Set([
+  'numero', 'num', 'no', 'colonia', 'col', 'codigo', 'postal', 'cp', 'avenida', 'av', 'ave',
+  'calle', 'c', 'departamento', 'depto', 'dpto', 'interior', 'int', 'exterior', 'ext',
+  'de', 'del', 'la', 'las', 'el', 'los', 'y', 'en', 'mz', 'manzana', 'lt', 'lote',
+  'alcaldia', 'delegacion', 'municipio', 'estado', 'ciudad', 'mexico', 'cdmx', 'df', 'edo', 'mex',
+]);
+
+/** Address tokens: accents/punctuation out, short numbers as words, stopwords out. */
+export function addressTokens(v?: unknown): Set<string> {
+  const out = new Set<string>();
+  for (const t of normalizeStr(v).split(' ')) {
+    if (!t) continue;
+    const words = /^\d{1,4}$/.test(t) ? spanishNumberWords(Number(t)).split(' ') : [t];
+    for (const w of words) {
+      if (w.length > 1 && !ADDRESS_STOPWORDS.has(w)) out.add(w);
+    }
+  }
+  return out;
+}
+
+/**
+ * Same place? Escrituras are verbose ("número doscientos sesenta y ocho,
+ * colonia…") and receipts terse ("AVE JESUS DEL MONTE 268"), so the overlap
+ * is measured against the SHORTER address, after dropping words that say
+ * nothing about the place, and at least two meaningful words must be shared.
+ */
 export function addressesMatch(a?: unknown, b?: unknown): boolean {
   const na = normalizeStr(a);
   const nb = normalizeStr(b);
   if (!na || !nb) return false;
   if (na === nb) return true;
-  const wa = new Set(na.split(' ').filter((w) => w.length > 1));
-  const wb = new Set(nb.split(' ').filter((w) => w.length > 1));
+  const wa = addressTokens(a);
+  const wb = addressTokens(b);
   if (wa.size === 0 || wb.size === 0) return false;
   let intersection = 0;
   for (const w of wa) if (wb.has(w)) intersection++;
-  return intersection / Math.max(wa.size, wb.size) >= 0.4;
+  return intersection >= 2 && intersection / Math.min(wa.size, wb.size) >= 0.6;
 }
 
 /**
