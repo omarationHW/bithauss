@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { ForbiddenException, BadRequestException } from '@nestjs/common';
+import { ForbiddenException, BadRequestException, ConflictException } from '@nestjs/common';
 
 import {
   PropertyMediaService,
@@ -43,11 +43,16 @@ function multerFile(name: string, buffer: Buffer, mimetype: string) {
  * modelled; anything unexpected surfaces as a plain undefined and fails the
  * assertion loudly instead of silently passing.
  */
-function makeSupabase(propertyRow: { id: string; owner_id: string } | null) {
+function makeSupabase(
+  propertyRow: { id: string; owner_id: string } | null,
+  activeBrc = false,
+) {
   const inserted: Record<string, unknown>[] = [];
   const uploaded: { path: string; contentType?: string }[] = [];
 
   const client = {
+    // migración 041: ¿el inmueble tiene un BRC vigente?
+    rpc: async () => ({ data: activeBrc, error: null }),
     from(table: string) {
       if (table === 'properties') {
         return {
@@ -115,8 +120,11 @@ function makeSupabase(propertyRow: { id: string; owner_id: string } | null) {
   return { client, inserted, uploaded };
 }
 
-function makeService(propertyRow: { id: string; owner_id: string } | null) {
-  const supabase = makeSupabase(propertyRow);
+function makeService(
+  propertyRow: { id: string; owner_id: string } | null,
+  activeBrc = false,
+) {
+  const supabase = makeSupabase(propertyRow, activeBrc);
   const config = {
     getAdminClient: () => supabase.client,
   } as unknown as SupabaseConfigService;
@@ -198,6 +206,33 @@ describe('PropertyMediaService · propiedad ajena (IDOR)', () => {
 /* ------------------------------------------------------------------ */
 /*  Magic bytes                                                        */
 /* ------------------------------------------------------------------ */
+
+describe('PropertyMediaService · BRC vigente (migración 041)', () => {
+  it('ni el dueño puede subir videos mientras el BRC esté vigente', async () => {
+    const { service, inserted, uploaded } = makeService(
+      { id: PROPERTY, owner_id: OWNER },
+      true,
+    );
+
+    await expect(
+      service.uploadVideo(
+        PROPERTY,
+        OWNER,
+        multerFile('recorrido.mp4', mp4Buffer(), 'video/mp4'),
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(uploaded).toHaveLength(0);
+    expect(inserted).toHaveLength(0);
+  });
+
+  it('ni el dueño puede eliminar media mientras el BRC esté vigente', async () => {
+    const { service } = makeService({ id: PROPERTY, owner_id: OWNER }, true);
+
+    await expect(
+      service.removeMedia(PROPERTY, 'media-1', OWNER),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+});
 
 describe('PropertyMediaService · magic bytes', () => {
   it('rechaza un archivo cuya extensión y content-type mienten', async () => {

@@ -7,6 +7,7 @@ import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { getSignedDocumentUrl, safeStorageFileName } from "@/lib/private-storage";
 import { runOcrValidation, ocrColumns } from "@/lib/ocr-validate";
+import { describeBrcDuplicates, fetchBrcDuplicates } from "@/lib/brc-duplicates";
 import { useUser } from "@/app/dashboard/_context/user-context";
 import { ShieldBrc } from '@/components/ui/shield-brc'
 import { type OcrStandaloneCheck } from '@/components/brc/ocr-document-review'
@@ -240,6 +241,8 @@ export default function ExpedienteDetailPage() {
 
   const [loading, setLoading] = useState(true);
   const [expediente, setExpediente] = useState<Expediente | null>(null);
+  /** Documentos ya usados en otro inmueble (migración 042): bloquea la emisión. */
+  const [duplicateMessage, setDuplicateMessage] = useState<string | null>(null);
   const [property, setProperty] = useState<Property | null>(null);
   const [documents, setDocuments] = useState<BrcDocument[]>([]);
   const [logs, setLogs] = useState<ExpedienteLog[]>([]);
@@ -308,6 +311,9 @@ export default function ExpedienteDetailPage() {
       tariff_currency: tariffData?.currency ?? null,
     };
     setExpediente(mappedExp as Expediente);
+    fetchBrcDuplicates(supabase, expedienteId).then((rows) =>
+      setDuplicateMessage(describeBrcDuplicates(rows))
+    );
 
     // 2. Property with media
     const { data: propData } = await supabase
@@ -1006,6 +1012,18 @@ export default function ExpedienteDetailPage() {
           </Link>
         )}
       </div>
+
+      {duplicateMessage && (
+        <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-red-800">
+              Documentos ya usados en otro inmueble: no se puede emitir el BRC
+            </p>
+            <p className="text-sm text-red-700">{duplicateMessage}</p>
+          </div>
+        </div>
+      )}
 
       {/* ============================================================ */}
       {/*  Progress Bar                                                */}

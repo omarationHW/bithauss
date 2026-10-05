@@ -76,6 +76,10 @@ export interface Property {
 
   // Location
   address_line: string | null;
+  /** Calle / números por separado (migración 040); obligatorios para el BRC. */
+  street: string | null;
+  exterior_number: string | null;
+  interior_number: string | null;
   neighborhood: string | null; // Colonia
   city: string;
   state: string; // Estado

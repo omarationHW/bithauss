@@ -182,13 +182,14 @@ export async function GET(
       expires_at: string;
       property_id: string;
       revoked_at?: string | null;
+      revoked_reason?: string | null;
     } | null = null;
     let error: unknown = null;
 
     const primary = await supabase
       .from("brc_certificates")
       .select(
-        "id, certificate_number, issued_at, issued_by, expires_at, property_id, revoked_at",
+        "id, certificate_number, issued_at, issued_by, expires_at, property_id, revoked_at, revoked_reason",
       )
       .eq("id", id)
       .maybeSingle();
@@ -222,7 +223,10 @@ export async function GET(
     let reason: string | undefined;
     if (revoked) {
       status = "REVOCADO";
-      reason = "Este certificado ha sido revocado por BitHauss.";
+      // Migración 041: el dueño puede anularlo para editar el inmueble.
+      reason = cert.revoked_reason
+        ? `Este certificado fue anulado. ${cert.revoked_reason}`
+        : "Este certificado ha sido revocado por BitHauss.";
     } else if (expired) {
       status = "EXPIRADO";
       reason = "El periodo de vigencia de 90 días ha terminado.";

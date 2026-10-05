@@ -74,6 +74,8 @@ import {
   type LocationStatus,
   type LocationValue,
 } from "@/components/ui/location-picker";
+import { StreetAddressFields } from "@/components/propiedades/street-address-fields";
+import { composeAddressLine, type StreetAddress } from "@/lib/brc-address";
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
@@ -218,7 +220,10 @@ interface FormData {
   has_storage: boolean;
   has_laundry_room: boolean;
   has_integrated_kitchen: boolean;
-  direccion: string;
+  /** Calle / número, split so the BRC can check them (migración 040). */
+  street: string;
+  exterior_number: string;
+  interior_number: string;
   colonia: string;
   ciudad: string;
   estado: string;
@@ -245,7 +250,9 @@ const initialFormData: FormData = {
   has_storage: false,
   has_laundry_room: false,
   has_integrated_kitchen: false,
-  direccion: "",
+  street: "",
+  exterior_number: "",
+  interior_number: "",
   colonia: "",
   ciudad: "",
   estado: "",
@@ -456,6 +463,10 @@ export default function NuevaPropiedadPage() {
   };
 
   const handleLocationChange = useCallback((patch: Partial<LocationValue>) => {
+    setForm((prev) => ({ ...prev, ...patch }));
+  }, []);
+
+  const handleStreetChange = useCallback((patch: Partial<StreetAddress>) => {
     setForm((prev) => ({ ...prev, ...patch }));
   }, []);
 
@@ -671,8 +682,9 @@ export default function NuevaPropiedadPage() {
       // and the detail page falls back to live geocoding).
       let latitude: number | null = null;
       let longitude: number | null = null;
+      const addressLine = composeAddressLine(form);
       const addressQuery = [
-        form.direccion,
+        addressLine,
         form.colonia,
         form.ciudad,
         form.estado,
@@ -725,7 +737,10 @@ export default function NuevaPropiedadPage() {
           has_storage: form.has_storage,
           has_laundry_room: form.has_laundry_room,
           has_integrated_kitchen: form.has_integrated_kitchen,
-          address_line: form.direccion || null,
+          address_line: addressLine || null,
+          street: form.street.trim() || null,
+          exterior_number: form.exterior_number.trim() || null,
+          interior_number: form.interior_number.trim() || null,
           neighborhood: form.colonia || null,
           city: form.ciudad,
           state: form.estado,
@@ -1131,24 +1146,16 @@ export default function NuevaPropiedadPage() {
         subtitle="La dirección exacta solo se usa para geolocalizar. Puedes ocultarla del público y mostrar solo colonia y ciudad."
       >
         <div className="space-y-5">
-          <div>
-            <Label htmlFor="direccion" className="mb-1.5 block text-gray-700">
-              Dirección{" "}
-              <span className="text-xs font-normal text-gray-400">(uso interno)</span>
-            </Label>
-            <Input
-              id="direccion"
-              placeholder="Calle, número exterior e interior"
-              value={form.direccion}
-              onChange={(e) => updateField("direccion", e.target.value)}
-              className="rounded-xl"
-            />
-          </div>
-
           <LocationPicker
             value={locationValue}
             onChange={handleLocationChange}
             onStatusChange={setLocationStatus}
+            idPrefix="nueva"
+          />
+
+          <StreetAddressFields
+            value={form}
+            onChange={handleStreetChange}
             idPrefix="nueva"
           />
 

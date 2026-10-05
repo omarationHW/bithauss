@@ -27,6 +27,7 @@ import {
 } from '@bithauss/validators';
 
 import { SupabaseConfigService } from '../../config/supabase.config';
+import { assertNotBrcFrozen } from './brc-freeze';
 
 /** PUBLIC bucket created in migration 030. */
 export const PROPERTY_VIDEO_BUCKET = 'property-videos';
@@ -166,6 +167,7 @@ export class PropertyMediaService {
     dto: AttachExternalVideoDto,
   ) {
     await this.verifyOwnership(propertyId, ownerId);
+    await assertNotBrcFrozen(this.supabaseConfig.getAdminClient(), propertyId);
     const existing = await this.assertRoomForVideo(propertyId);
 
     const parsed = parseVideoUrl(dto.url);
@@ -214,6 +216,7 @@ export class PropertyMediaService {
     file: Express.Multer.File,
   ) {
     await this.verifyOwnership(propertyId, ownerId);
+    await assertNotBrcFrozen(this.supabaseConfig.getAdminClient(), propertyId);
     const existing = await this.assertRoomForVideo(propertyId);
 
     if (!file?.buffer?.length) {
@@ -297,6 +300,7 @@ export class PropertyMediaService {
    */
   async removeMedia(propertyId: string, mediaId: string, ownerId: string) {
     await this.verifyOwnership(propertyId, ownerId);
+    await assertNotBrcFrozen(this.supabaseConfig.getAdminClient(), propertyId);
 
     const supabase = this.supabaseConfig.getAdminClient();
 
@@ -350,6 +354,7 @@ export class PropertyMediaService {
    */
   async reorderMedia(propertyId: string, ownerId: string, dto: ReorderMediaDto) {
     await this.verifyOwnership(propertyId, ownerId);
+    await assertNotBrcFrozen(this.supabaseConfig.getAdminClient(), propertyId);
 
     const supabase = this.supabaseConfig.getAdminClient();
 

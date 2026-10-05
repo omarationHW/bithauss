@@ -176,6 +176,9 @@ const propertyObjectSchema = z.object({
 
   // Location
   address_line: z.string().max(300).nullable().optional(),
+  street: z.string().max(200).nullable().optional(),
+  exterior_number: z.string().max(20).nullable().optional(),
+  interior_number: z.string().max(20).nullable().optional(),
   neighborhood: z.string().max(150).nullable().optional(),
   city: z
     .string()

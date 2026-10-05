@@ -20,6 +20,12 @@ import { safeStorageFileName } from "@/lib/private-storage";
 import { logError } from "@/lib/log";
 import { isDocumentRequired } from "@/lib/brc-documents";
 import {
+  checkAddressAgainstCatalog,
+  lookupPostalForBrc,
+  missingBrcAddressFields,
+} from "@/lib/brc-address";
+import { describeBrcDuplicates, fetchBrcDuplicates } from "@/lib/brc-duplicates";
+import {
   bestMembershipTier,
   calculateBrcPrice,
   membershipDiscountFor,
@@ -39,6 +45,11 @@ interface Property {
   id: string;
   title: string;
   address_line: string;
+  street: string | null;
+  exterior_number: string | null;
+  interior_number: string | null;
+  neighborhood: string | null;
+  zip_code: string | null;
   city: string;
   state: string;
   price: number;
@@ -153,6 +164,55 @@ export default function SolicitarBrcPage() {
 
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
+  /** Candado de dirección (migración 040): completa y coherente con SEPOMEX. */
+  const [addressCheck, setAddressCheck] = useState<{
+    missing: string[];
+    errors: string[];
+    warnings: string[];
+    checking: boolean;
+  }>({ missing: [], errors: [], warnings: [], checking: true });
+  /** El dueño acepta que, emitido el BRC, el inmueble queda congelado (041). */
+  const [lockAck, setLockAck] = useState(false);
+  /** Documentos ya usados en otro inmueble en proceso o certificado (042). */
+  const [duplicateMessage, setDuplicateMessage] = useState<string | null>(null);
+
+  async function checkDuplicates(
+    supabase: ReturnType<typeof createClient>,
+    expedienteId: string,
+  ) {
+    setDuplicateMessage(
+      describeBrcDuplicates(await fetchBrcDuplicates(supabase, expedienteId)),
+    );
+  }
+
+  useEffect(() => {
+    if (!property) return;
+    let cancelled = false;
+    const missing = missingBrcAddressFields(property);
+    if (missing.length > 0) {
+      setAddressCheck({ missing, errors: [], warnings: [], checking: false });
+      return;
+    }
+    setAddressCheck({ missing: [], errors: [], warnings: [], checking: true });
+    lookupPostalForBrc(property.zip_code ?? "").then(({ record, unavailable }) => {
+      if (cancelled) return;
+      // Catalog unreachable: don't block — the DB trigger still guarantees
+      // completeness and the notaría compares against the escritura.
+      const { errors, warnings } = unavailable
+        ? { errors: [], warnings: [] }
+        : checkAddressAgainstCatalog(property, record);
+      setAddressCheck({ missing: [], errors, warnings, checking: false });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [property]);
+
+  const addressBlocked =
+    addressCheck.checking ||
+    addressCheck.missing.length > 0 ||
+    addressCheck.errors.length > 0;
+
   /* ---- Fetch property, tariff and document types ---- */
   useEffect(() => {
     async function fetchData() {
@@ -163,7 +223,7 @@ export default function SolicitarBrcPage() {
         const { data: prop, error: propError } = await supabase
           .from("properties")
           .select(
-            "id, title, address_line, city, state, price, price_sale, currency, brc_status, type, operation",
+            "id, title, address_line, street, exterior_number, interior_number, neighborhood, zip_code, city, state, price, price_sale, currency, brc_status, type, operation",
           )
           .eq("id", id)
           .single();
@@ -216,6 +276,7 @@ export default function SolicitarBrcPage() {
 
         if (draft) {
           setDraftId(draft.id as string);
+          void checkDuplicates(supabase, draft.id as string);
           if (draft.notes) setNotes(draft.notes as string);
 
           const { data: docs } = await supabase
@@ -611,8 +672,10 @@ export default function SolicitarBrcPage() {
     setSavingDraft(true);
     setError(null);
     try {
-      await persistProgress(createClient());
+      const supabase = createClient();
+      const expedienteId = await persistProgress(supabase);
       setSavedAt(new Date());
+      await checkDuplicates(supabase, expedienteId);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "No se pudo guardar el progreso.",
@@ -677,6 +740,19 @@ export default function SolicitarBrcPage() {
       return;
     }
 
+    if (addressBlocked) {
+      setError("Completa y corrige la dirección del inmueble antes de enviar la solicitud.");
+      return;
+    }
+    if (duplicateMessage) {
+      setError(duplicateMessage);
+      return;
+    }
+    if (!lockAck) {
+      setError("Debes aceptar las condiciones del BRC antes de enviar la solicitud.");
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
 
@@ -692,6 +768,7 @@ export default function SolicitarBrcPage() {
         .from("brc_expedientes")
         .update({
           status: "EN_REVISION",
+          lock_acknowledged_at: new Date().toISOString(),
           tariff_id: tariff?.id ?? null,
           notes: notes.trim() || null,
         })
@@ -828,6 +905,53 @@ export default function SolicitarBrcPage() {
           </div>
         </div>
       </SpotlightCard>
+
+      {/* ============================================================ */}
+      {/*  Dirección del inmueble (candado)                             */}
+      {/* ============================================================ */}
+      {!addressCheck.checking &&
+        (addressCheck.missing.length > 0 || addressCheck.errors.length > 0) && (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 sm:p-5">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
+              <div className="min-w-0 space-y-2">
+                <p className="text-sm font-semibold text-red-800">
+                  La dirección del inmueble no está lista para certificar
+                </p>
+                {addressCheck.missing.length > 0 && (
+                  <p className="text-sm text-red-700">
+                    Falta: {addressCheck.missing.join(", ")}.
+                  </p>
+                )}
+                {addressCheck.errors.map((e) => (
+                  <p key={e} className="text-sm text-red-700">
+                    {e}
+                  </p>
+                ))}
+                <p className="text-xs text-red-700">
+                  Escríbela tal como aparece en la escritura. Puedes seguir
+                  subiendo documentos, pero no enviar la solicitud hasta
+                  corregirla.
+                </p>
+                <Link
+                  href={`/dashboard/propiedades/${id}/editar#ubicacion`}
+                  className="inline-flex text-sm font-semibold text-red-800 underline underline-offset-2 hover:text-red-900"
+                >
+                  Completar dirección
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+      {addressCheck.warnings.map((w) => (
+        <div
+          key={w}
+          className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4"
+        >
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
+          <p className="text-sm text-amber-800">{w}</p>
+        </div>
+      ))}
 
       {/* ============================================================ */}
       {/*  Documents Upload                                             */}
@@ -1141,6 +1265,43 @@ export default function SolicitarBrcPage() {
       {/* ============================================================ */}
       {/*  Price breakdown + payment                                    */}
       {/* ============================================================ */}
+      {duplicateMessage && (
+        <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 sm:p-5">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-red-800">
+              Documentos ya usados en otro inmueble
+            </p>
+            <p className="text-sm text-red-700">{duplicateMessage}</p>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/*  Aceptación: el inmueble queda congelado con el BRC vigente   */}
+      {/* ============================================================ */}
+      <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:p-5">
+        <input
+          type="checkbox"
+          checked={lockAck}
+          onChange={(e) => setLockAck(e.target.checked)}
+          className="mt-0.5 h-4 w-4 shrink-0 rounded border-amber-300 accent-blue-600"
+        />
+        <span className="space-y-1 text-sm text-amber-900">
+          <span className="block font-semibold">
+            ¿Estás seguro? Una vez emitido el BRC, la información del inmueble
+            no podrá modificarse.
+          </span>
+          <span className="block text-amber-800">
+            Durante la vigencia del certificado no podrás editar los datos,
+            la dirección, las fotos ni los videos del inmueble. Si necesitas
+            cambiar algo, el BRC quedará anulado y tendrás que hacer el proceso
+            de certificación desde cero, incluido el pago. Revisa que todo
+            esté correcto antes de enviar.
+          </span>
+        </span>
+      </label>
+
       {breakdown && (
         <BrcPriceSummary
           breakdown={breakdown}
@@ -1149,7 +1310,7 @@ export default function SolicitarBrcPage() {
           membershipTier={membershipTier}
           stripeConfigured={stripeConfigured}
           submitting={submitting}
-          disabled={savingDraft}
+          disabled={savingDraft || addressBlocked || !lockAck || Boolean(duplicateMessage)}
           onPay={handleSubmit}
         />
       )}

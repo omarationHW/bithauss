@@ -80,6 +80,9 @@ import {
   type LocationStatus,
   type LocationValue,
 } from "@/components/ui/location-picker";
+import { StreetAddressFields } from "@/components/propiedades/street-address-fields";
+import { AnnulBrcDialog } from "@/components/propiedades/annul-brc-dialog";
+import { composeAddressLine, type StreetAddress } from "@/lib/brc-address";
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
@@ -235,7 +238,11 @@ interface FormData {
   has_storage: boolean;
   has_laundry_room: boolean;
   has_integrated_kitchen: boolean;
+  /** Free-text address saved before migración 040; kept as a fallback. */
   direccion: string;
+  street: string;
+  exterior_number: string;
+  interior_number: string;
   colonia: string;
   ciudad: string;
   estado: string;
@@ -263,6 +270,9 @@ const initialFormData: FormData = {
   has_laundry_room: false,
   has_integrated_kitchen: false,
   direccion: "",
+  street: "",
+  exterior_number: "",
+  interior_number: "",
   colonia: "",
   ciudad: "",
   estado: "",
@@ -364,6 +374,9 @@ export default function EditarPropiedadPage() {
   const [originalSlug, setOriginalSlug] = useState<string>("");
   const [, setOriginalStatus] = useState<string>("");
   const [brcStatus, setBrcStatus] = useState<string>("NO_SOLICITADO");
+  /** BRC vigente: la ficha está congelada (migración 041) hasta anularlo. */
+  const [brcLocked, setBrcLocked] = useState(false);
+  const [annulOpen, setAnnulOpen] = useState(false);
 
   // Which conditional fields appear comes from the client's matrix; this only
   // covers the blocks the matrix does not model (extra private features).
@@ -436,6 +449,15 @@ export default function EditarPropiedadPage() {
       setOriginalSlug(property.slug ?? "");
       setOriginalStatus(property.status ?? "");
       setBrcStatus(property.brc_status ?? "NO_SOLICITADO");
+      if (property.brc_status === "CERTIFICADO") {
+        // An expired certificate no longer freezes the listing. If the check
+        // itself fails, assume it is valid: the DB enforces the lock anyway.
+        const { data: active, error: activeError } = await supabase.rpc(
+          "property_has_active_brc",
+          { p_property_id: propertyId }
+        );
+        setBrcLocked(activeError ? true : active === true);
+      }
 
       const op = normalizeOperation(property.operation);
       // For legacy rows that only have `price`, surface it in whichever
@@ -476,6 +498,9 @@ export default function EditarPropiedadPage() {
         has_laundry_room: property.has_laundry_room ?? false,
         has_integrated_kitchen: property.has_integrated_kitchen ?? false,
         direccion: property.address_line ?? "",
+        street: property.street ?? "",
+        exterior_number: property.exterior_number ?? "",
+        interior_number: property.interior_number ?? "",
         colonia: property.neighborhood ?? "",
         ciudad: property.city ?? "",
         estado: property.state ?? "",
@@ -587,6 +612,10 @@ export default function EditarPropiedadPage() {
   };
 
   const handleLocationChange = useCallback((patch: Partial<LocationValue>) => {
+    setForm((prev) => ({ ...prev, ...patch }));
+  }, []);
+
+  const handleStreetChange = useCallback((patch: Partial<StreetAddress>) => {
     setForm((prev) => ({ ...prev, ...patch }));
   }, []);
 
@@ -799,6 +828,13 @@ export default function EditarPropiedadPage() {
     setError(null);
     setSuccess(null);
 
+    if (brcLocked) {
+      setError(
+        "Este inmueble tiene un BRC vigente y no puede modificarse. Para editarlo, anula el BRC."
+      );
+      return;
+    }
+
     const { message: validationError, focused } = validate();
     if (validationError) {
       setError(validationError);
@@ -822,8 +858,10 @@ export default function EditarPropiedadPage() {
 
       let latitude: number | null = null;
       let longitude: number | null = null;
+      // Until the owner splits it, a legacy listing keeps its free-text line.
+      const addressLine = composeAddressLine(form) || form.direccion.trim();
       const addressQuery = [
-        form.direccion,
+        addressLine,
         form.colonia,
         form.ciudad,
         form.estado,
@@ -871,7 +909,10 @@ export default function EditarPropiedadPage() {
         has_storage: form.has_storage,
         has_laundry_room: form.has_laundry_room,
         has_integrated_kitchen: form.has_integrated_kitchen,
-        address_line: form.direccion || null,
+        address_line: addressLine || null,
+        street: form.street.trim() || null,
+        exterior_number: form.exterior_number.trim() || null,
+        interior_number: form.interior_number.trim() || null,
         neighborhood: form.colonia || null,
         city: form.ciudad,
         state: form.estado,
@@ -1127,9 +1168,43 @@ export default function EditarPropiedadPage() {
               </p>
             </div>
           </div>
+          {brcLocked && (
+            <div className="mt-4 flex flex-col gap-3 border-t border-emerald-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-emerald-800">
+                Mientras el BRC esté vigente, la información, fotos y videos
+                del inmueble no pueden modificarse. Si editas, el BRC quedará
+                anulado y tendrás que certificar desde cero.
+              </p>
+              <button
+                type="button"
+                onClick={() => setAnnulOpen(true)}
+                className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 transition-colors hover:bg-red-50"
+              >
+                Anular BRC y editar
+              </button>
+            </div>
+          )}
         </div>
       )}
 
+      <AnnulBrcDialog
+        open={annulOpen}
+        onOpenChange={setAnnulOpen}
+        propertyId={propertyId}
+        onAnnulled={() => {
+          setBrcLocked(false);
+          setBrcStatus("NO_SOLICITADO");
+          setSuccess(
+            "BRC anulado. Ya puedes editar el inmueble; para certificarlo de nuevo tendrás que solicitar el BRC desde cero."
+          );
+        }}
+      />
+
+      {/* Con BRC vigente todo el formulario queda deshabilitado (041). */}
+      <fieldset
+        disabled={brcLocked}
+        className="contents"
+      >
       {/* Información Básica */}
       <SectionCard title="Información Básica">
         <div className="space-y-5">
@@ -1394,30 +1469,24 @@ export default function EditarPropiedadPage() {
         </SectionCard>
       )}
 
-      {/* Ubicación */}
+      {/* Ubicación — anchor target of the BRC request's "completa la dirección" */}
+      <div id="ubicacion" className="scroll-mt-24">
       <SectionCard
         title="Ubicación"
         subtitle="La dirección exacta solo se usa para geolocalizar. Puedes ocultarla del público y mostrar solo colonia y ciudad."
       >
         <div className="space-y-5">
-          <div>
-            <Label htmlFor="direccion" className="mb-1.5 block text-gray-700">
-              Dirección{" "}
-              <span className="text-xs font-normal text-gray-400">(uso interno)</span>
-            </Label>
-            <Input
-              id="direccion"
-              placeholder="Calle, número exterior e interior"
-              value={form.direccion}
-              onChange={(e) => updateField("direccion", e.target.value)}
-              className="rounded-xl"
-            />
-          </div>
-
           <LocationPicker
             value={locationValue}
             onChange={handleLocationChange}
             onStatusChange={setLocationStatus}
+            idPrefix="editar"
+          />
+
+          <StreetAddressFields
+            value={form}
+            onChange={handleStreetChange}
+            legacyAddress={form.direccion}
             idPrefix="editar"
           />
 
@@ -1431,6 +1500,7 @@ export default function EditarPropiedadPage() {
           </div>
         </div>
       </SectionCard>
+      </div>
 
       {/* Amenidades / Áreas comunes — la matriz sólo las pide en los tipos
           residenciales. */}
@@ -1562,6 +1632,7 @@ export default function EditarPropiedadPage() {
           Guardar cambios
         </button>
       </div>
+      </fieldset>
     </div>
   );
 }

@@ -5,6 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { SupabaseConfigService } from '../../config/supabase.config';
+import { assertNotBrcFrozen } from './brc-freeze';
 import { randomBytes } from 'crypto';
 
 // ────────────────────────────────────────────────────────────
@@ -99,6 +100,9 @@ export class CreatePropertyDto {
   @IsOptional() @IsBoolean() has_integrated_kitchen?: boolean;
 
   @IsOptional() @IsString() @Length(0, 300) address_line?: string;
+  @IsOptional() @IsString() @Length(0, 200) street?: string;
+  @IsOptional() @IsString() @Length(0, 20) exterior_number?: string;
+  @IsOptional() @IsString() @Length(0, 20) interior_number?: string;
   @IsOptional() @IsString() @Length(0, 200) neighborhood?: string;
 
   @IsString() @Length(1, 100) city!: string;
@@ -149,6 +153,9 @@ export class UpdatePropertyDto {
   @IsOptional() @IsBoolean() has_laundry_room?: boolean;
   @IsOptional() @IsBoolean() has_integrated_kitchen?: boolean;
   @IsOptional() @IsString() @Length(0, 300) address_line?: string;
+  @IsOptional() @IsString() @Length(0, 200) street?: string;
+  @IsOptional() @IsString() @Length(0, 20) exterior_number?: string;
+  @IsOptional() @IsString() @Length(0, 20) interior_number?: string;
   @IsOptional() @IsString() @Length(0, 200) neighborhood?: string;
   @IsOptional() @IsString() @Length(1, 100) city?: string;
   @IsOptional() @IsString() @Length(1, 100) state?: string;
@@ -283,6 +290,9 @@ export class PropertiesService {
         has_laundry_room: dto.has_laundry_room ?? false,
         has_integrated_kitchen: dto.has_integrated_kitchen ?? false,
         address_line: dto.address_line ?? null,
+        street: dto.street ?? null,
+        exterior_number: dto.exterior_number ?? null,
+        interior_number: dto.interior_number ?? null,
         neighborhood: dto.neighborhood ?? null,
         city: dto.city,
         state: dto.state,
@@ -424,6 +434,7 @@ export class PropertiesService {
     await this.verifyOwnership(id, ownerId);
 
     const supabase = this.supabaseConfig.getAdminClient();
+    await assertNotBrcFrozen(supabase, id);
 
     const updateData: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
@@ -454,6 +465,9 @@ export class PropertiesService {
       'has_terrace',
       'applies_traspaso',
       'address_line',
+      'street',
+      'exterior_number',
+      'interior_number',
       'neighborhood',
       'city',
       'state',
