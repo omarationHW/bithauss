@@ -68,6 +68,9 @@ function money(n: number, currency: string | null): string {
   return `${new Intl.NumberFormat("es-MX", {
     style: "currency",
     currency: cur,
+    // "$" y la clave al final: es-MX escribe "USD 7,000,000" y quedaba
+    // "USD 7,000,000 USD".
+    currencyDisplay: "narrowSymbol",
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(n)} ${cur}`;

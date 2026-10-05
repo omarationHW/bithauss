@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { logError } from '@/lib/log'
+import { cleanPhotoSrc } from '@/lib/clean-photo'
 
 /* ------------------------------------------------------------------ */
 /*  Data                                                               */
@@ -103,7 +104,8 @@ function mapRow(p: PropertyRow): FeaturedCard {
     bathrooms: p.bathrooms || 0,
     area: p.area_total || 0,
     address: [line1, line2].filter(Boolean).join('\n'),
-    image: p.featured_image_url || FALLBACK_IMAGE,
+    // Sin la marca de agua de la inmobiliaria (ver lib/clean-photo.ts).
+    image: cleanPhotoSrc(p.featured_image_url, 960) || FALLBACK_IMAGE,
     timeAgo: timeAgo(p.created_at),
     isNew: created > 0 && Date.now() - created <= 7 * 86_400_000,
     certified: p.brc_status === 'CERTIFICADO',

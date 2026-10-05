@@ -33,6 +33,25 @@ export function originalPhotoUrl(url: string | null | undefined): string | null 
   return `${m[1]}/${ORIGINALS_DIR}/${m[2]}.orig`;
 }
 
+/** Anchos que sirve /api/foto: pocos y fijos para que el caché funcione. */
+export const CLEAN_PHOTO_WIDTHS = [480, 960, 1600] as const;
+export type CleanPhotoWidth = (typeof CLEAN_PHOTO_WIDTHS)[number];
+
+/**
+ * URL para mostrar una foto en las páginas públicas SIN la marca de agua de
+ * la inmobiliaria: /api/foto entrega el original archivado, redimensionado
+ * (los originales pesan varios MB y la web no optimiza imágenes). Las fotos
+ * que no siguen el esquema `wm/` se devuelven tal cual.
+ */
+export function cleanPhotoSrc(
+  url: string | null | undefined,
+  width: CleanPhotoWidth = 960,
+): string | null {
+  if (!url) return null;
+  if (!originalPhotoUrl(url)) return url;
+  return `/api/foto?u=${encodeURIComponent(url)}&w=${width}`;
+}
+
 /** True cuando la URL apunta a un objeto con marca de agua horneada. */
 export function hasBakedWatermark(url: string | null | undefined): boolean {
   return !!url && /-wm\.[a-z0-9]+(\?|#|$)/i.test(url);

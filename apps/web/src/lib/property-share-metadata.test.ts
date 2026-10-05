@@ -42,6 +42,12 @@ describe("vista previa del enlace (Open Graph)", () => {
     expect(d).toContain("Polanco, Ciudad de México");
   });
 
+  it("en dólares escribe la moneda una sola vez", () => {
+    const d = buildShareDescription({ ...BASE, currency: "USD", price: 7_000_000, price_sale: 7_000_000 });
+    expect(d).toMatch(/\$7,000,000 USD/);
+    expect(d).not.toMatch(/USD.*USD/);
+  });
+
   it("nunca filtra un precio oculto", () => {
     const d = buildShareDescription({ ...BASE, show_price: false });
     expect(d).toContain("Precio a consultar");

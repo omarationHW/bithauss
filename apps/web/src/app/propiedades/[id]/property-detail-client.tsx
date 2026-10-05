@@ -10,8 +10,6 @@ import {
   Bath,
   Ruler,
   Car,
-  Phone,
-  Mail,
   ChevronRight,
   Heart,
   Share2,
@@ -20,7 +18,6 @@ import {
   Bed,
   Maximize,
   Calendar,
-  Star,
   X,
   ChevronLeft,
   Loader2,
@@ -53,6 +50,7 @@ import {
 } from "@/components/propiedades/ficha-options";
 import { downloadFichaTecnica } from "@/lib/download-ficha-tecnica";
 import { logError } from "@/lib/log";
+import { cleanPhotoSrc } from "@/lib/clean-photo";
 import { propertyOperationLabel } from "@/components/propiedades/property-operations";
 import {
   PROPERTY_FIELD_META,
@@ -125,16 +123,6 @@ interface PropertyMedia {
   thumbnail_url: string | null;
   alt_text: string;
   sort_order: number;
-}
-
-interface Profile {
-  id: string;
-  email: string;
-  first_name: string;
-  last_name: string;
-  phone: string;
-  avatar_url: string;
-  role: string;
 }
 
 interface SimilarProperty {
@@ -500,7 +488,6 @@ export default function PropertyDetailClient() {
 
   const [property, setProperty] = useState<Property | null>(null);
   const [media, setMedia] = useState<PropertyMedia[]>([]);
-  const [owner, setOwner] = useState<Profile | null>(null);
   const [similarProperties, setSimilarProperties] = useState<SimilarProperty[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -575,18 +562,15 @@ export default function PropertyDetailClient() {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       setIsOwner(currentUser?.id === prop.owner_id);
 
-      // Fetch media, owner, and similar properties in parallel
-      const [mediaResult, ownerResult, similarResult] = await Promise.all([
+      // Fetch media and similar properties in parallel. The owner's profile is
+      // deliberately NOT read: the public page never shows who the agency or
+      // broker is, so a client cannot skip them (or BitHauss).
+      const [mediaResult, similarResult] = await Promise.all([
         supabase
           .from("property_media")
           .select("*")
           .eq("property_id", prop.id)
           .order("sort_order", { ascending: true }),
-        supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", prop.owner_id)
-          .maybeSingle(),
         // Related properties: separate parameterized queries instead of .or() with
         // string interpolation, which would let crafted city/state values inject
         // PostgREST filter operators.
@@ -601,9 +585,6 @@ export default function PropertyDetailClient() {
 
       if (mediaResult.data) {
         setMedia(mediaResult.data as PropertyMedia[]);
-      }
-      if (ownerResult.data) {
-        setOwner(ownerResult.data as Profile);
       }
       if (similarResult.data) {
         setSimilarProperties(similarResult.data as SimilarProperty[]);
@@ -730,7 +711,6 @@ export default function PropertyDetailClient() {
   const locationText = property.show_address
     ? [property.address_line, property.neighborhood, property.city, property.zip_code ? `C.P. ${property.zip_code}` : ""].filter(Boolean).join(", ")
     : [property.neighborhood, property.city].filter(Boolean).join(", ");
-  const ownerName = owner ? `${owner.first_name ?? ""} ${owner.last_name ?? ""}`.trim() : "Asesor";
 
   return (
     <main className="min-h-screen bg-background pt-[var(--header-offset)]">
@@ -759,7 +739,7 @@ export default function PropertyDetailClient() {
 
             <div className="relative w-full max-w-4xl h-[70vh]">
               <Image
-                src={images[currentImage]!}
+                src={cleanPhotoSrc(images[currentImage], 1600)!}
                 alt={`Foto ${currentImage + 1}`}
                 fill
                 className="object-contain"
@@ -784,7 +764,7 @@ export default function PropertyDetailClient() {
                   i === currentImage ? "ring-2 ring-white opacity-100" : "opacity-50 hover:opacity-80"
                 }`}
               >
-                <Image src={img} alt="" fill className="object-cover" />
+                <Image src={cleanPhotoSrc(img, 480)!} alt="" fill className="object-cover" />
               </button>
             ))}
           </div>
@@ -869,7 +849,7 @@ export default function PropertyDetailClient() {
             {/* Main image */}
             <div className="col-span-3 aspect-[4/3] sm:aspect-auto sm:col-span-2 sm:row-span-2 relative group cursor-pointer" onClick={() => openGallery(0)}>
               <Image
-                src={images[0]!}
+                src={cleanPhotoSrc(images[0], 1600)!}
                 alt="Propiedad principal"
                 fill
                 className="object-cover transition-transform duration-500 group-hover:scale-105"
@@ -898,7 +878,7 @@ export default function PropertyDetailClient() {
                 onClick={() => openGallery(i + 1)}
               >
                 <Image
-                  src={img}
+                  src={cleanPhotoSrc(img, 960)!}
                   alt={`Vista ${i + 2}`}
                   fill
                   className="object-cover transition-transform duration-500 group-hover:scale-105"
@@ -920,7 +900,7 @@ export default function PropertyDetailClient() {
             without video shows exactly the same page as before. */}
         <PropertyVideoGallery
           videos={videoMedia}
-          posterFallback={images[0] ?? property.featured_image_url ?? null}
+          posterFallback={cleanPhotoSrc(images[0] ?? property.featured_image_url, 960)}
         />
 
         {/* Content */}
@@ -1278,66 +1258,24 @@ export default function PropertyDetailClient() {
           {/* Right Sidebar */}
           <div className="lg:col-span-1">
             <div className="sticky top-24 space-y-5">
-              {/* Broker Card */}
-              <div className="rounded-2xl border border-border/50 overflow-hidden">
-                <div
-                  className="p-5 text-white"
-                  style={{ background: 'linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))' }}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="relative">
-                      {owner?.avatar_url ? (
-                        <Image
-                          src={owner.avatar_url}
-                          alt={ownerName}
-                          width={56}
-                          height={56}
-                          className="rounded-full object-cover h-14 w-14"
-                        />
-                      ) : (
-                        <div className="h-14 w-14 rounded-full bg-white/20 flex items-center justify-center text-white font-bold text-lg">
-                          {(owner?.first_name?.[0] ?? "A").toUpperCase()}
-                        </div>
-                      )}
-                      <div className="absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full bg-green-400 border-2 border-white" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold">{ownerName}</h3>
-                      <p className="text-xs text-white/80">{owner?.role === "BROKER" ? "Broker" : "Propietario"}</p>
-                      <div className="flex items-center gap-0.5 mt-1">
-                        {[1, 2, 3, 4, 5].map((s) => (
-                          <Star key={s} className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                        ))}
-                        <span className="text-[10px] text-white/70 ml-1">5.0</span>
-                      </div>
-                    </div>
+              {/* Contacto: siempre a través de BitHauss. Ni el nombre, ni el
+                  teléfono, ni el logo de la inmobiliaria o el asesor se
+                  muestran: quien comparte la propiedad no debe poder ser
+                  saltado por su cliente. */}
+              <div
+                className="rounded-2xl p-5 text-white"
+                style={{ background: 'linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))' }}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/20">
+                    <ShieldBrc className="h-6 w-6 text-white" />
                   </div>
-                </div>
-                <div className="p-4 space-y-2">
-                  {owner?.phone && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Phone className="h-4 w-4" />
-                      <span>{owner.phone}</span>
-                    </div>
-                  )}
-                  {owner?.email && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Mail className="h-4 w-4" />
-                      <span>{owner.email}</span>
-                    </div>
-                  )}
-                  {owner?.phone && (
-                    <Button
-                      asChild
-                      className="w-full mt-2 border-0 text-white"
-                      style={{ background: 'linear-gradient(135deg, hsl(221 83% 53%), hsl(160 84% 39%))' }}
-                    >
-                      <a href={`tel:${owner.phone}`}>
-                        <Phone className="h-4 w-4 mr-2" />
-                        Llamar ahora
-                      </a>
-                    </Button>
-                  )}
+                  <div>
+                    <h3 className="font-semibold">Contacto vía BitHauss</h3>
+                    <p className="text-xs text-white/85">
+                      Escríbenos y te ponemos en contacto con el asesor de esta propiedad.
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -1362,7 +1300,7 @@ export default function PropertyDetailClient() {
                     <div className="relative h-48 overflow-hidden">
                       {prop.featured_image_url ? (
                         <Image
-                          src={prop.featured_image_url}
+                          src={cleanPhotoSrc(prop.featured_image_url, 960)!}
                           alt={prop.title}
                           fill
                           className="object-cover transition-transform duration-500 group-hover:scale-105"

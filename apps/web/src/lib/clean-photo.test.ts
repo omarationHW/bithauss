@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { hasBakedWatermark, originalPhotoUrl, resolveCleanPhotoUrls } from "./clean-photo";
+import {
+  cleanPhotoSrc,
+  hasBakedWatermark,
+  originalPhotoUrl,
+  resolveCleanPhotoUrls,
+} from "./clean-photo";
 
 const SUPA = "https://abc.supabase.co/storage/v1/object/public/properties";
 
@@ -73,5 +78,23 @@ describe("resolveCleanPhotoUrls", () => {
     stubHead(async () => new Response(null, { status: 200 }));
     const plain = "https://x.supabase.co/storage/v1/object/public/properties/u1/p1/foto.jpg";
     expect((await resolveCleanPhotoUrls([plain])).get(plain)).toBe(plain);
+  });
+});
+
+describe("cleanPhotoSrc", () => {
+  const WM = `${SUPA}/u1/p1/wm/k1-abc12-wm.jpg?v=abc12`;
+
+  it("manda las fotos estampadas por /api/foto con el ancho pedido", () => {
+    expect(cleanPhotoSrc(WM, 480)).toBe(`/api/foto?u=${encodeURIComponent(WM)}&w=480`);
+  });
+
+  it("usa 960 por defecto", () => {
+    expect(cleanPhotoSrc(WM)).toContain("&w=960");
+  });
+
+  it("deja igual las fotos sin marca y los vacíos", () => {
+    const plain = `${SUPA}/u1/p1/foto.jpg`;
+    expect(cleanPhotoSrc(plain)).toBe(plain);
+    expect(cleanPhotoSrc(null)).toBeNull();
   });
 });

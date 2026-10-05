@@ -43,6 +43,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
+import { cleanPhotoSrc } from "@/lib/clean-photo";
 import { createClient } from "@/lib/supabase/client";
 import { logError } from "@/lib/log";
 import {
@@ -202,7 +203,8 @@ function mapProperty(p: PropertyFromDB): MappedProperty {
     bathrooms: p.bathrooms || 0,
     area: p.area_total || 0,
     brc: p.brc_status === "CERTIFICADO",
-    image: p.featured_image_url || "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Casa1.jpg",
+    // Sin la marca de agua de la inmobiliaria (ver lib/clean-photo.ts).
+    image: cleanPhotoSrc(p.featured_image_url, 960) || "https://bithauss-images-fpdpe5auefacdweh.z03.azurefd.net/images/Casa1.jpg",
     tag: op === "VENTA_RENTA" ? "Compra o Renta" : op === "RENTA" ? "Renta" : "Compra",
     operation: op,
     type: p.type ? (PROPERTY_TYPE_MAP[p.type.toUpperCase()] ?? p.type) : "",
