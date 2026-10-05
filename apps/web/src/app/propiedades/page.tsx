@@ -135,7 +135,8 @@ function normalize(s: string): string {
 function formatPrice(price: number | null, currency: string | null, operation: string | null): string {
   if (!price) return "Precio no disponible";
   const cur = currency || "MXN";
-  const formatted = price.toLocaleString("es-MX", { style: "currency", currency: cur, minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  // "$" y la clave al final: es-MX escribe "USD 7,000,000" y quedaba "USD … USD".
+  const formatted = price.toLocaleString("es-MX", { style: "currency", currency: cur, currencyDisplay: "narrowSymbol", minimumFractionDigits: 0, maximumFractionDigits: 0 });
   if (operation === "RENTA") {
     return `${formatted}/mes ${cur}`;
   }
@@ -1005,7 +1006,7 @@ function PropiedadesPageInner() {
                       <div className="flex items-center gap-1.5 mt-1.5 text-[10px] text-muted-foreground flex-wrap">
                         {property.bedrooms > 0 && <span>● {property.bedrooms} rec.</span>}
                         {property.bathrooms > 0 && <span>● {property.bathrooms} baños</span>}
-                        <span>● {property.area}m²</span>
+                        {property.area > 0 && <span>● {property.area}m²</span>}
                       </div>
 
                       <p className="mt-1.5 text-[10px] text-muted-foreground whitespace-pre-line leading-relaxed line-clamp-2">

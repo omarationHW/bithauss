@@ -56,6 +56,7 @@ import {
   PROPERTY_FIELD_META,
   getPropertyFieldLabel,
   getVisibleFields,
+  isFieldVisible,
 } from "@/lib/property-fields";
 
 interface Property {
@@ -144,6 +145,9 @@ function formatPrice(price: number, currency: string): string {
   return new Intl.NumberFormat("es-MX", {
     style: "currency",
     currency: currency || "MXN",
+    // "$" aquí y la clave de moneda la añade quien llama: es-MX escribe
+    // "USD 7,000,000" y quedaba "USD 7,000,000 USD".
+    currencyDisplay: "narrowSymbol",
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(price);
@@ -957,31 +961,56 @@ export default function PropertyDetailClient() {
               </div>
             </div>
 
-            {/* Key Specs */}
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {[
-                { icon: BedDouble, value: String(property.bedrooms ?? 0), label: "Recámaras" },
-                { icon: Bath, value: String(property.bathrooms ?? 0), label: "Baños" },
-                { icon: Ruler, value: String(property.area_built ?? property.area_total ?? 0), label: "m²" },
-                { icon: Car, value: String(property.parking_spaces ?? 0), label: "Estacionamientos" },
-              ].map((spec) => {
-                const Icon = spec.icon;
-                return (
-                  <div
-                    key={spec.label}
-                    className="rounded-xl border border-border/50 p-4 text-center transition-all duration-300 hover:shadow-md hover:border-primary/30"
-                  >
-                    <div className="mx-auto mb-2 h-10 w-10 rounded-full flex items-center justify-center"
-                      style={{ background: 'linear-gradient(135deg, hsl(221 83% 53% / 0.1), hsl(160 84% 39% / 0.1))' }}
-                    >
-                      <Icon className="h-5 w-5 text-primary" />
-                    </div>
-                    <p className="text-xl font-bold">{spec.value}</p>
-                    <p className="text-xs text-muted-foreground">{spec.label}</p>
-                  </div>
-                );
-              })}
-            </div>
+            {/* Key Specs — only what the field matrix asks for this type
+                (a terreno has no recámaras, baños or estacionamientos) and
+                only when the publisher filled it in: never a made-up "0". */}
+            {(() => {
+              const type = property.type;
+              const areaField =
+                isFieldVisible("area_built", type) && property.area_built != null
+                  ? property.area_built
+                  : isFieldVisible("area_total", type)
+                    ? property.area_total
+                    : null;
+              const specs = [
+                isFieldVisible("bedrooms", type) && property.bedrooms != null
+                  ? { icon: BedDouble, value: String(property.bedrooms), label: "Recámaras" }
+                  : null,
+                isFieldVisible("bathrooms", type) && property.bathrooms != null
+                  ? { icon: Bath, value: String(property.bathrooms), label: "Baños" }
+                  : null,
+                areaField != null
+                  ? { icon: Ruler, value: String(areaField), label: "m²" }
+                  : null,
+                isFieldVisible("parking_spaces", type) && property.parking_spaces != null
+                  ? { icon: Car, value: String(property.parking_spaces), label: "Estacionamientos" }
+                  : null,
+              ].filter((spec): spec is NonNullable<typeof spec> => spec !== null);
+              if (specs.length === 0) return null;
+              const cols =
+                ["sm:grid-cols-1", "sm:grid-cols-2", "sm:grid-cols-3", "sm:grid-cols-4"][specs.length - 1];
+              return (
+                <div className={`grid grid-cols-2 gap-3 ${cols} ${specs.length === 1 ? "max-w-[12rem]" : ""}`}>
+                  {specs.map((spec) => {
+                    const Icon = spec.icon;
+                    return (
+                      <div
+                        key={spec.label}
+                        className={`rounded-xl border border-border/50 p-4 text-center transition-all duration-300 hover:shadow-md hover:border-primary/30 ${specs.length === 1 ? "col-span-2 sm:col-span-1" : ""}`}
+                      >
+                        <div className="mx-auto mb-2 h-10 w-10 rounded-full flex items-center justify-center"
+                          style={{ background: 'linear-gradient(135deg, hsl(221 83% 53% / 0.1), hsl(160 84% 39% / 0.1))' }}
+                        >
+                          <Icon className="h-5 w-5 text-primary" />
+                        </div>
+                        <p className="text-xl font-bold">{spec.value}</p>
+                        <p className="text-xs text-muted-foreground">{spec.label}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
 
             <Separator />
 
@@ -1337,18 +1366,25 @@ export default function PropertyDetailClient() {
                         <span className="text-xs">{prop.city}, {prop.state}</span>
                       </div>
                       <div className="flex items-center gap-3 mt-3 pt-3 border-t border-border/50">
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Bed className="h-3.5 w-3.5" />
-                          <span>{prop.bedrooms}</span>
-                        </div>
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Bath className="h-3.5 w-3.5" />
-                          <span>{prop.bathrooms}</span>
-                        </div>
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Maximize className="h-3.5 w-3.5" />
-                          <span>{prop.area_total} m²</span>
-                        </div>
+                        {/* Same rule as the main specs: no "0" for what was never captured. */}
+                        {prop.bedrooms ? (
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Bed className="h-3.5 w-3.5" />
+                            <span>{prop.bedrooms}</span>
+                          </div>
+                        ) : null}
+                        {prop.bathrooms ? (
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Bath className="h-3.5 w-3.5" />
+                            <span>{prop.bathrooms}</span>
+                          </div>
+                        ) : null}
+                        {prop.area_total ? (
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Maximize className="h-3.5 w-3.5" />
+                            <span>{prop.area_total} m²</span>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   </div>

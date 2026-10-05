@@ -158,6 +158,8 @@ function formatPrice(price: number, currency: string): string {
   return new Intl.NumberFormat("es-MX", {
     style: "currency",
     currency: currency || "MXN",
+    // "$": la clave de moneda ya se imprime al lado (evita "USD … USD").
+    currencyDisplay: "narrowSymbol",
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(price);
