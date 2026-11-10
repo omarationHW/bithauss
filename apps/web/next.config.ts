@@ -68,8 +68,10 @@ const securityHeaders = [
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   {
     key: "Permissions-Policy",
+    // microphone=(self): the public property assistant takes voice notes
+    // (Web Speech / MediaRecorder). Still first-party only — no iframe gets it.
     value:
-      "camera=(), microphone=(), geolocation=(self), payment=(), usb=(), interest-cohort=()",
+      "camera=(), microphone=(self), geolocation=(self), payment=(), usb=(), interest-cohort=()",
   },
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
   // Isolates the browsing context so a cross-origin opener cannot reach into

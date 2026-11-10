@@ -23,6 +23,13 @@ describe("next.config security headers (BH-11)", () => {
     expect(headers["Cross-Origin-Opener-Policy"]).toBe("same-origin");
   });
 
+  it("grants the microphone to our own origin only (voice assistant)", async () => {
+    const policy = (await headerMap())["Permissions-Policy"]!;
+    expect(policy).toContain("microphone=(self)");
+    expect(policy).toContain("camera=()");
+    expect(policy).not.toMatch(/microphone=\(\*|microphone=\([^)]*https?:/);
+  });
+
   it("locks down the dangerous CSP directives", async () => {
     const csp = (await headerMap())["Content-Security-Policy"]!;
     expect(csp).toContain("object-src 'none'");
