@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { BadRequestException, ServiceUnavailableException } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 
-import { AssistantService, trimHistory } from './assistant.service';
+import { AssistantService, describeSearch, trimHistory } from './assistant.service';
 import { LLM_MAX_TOKENS, LLM_TEMPERATURE, MAX_TOOL_ROUNDS } from './assistant.constants';
 import { SYSTEM_PROMPT } from './assistant.prompt';
 import type { GeocodingService } from './geocoding.service';
@@ -411,5 +411,21 @@ describe('AssistantService.chat — history and errors', () => {
     const tool = requestBody(fetchMock, 1).messages.find((m: { role: string }) => m.role === 'tool');
     expect(JSON.parse(tool.content)).toEqual({ error: 'busqueda_no_disponible' });
     expect(res).toEqual({ reply: 'No pude buscar ahora.', properties: [], relaxed: false });
+  });
+});
+
+describe('describeSearch (log line)', () => {
+  it('logs structured filters only — never keywords text or raw newlines', () => {
+    const line = describeSearch({
+      type: 'OFICINA',
+      area_min: 80,
+      area_max: 120,
+      neighborhood: 'Juárez\nFAKE LOG LINE',
+      keywords: 'llámame al 5512345678',
+      near: { lat: 19.4, lng: -99.1, radius_km: 3 },
+    });
+    expect(line).toBe('type=OFICINA m2=80-120 colonia="Juárez FAKE LOG LINE" near=3km keywords=si');
+    expect(line).not.toContain('5512345678');
+    expect(line).not.toContain('\n');
   });
 });
