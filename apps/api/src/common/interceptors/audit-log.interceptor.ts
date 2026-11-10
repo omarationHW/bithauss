@@ -137,7 +137,19 @@ export function clientIp(request: {
   if (typeof xff === 'string' && xff.trim()) {
     const parts = xff.split(',').map((p) => p.trim()).filter(Boolean);
     const last = parts[parts.length - 1];
-    if (last) return last.split(':')[0] ?? last;
+    if (last) return stripPort(last);
   }
   return request.ip ?? 'unknown';
+}
+
+/**
+ * Azure writes "1.2.3.4:56789" for IPv4 and "[2001:db8::1]:56789" for IPv6.
+ * A bare IPv6 address has colons too, so only strip a port we can recognise.
+ */
+function stripPort(entry: string): string {
+  const bracketed = entry.match(/^\[([^\]]+)\](?::\d+)?$/);
+  if (bracketed?.[1]) return bracketed[1];
+  const ipv4 = entry.match(/^(\d{1,3}(?:\.\d{1,3}){3})(?::\d+)?$/);
+  if (ipv4?.[1]) return ipv4[1];
+  return entry;
 }

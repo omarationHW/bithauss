@@ -19,6 +19,11 @@ describe('audit log helpers (BH-16)', () => {
     );
   });
 
+  it('keeps IPv6 addresses whole (bracketed with port, or bare)', () => {
+    expect(clientIp({ headers: { 'x-forwarded-for': '[2001:db8::1]:5000' } })).toBe('2001:db8::1');
+    expect(clientIp({ headers: { 'x-forwarded-for': '1.2.3.4, 2001:db8::1' } })).toBe('2001:db8::1');
+  });
+
   it('falls back to the socket address', () => {
     expect(clientIp({ headers: {}, ip: '198.51.100.1' })).toBe('198.51.100.1');
     expect(clientIp({})).toBe('unknown');
