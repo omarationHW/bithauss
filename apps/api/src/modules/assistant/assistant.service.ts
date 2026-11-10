@@ -26,7 +26,7 @@ import {
   parseSearchArgs,
 } from './assistant.prompt';
 import { GeocodingService } from './geocoding.service';
-import { PropertiesService } from '../properties/properties.service';
+import { PropertiesService, sanitizeSearchText } from '../properties/properties.service';
 import type {
   PropertySearchCriteria,
   PropertySearchHit,
@@ -74,11 +74,6 @@ export function trimHistory(messages: ChatMessageDto[]): Array<{ role: 'user' | 
     .map((m) => ({ role: m.role, content: String(m.content).slice(0, MAX_MESSAGE_CHARS) }));
 }
 
-/** For logs only — never log full user text. */
-function preview(text: string, max = 60): string {
-  const oneLine = text.replace(/\s+/g, ' ').trim();
-  return oneLine.length > max ? `${oneLine.slice(0, max)}…` : oneLine;
-}
 
 class ContentFilteredError extends Error {}
 
@@ -120,7 +115,7 @@ export class AssistantService {
     let lastSearch: PropertySearchResult | null = null;
     let reply = '';
 
-    this.logger.debug(`chat: ${history.length} msgs, último="${preview(last.content)}"`);
+    this.logger.debug(`chat: ${history.length} msgs, último=${last.content.length} chars`);
 
     try {
       for (let round = 0; ; round++) {
@@ -192,12 +187,7 @@ export class AssistantService {
           note = 'Se buscó por nombre de la zona porque el punto en el mapa no tenía resultados.';
         }
       }
-      // Search filters only (no free text beyond place names) — for tuning.
-      this.logger.log(
-        `assistant search args=${(call.function.arguments ?? '').slice(0, 300)} ` +
-          `near=${criteria.near ? `${criteria.near.radius_km}km` : 'no'} ` +
-          `hits=${result.hits.length} relaxed=${result.relaxed_fields.join('+') || '-'}`,
-      );
+      this.logger.log(`assistant search ${describeSearch(criteria)} hits=${result.hits.length} relaxed=${result.relaxed_fields.join('+') || '-'}`);
       return { content: compactSearchResult(result, note), result };
     } catch (err) {
       this.logger.error(`searchForAssistant falló: ${(err as Error).message}`);
@@ -292,4 +282,32 @@ function byPlaceName(criteria: PropertySearchCriteria, place: string): PropertyS
   if (!out.neighborhood) out.neighborhood = place;
   else out.keywords = [out.keywords, place].filter(Boolean).join(' ');
   return out;
+}
+
+/**
+ * Log line for tuning the search. Structured filters only: enums, numbers,
+ * whether a point/zone was used and a sanitized, short place name. Never the
+ * model's raw arguments or `keywords` — those can carry whatever the user
+ * typed (a phone, a name).
+ */
+export function describeSearch(c: PropertySearchCriteria): string {
+  const place = (s?: string) => (s ? `"${sanitizeSearchText(s, 40)}"` : undefined);
+  const parts: [string, unknown][] = [
+    ['type', c.type],
+    ['op', c.operation],
+    ['m2', c.area_min != null || c.area_max != null ? `${c.area_min ?? ''}-${c.area_max ?? ''}` : undefined],
+    ['rec', c.bedrooms_min],
+    ['banos', c.bathrooms_min],
+    ['est', c.parking_min],
+    ['precio', c.price_min != null || c.price_max != null ? `${c.price_min ?? ''}-${c.price_max ?? ''}` : undefined],
+    ['colonia', place(c.neighborhood)],
+    ['ciudad', place(c.city)],
+    ['estado', place(c.state)],
+    ['near', c.near ? `${c.near.radius_km}km` : undefined],
+    ['keywords', c.keywords ? 'si' : undefined],
+  ];
+  return parts
+    .filter(([, v]) => v !== undefined && v !== null && v !== '')
+    .map(([k, v]) => `${k}=${String(v)}`)
+    .join(' ');
 }
