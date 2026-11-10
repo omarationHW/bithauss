@@ -8,6 +8,7 @@ describe('parseSearchArgs', () => {
       criteria: { type: 'OFICINA', operation: 'RENTA', area_min: 80, limit: 5 },
       cercaDe: 'Puerto Cancún',
       radioKm: 3,
+      radioKmExplicit: false,
     });
   });
 

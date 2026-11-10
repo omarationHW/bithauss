@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 
 import {
+  AREA_RADIUS_CAP_KM,
   CHAT_API_VERSION,
   LLM_MAX_TOKENS,
   LLM_TEMPERATURE,
@@ -178,9 +179,25 @@ export class AssistantService {
       return { content: JSON.stringify({ error: 'herramienta_desconocida' }), result: null };
     }
 
-    const { criteria, note } = await this.buildCriteria(call.function.arguments);
+    const built = await this.buildCriteria(call.function.arguments);
+    let { criteria, note } = built;
     try {
-      const result = await this.properties.searchForAssistant(criteria);
+      let result = await this.properties.searchForAssistant(criteria);
+      if (result.hits.length === 0 && built.textFallback) {
+        // One extra DB query, no extra LLM call.
+        const byName = await this.properties.searchForAssistant(built.textFallback);
+        if (byName.hits.length > 0) {
+          criteria = built.textFallback;
+          result = byName;
+          note = 'Se buscó por nombre de la zona porque el punto en el mapa no tenía resultados.';
+        }
+      }
+      // Search filters only (no free text beyond place names) — for tuning.
+      this.logger.log(
+        `assistant search args=${(call.function.arguments ?? '').slice(0, 300)} ` +
+          `near=${criteria.near ? `${criteria.near.radius_km}km` : 'no'} ` +
+          `hits=${result.hits.length} relaxed=${result.relaxed_fields.join('+') || '-'}`,
+      );
       return { content: compactSearchResult(result, note), result };
     } catch (err) {
       this.logger.error(`searchForAssistant falló: ${(err as Error).message}`);
@@ -194,8 +211,13 @@ export class AssistantService {
   /** Tool args → contract criteria, geocoding `cerca_de` into `near`. */
   async buildCriteria(
     rawArgs: string | undefined,
-  ): Promise<{ criteria: PropertySearchCriteria; note?: string }> {
-    const { criteria, cercaDe, radioKm } = parseSearchArgs(rawArgs);
+  ): Promise<{
+    criteria: PropertySearchCriteria;
+    note?: string;
+    /** Same search by place NAME, for when the map point finds nothing. */
+    textFallback?: PropertySearchCriteria;
+  }> {
+    const { criteria, cercaDe, radioKm, radioKmExplicit } = parseSearchArgs(rawArgs);
     if (!cercaDe) return { criteria };
 
     // The city disambiguates homonyms ("Centro", "Zona Hotelera").
@@ -205,15 +227,23 @@ export class AssistantService {
         : cercaDe;
     const point = await this.geocoder.geocode(query);
     if (point) {
-      return { criteria: { ...criteria, near: { lat: point.lat, lng: point.lng, radius_km: radioKm } } };
+      // A distance the user asked for wins. Otherwise cover the whole place:
+      // the default radius for a colonia, the place's own size for a
+      // municipality or city (capped so a state doesn't become "near").
+      const radius = radioKmExplicit
+        ? radioKm
+        : Math.min(AREA_RADIUS_CAP_KM, Math.max(radioKm, point.extent_km ?? 0));
+      return {
+        criteria: { ...criteria, near: { lat: point.lat, lng: point.lng, radius_km: radius } },
+        // Bare names are ambiguous ("Juárez", "Roma" exist in many cities), so
+        // the point may land in the wrong one.
+        textFallback: byPlaceName(criteria, cercaDe),
+      };
     }
 
     // Could not place it on the map: search the name as text instead.
-    const fallback = { ...criteria };
-    if (!fallback.neighborhood) fallback.neighborhood = cercaDe;
-    else fallback.keywords = [fallback.keywords, cercaDe].filter(Boolean).join(' ');
     return {
-      criteria: fallback,
+      criteria: byPlaceName(criteria, cercaDe),
       note: `No se pudo ubicar "${cercaDe}" en el mapa; se buscó por nombre de zona.`,
     };
   }
@@ -254,4 +284,12 @@ export class AssistantService {
     }
     return data;
   }
+}
+
+/** Search the place as a colonia name (or extra keyword if a colonia is already set). */
+function byPlaceName(criteria: PropertySearchCriteria, place: string): PropertySearchCriteria {
+  const out = { ...criteria };
+  if (!out.neighborhood) out.neighborhood = place;
+  else out.keywords = [out.keywords, place].filter(Boolean).join(' ');
+  return out;
 }

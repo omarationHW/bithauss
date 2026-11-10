@@ -88,6 +88,8 @@ export interface ParsedSearchArgs {
   criteria: PropertySearchCriteria;
   cercaDe?: string;
   radioKm: number;
+  /** True when the model passed radio_km (the user asked for a distance). */
+  radioKmExplicit: boolean;
 }
 
 const NUMBER_KEYS = [
@@ -155,7 +157,7 @@ export function parseSearchArgs(raw: string | undefined): ParsedSearchArgs {
   const radioKm =
     radius && radius > 0 ? Math.min(MAX_RADIUS_KM, Math.max(0.5, radius)) : DEFAULT_RADIUS_KM;
 
-  return { criteria, cercaDe: asText(args.cerca_de), radioKm };
+  return { criteria, cercaDe: asText(args.cerca_de), radioKm, radioKmExplicit: !!radius && radius > 0 };
 }
 
 /* ------------------------------------------------------------------ */

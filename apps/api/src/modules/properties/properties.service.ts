@@ -199,6 +199,17 @@ export class PropertyFilters {
  * Safe for tsquery input and for values embedded in PostgREST filter strings
  * (no `,` `(` `)` `"` `*` `%` `_` survive).
  */
+/**
+ * Listings are typed by hand, often without accents ("juarez", "JESUS DEL
+ * MONTE"), while people (and the model) write "Juárez". Turning each accented
+ * letter into the single-character LIKE wildcard `_` matches both spellings
+ * without a migration (no unaccent extension). Run AFTER sanitizeSearchText,
+ * which strips any user-supplied `_`, so the only wildcards are ours.
+ */
+export function accentInsensitive(text: string): string {
+  return text.replace(/[áéíóúüñ]/giu, '_');
+}
+
 export function sanitizeSearchText(raw: unknown, max = 200): string {
   if (typeof raw !== 'string') return '';
   return raw
@@ -921,9 +932,9 @@ export class PropertiesService {
       });
     }
 
-    const city = sanitizeSearchText(c.city, 100);
-    const state = sanitizeSearchText(c.state, 100);
-    const neighborhood = sanitizeSearchText(c.neighborhood, 100);
+    const city = accentInsensitive(sanitizeSearchText(c.city, 100));
+    const state = accentInsensitive(sanitizeSearchText(c.state, 100));
+    const neighborhood = accentInsensitive(sanitizeSearchText(c.neighborhood, 100));
 
     if (near && plan.radius_km !== null) {
       const dLat = plan.radius_km / 111.32;
