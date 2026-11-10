@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { Navbar } from "./navbar";
 import { PriceTicker } from "./price-ticker";
 import { Footer } from "./footer";
+import { AssistantLauncher } from "@/components/assistant/assistant-launcher";
 
 export function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -19,6 +20,8 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
       <PriceTicker />
       {children}
       <Footer />
+      {/* Public pages only — see isAssistantRoute (allowlist). */}
+      <AssistantLauncher />
     </>
   );
 }

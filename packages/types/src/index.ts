@@ -9,3 +9,4 @@ export * from './kyc.types';
 export * from './purchase.types';
 export * from './payment.types';
 export * from './notification.types';
+export * from './assistant.types';
