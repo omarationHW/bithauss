@@ -7,6 +7,11 @@ import {
 import { SupabaseConfigService } from '../../config/supabase.config';
 import { assertNotBrcFrozen } from './brc-freeze';
 import { randomBytes } from 'crypto';
+import type {
+  PropertySearchCriteria,
+  PropertySearchHit,
+  PropertySearchResult,
+} from './property-search.types';
 
 // ────────────────────────────────────────────────────────────
 // DTOs
@@ -186,6 +191,134 @@ export class PropertyFilters {
 }
 
 // ────────────────────────────────────────────────────────────
+// Assistant search helpers
+// ────────────────────────────────────────────────────────────
+
+/**
+ * Strips everything but letters, digits, spaces, apostrophes and dashes.
+ * Safe for tsquery input and for values embedded in PostgREST filter strings
+ * (no `,` `(` `)` `"` `*` `%` `_` survive).
+ */
+export function sanitizeSearchText(raw: unknown, max = 200): string {
+  if (typeof raw !== 'string') return '';
+  return raw
+    .normalize('NFKC')
+    .replace(/[^\p{L}\p{N}\s'-]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, max);
+}
+
+/**
+ * Public columns only. Never owner_id, company_id, address_line, zip_code,
+ * contact or BRC fields. show_price / show_address are read to honour the
+ * owner's privacy choices and are not returned.
+ */
+const ASSISTANT_SEARCH_COLUMNS =
+  'id, title, type, operation, price, price_sale, price_rent, currency, show_price, show_address, ' +
+  'area_built, area_total, bedrooms, bathrooms, parking_spaces, neighborhood, city, state, ' +
+  'latitude, longitude, featured_image_url, published_at';
+
+/** Rows fetched per query; ranking and radius filtering happen in JS. */
+const ASSISTANT_CANDIDATE_LIMIT = 50;
+const ASSISTANT_DEFAULT_LIMIT = 5;
+const ASSISTANT_MAX_LIMIT = 10;
+const ASSISTANT_DEFAULT_RADIUS_KM = 3;
+/** Cap on the requested radius, so the bounding box stays meaningful. */
+const ASSISTANT_MAX_RADIUS_KM = 50;
+/** Relaxation never widens the radius beyond this. */
+const ASSISTANT_MAX_RELAXED_RADIUS_KM = 25;
+
+interface AssistantSearchRow {
+  id: string;
+  title: string;
+  type: string;
+  operation: string;
+  price: unknown;
+  price_sale: unknown;
+  price_rent: unknown;
+  currency: string;
+  show_price: boolean | null;
+  show_address: boolean | null;
+  area_built: unknown;
+  area_total: unknown;
+  bedrooms: unknown;
+  bathrooms: unknown;
+  parking_spaces: unknown;
+  neighborhood: string | null;
+  city: string;
+  state: string;
+  latitude: unknown;
+  longitude: unknown;
+  featured_image_url: string | null;
+  published_at: string | null;
+}
+
+/** The loosen-able part of a query. Type and operation are never relaxed. */
+interface AssistantSearchPlan {
+  area_min: number | null;
+  area_max: number | null;
+  price_min: number | null;
+  price_max: number | null;
+  radius_km: number | null;
+  keywords: string;
+}
+
+/** PostgREST numeric columns may arrive as strings. */
+function toNum(v: unknown): number | null {
+  if (v === null || v === undefined || v === '') return null;
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** A positive finite number from untrusted (LLM-produced) input, else null. */
+function positive(v: unknown): number | null {
+  const n = toNum(v);
+  return n !== null && n > 0 ? n : null;
+}
+
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const rad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * rad;
+  const dLng = (lng2 - lng1) * rad;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLng / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/**
+ * PostgREST `or` filter for "primary within [min,max], or primary is null and
+ * fallback within [min,max]" — e.g. area_built falling back to area_total.
+ */
+function rangeWithFallbackFilter(
+  primary: string,
+  fallback: string,
+  min: number | null,
+  max: number | null,
+): string | null {
+  const bounds = (col: string) =>
+    [min !== null ? `${col}.gte.${min}` : null, max !== null ? `${col}.lte.${max}` : null]
+      .filter(Boolean)
+      .join(',');
+  if (min === null && max === null) return null;
+  return `and(${bounds(primary)}),and(${primary}.is.null,${bounds(fallback)})`;
+}
+
+/** A VENTA_RENTA listing is both for sale and for rent. */
+function operationsMatching(operation: string): string[] {
+  if (operation === 'VENTA' || operation === 'RENTA') return [operation, 'VENTA_RENTA'];
+  return [operation];
+}
+
+/** Price column for the requested operation; the legacy `price` is the fallback. */
+function priceColumnFor(operation: string | undefined): 'price_sale' | 'price_rent' | null {
+  if (operation === 'VENTA') return 'price_sale';
+  if (operation === 'RENTA') return 'price_rent';
+  return null;
+}
+
+// ────────────────────────────────────────────────────────────
 // Service
 // ────────────────────────────────────────────────────────────
 
@@ -336,11 +469,7 @@ export class PropertiesService {
     // Use websearch_to_tsquery (sanitization-aware) and additionally strip
     // characters that could be misinterpreted by Postgres tsquery operators.
     if (filters.search) {
-      const sanitized = filters.search
-        .normalize('NFKC')
-        .replace(/[^\p{L}\p{N}\s'-]+/gu, ' ')
-        .trim()
-        .slice(0, 200);
+      const sanitized = sanitizeSearchText(filters.search);
       if (sanitized) {
         query = query.textSearch('search_vector', sanitized, { type: 'websearch' });
       }
@@ -615,5 +744,301 @@ export class PropertiesService {
           .eq('id', id);
       }
     }
+  }
+
+  // ── Assistant search ─────────────────────────────────────
+
+  /**
+   * Search PUBLISHED listings for the conversational assistant.
+   *
+   * - Only public columns leave this method (see ASSISTANT_SEARCH_COLUMNS);
+   *   hidden prices come back null and hidden addresses without coordinates.
+   * - Area matches area_built, falling back to area_total when it is null
+   *   (PostgREST `or` filter, so it is exact in the database).
+   * - `near`: lat/lng bounding box in the query, exact haversine radius in JS,
+   *   sorted by distance. If city/neighborhood are also given, listings
+   *   WITHOUT coordinates matching that text are included after the geo hits
+   *   (distance_km null). With `near`, the text location only applies to
+   *   those coordinate-less listings — the point is the authority.
+   * - Zero hits → relax cumulatively: area ±20%, radius ×2 (≤25 km),
+   *   price ±15%, drop keywords, then any area (closest size first). Stops at
+   *   the first non-empty result; at most 6 queries. Type and operation are
+   *   never relaxed.
+   */
+  async searchForAssistant(criteria: PropertySearchCriteria): Promise<PropertySearchResult> {
+    const c = criteria ?? {};
+    const rawLimit = toNum(c.limit);
+    const limit =
+      rawLimit === null
+        ? ASSISTANT_DEFAULT_LIMIT
+        : Math.min(ASSISTANT_MAX_LIMIT, Math.max(1, Math.trunc(rawLimit)));
+
+    const lat = toNum(c.near?.lat);
+    const lng = toNum(c.near?.lng);
+    const near =
+      lat !== null && lng !== null && Math.abs(lat) <= 90 && Math.abs(lng) <= 180
+        ? {
+            lat,
+            lng,
+            radius_km: Math.min(
+              positive(c.near?.radius_km) ?? ASSISTANT_DEFAULT_RADIUS_KM,
+              ASSISTANT_MAX_RADIUS_KM,
+            ),
+          }
+        : null;
+
+    let areaMin = positive(c.area_min);
+    let areaMax = positive(c.area_max);
+    if (areaMin !== null && areaMax !== null && areaMin > areaMax) {
+      [areaMin, areaMax] = [areaMax, areaMin];
+    }
+    let priceMin = positive(c.price_min);
+    let priceMax = positive(c.price_max);
+    if (priceMin !== null && priceMax !== null && priceMin > priceMax) {
+      [priceMin, priceMax] = [priceMax, priceMin];
+    }
+    // Ranking target for "closest area": the midpoint of a range, else the bound.
+    const areaTarget =
+      areaMin !== null && areaMax !== null ? (areaMin + areaMax) / 2 : areaMin ?? areaMax;
+
+    const initial: AssistantSearchPlan = {
+      area_min: areaMin,
+      area_max: areaMax,
+      price_min: priceMin,
+      price_max: priceMax,
+      radius_km: near?.radius_km ?? null,
+      keywords: sanitizeSearchText(c.keywords),
+    };
+
+    const round = (n: number) => Math.round(n * 100) / 100;
+    const relaxSteps: { field: string; apply: (p: AssistantSearchPlan) => AssistantSearchPlan | null }[] = [
+      {
+        field: 'area',
+        apply: (p) =>
+          p.area_min === null && p.area_max === null
+            ? null
+            : {
+                ...p,
+                area_min: p.area_min !== null ? round(p.area_min * 0.8) : null,
+                area_max: p.area_max !== null ? round(p.area_max * 1.2) : null,
+              },
+      },
+      {
+        field: 'radius',
+        apply: (p) =>
+          p.radius_km === null || p.radius_km >= ASSISTANT_MAX_RELAXED_RADIUS_KM
+            ? null
+            : { ...p, radius_km: Math.min(p.radius_km * 2, ASSISTANT_MAX_RELAXED_RADIUS_KM) },
+      },
+      {
+        field: 'price',
+        apply: (p) =>
+          p.price_min === null && p.price_max === null
+            ? null
+            : {
+                ...p,
+                price_min: p.price_min !== null ? round(p.price_min * 0.85) : null,
+                price_max: p.price_max !== null ? round(p.price_max * 1.15) : null,
+              },
+      },
+      {
+        field: 'keywords',
+        apply: (p) => (p.keywords ? { ...p, keywords: '' } : null),
+      },
+      {
+        // Last resort: any size. Ranking still sorts by closeness to the
+        // requested area, so the most similar size comes first ("algo parecido").
+        field: 'area_any',
+        apply: (p) =>
+          p.area_min === null && p.area_max === null
+            ? null
+            : { ...p, area_min: null, area_max: null },
+      },
+    ];
+
+    const run = async (plan: AssistantSearchPlan) => {
+      const rows = await this.fetchAssistantCandidates(c, near, plan);
+      return this.rankAssistantRows(rows, c, near && { ...near, radius_km: plan.radius_km! }, areaTarget, limit);
+    };
+
+    let plan = initial;
+    let hits = await run(plan);
+    const relaxedFields: string[] = [];
+    for (const step of relaxSteps) {
+      if (hits.length > 0) break;
+      const next = step.apply(plan);
+      if (!next) continue;
+      plan = next;
+      relaxedFields.push(step.field);
+      hits = await run(plan);
+    }
+
+    return { hits, relaxed: relaxedFields.length > 0, relaxed_fields: relaxedFields };
+  }
+
+  private async fetchAssistantCandidates(
+    c: PropertySearchCriteria,
+    near: { lat: number; lng: number } | null,
+    plan: AssistantSearchPlan,
+  ): Promise<AssistantSearchRow[]> {
+    const supabase = this.supabaseConfig.getAdminClient();
+
+    let query = supabase
+      .from('properties')
+      .select(ASSISTANT_SEARCH_COLUMNS)
+      .eq('status', 'PUBLICADO');
+
+    if (c.type) query = query.eq('type', c.type);
+    if (c.operation) {
+      const ops = operationsMatching(c.operation);
+      query = ops.length > 1 ? query.in('operation', ops) : query.eq('operation', ops[0]);
+    }
+
+    const area = rangeWithFallbackFilter('area_built', 'area_total', plan.area_min, plan.area_max);
+    if (area) query = query.or(area);
+
+    const priceColumn = priceColumnFor(c.operation);
+    if (priceColumn) {
+      const price = rangeWithFallbackFilter(priceColumn, 'price', plan.price_min, plan.price_max);
+      if (price) query = query.or(price);
+    } else {
+      if (plan.price_min !== null) query = query.gte('price', plan.price_min);
+      if (plan.price_max !== null) query = query.lte('price', plan.price_max);
+    }
+
+    const bedrooms = positive(c.bedrooms_min);
+    const bathrooms = positive(c.bathrooms_min);
+    const parking = positive(c.parking_min);
+    if (bedrooms !== null) query = query.gte('bedrooms', bedrooms);
+    if (bathrooms !== null) query = query.gte('bathrooms', bathrooms);
+    if (parking !== null) query = query.gte('parking_spaces', parking);
+
+    if (plan.keywords) {
+      // search_vector is built with the Spanish configuration (migration 001).
+      query = query.textSearch('search_vector', plan.keywords, {
+        type: 'websearch',
+        config: 'spanish',
+      });
+    }
+
+    const city = sanitizeSearchText(c.city, 100);
+    const state = sanitizeSearchText(c.state, 100);
+    const neighborhood = sanitizeSearchText(c.neighborhood, 100);
+
+    if (near && plan.radius_km !== null) {
+      const dLat = plan.radius_km / 111.32;
+      const dLng = plan.radius_km / (111.32 * Math.max(Math.cos((near.lat * Math.PI) / 180), 0.01));
+      const box = [
+        `latitude.gte.${near.lat - dLat}`,
+        `latitude.lte.${near.lat + dLat}`,
+        `longitude.gte.${near.lng - dLng}`,
+        `longitude.lte.${near.lng + dLng}`,
+      ].join(',');
+      if (city || neighborhood) {
+        // Coordinate-less listings matching the text, as a lower-priority tier.
+        const text = [
+          city ? `city.ilike."*${city}*"` : null,
+          state ? `state.ilike."*${state}*"` : null,
+          neighborhood ? `neighborhood.ilike."*${neighborhood}*"` : null,
+        ]
+          .filter(Boolean)
+          .join(',');
+        query = query.or(`and(${box}),and(or(latitude.is.null,longitude.is.null),${text})`);
+      } else {
+        query = query.or(`and(${box})`);
+      }
+    } else {
+      if (city) query = query.ilike('city', `%${city}%`);
+      if (state) query = query.ilike('state', `%${state}%`);
+      if (neighborhood) query = query.ilike('neighborhood', `%${neighborhood}%`);
+    }
+
+    const { data, error } = await query
+      .order('published_at', { ascending: false, nullsFirst: false })
+      .limit(ASSISTANT_CANDIDATE_LIMIT);
+
+    if (error) {
+      this.logger.error(`Assistant property search failed: ${error.message}`);
+      throw error;
+    }
+
+    return (data ?? []) as unknown as AssistantSearchRow[];
+  }
+
+  private rankAssistantRows(
+    rows: AssistantSearchRow[],
+    c: PropertySearchCriteria,
+    near: { lat: number; lng: number; radius_km: number } | null,
+    areaTarget: number | null,
+    limit: number,
+  ): PropertySearchHit[] {
+    const priceColumn = priceColumnFor(c.operation);
+
+    const scored = rows.flatMap((row, order) => {
+      const lat = toNum(row.latitude);
+      const lng = toNum(row.longitude);
+      let distance: number | null = null;
+      if (near && lat !== null && lng !== null) {
+        distance = haversineKm(near.lat, near.lng, lat, lng);
+        // The bounding box over-fetches its corners.
+        if (distance > near.radius_km) return [];
+      }
+      const area = toNum(row.area_built) ?? toNum(row.area_total);
+      return [{ row, order, lat, lng, distance, area }];
+    });
+
+    if (near) {
+      // Geo hits by distance; coordinate-less text matches after, newest first.
+      scored.sort((a, b) => {
+        if (a.distance !== null && b.distance !== null) return a.distance - b.distance;
+        if (a.distance !== null) return -1;
+        if (b.distance !== null) return 1;
+        return a.order - b.order;
+      });
+    } else if (areaTarget !== null) {
+      scored.sort((a, b) => {
+        if (a.area !== null && b.area !== null) {
+          return Math.abs(a.area - areaTarget) - Math.abs(b.area - areaTarget) || a.order - b.order;
+        }
+        if (a.area !== null) return -1;
+        if (b.area !== null) return 1;
+        return a.order - b.order;
+      });
+    }
+    // Otherwise keep the database order: newest published first.
+
+    return scored.slice(0, limit).map(({ row, lat, lng, distance, area }) => {
+      const hideAddress = row.show_address === false;
+      const price =
+        row.show_price === false
+          ? null
+          : (priceColumn ? toNum(row[priceColumn]) : null) ?? toNum(row.price);
+      return {
+        id: row.id,
+        title: row.title,
+        type: row.type,
+        operation: row.operation,
+        price,
+        currency: row.currency,
+        area_m2: area,
+        bedrooms: toNum(row.bedrooms),
+        bathrooms: toNum(row.bathrooms),
+        parking_spaces: toNum(row.parking_spaces),
+        neighborhood: row.neighborhood ?? null,
+        city: row.city,
+        state: row.state,
+        latitude: hideAddress ? null : lat,
+        longitude: hideAddress ? null : lng,
+        // Hidden addresses get a coarse (whole-km) distance so it cannot pin the spot.
+        distance_km:
+          distance === null
+            ? null
+            : hideAddress
+              ? Math.max(1, Math.ceil(distance))
+              : Math.round(distance * 10) / 10,
+        featured_image_url: row.featured_image_url ?? null,
+        url_path: `/propiedades/${row.id}`,
+      };
+    });
   }
 }

@@ -11,6 +11,7 @@ import { AdminModule } from './modules/admin/admin.module';
 import { BrcModule } from './modules/brc/brc.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { MembershipsModule } from './modules/memberships/memberships.module';
+import { AssistantModule } from './modules/assistant/assistant.module';
 import { AuthGuard } from './common/guards/auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { ClientIpThrottlerGuard } from './common/guards/client-ip-throttler.guard';
@@ -48,6 +49,7 @@ import { validateEnv } from './config/env.validation';
     BrcModule,
     PaymentsModule,
     MembershipsModule,
+    AssistantModule,
   ],
   providers: [
     // Global throttler guard
