@@ -1,4 +1,4 @@
-import { GeocodingService } from './geocoding.service';
+import { GeocodingService, boundingBoxExtentKm } from './geocoding.service';
 import { NOMINATIM_USER_AGENT } from './assistant.constants';
 
 function ok(body: unknown): Response {
@@ -23,6 +23,18 @@ describe('GeocodingService', () => {
     expect(url).toContain(encodeURIComponent('Puerto Cancún'));
     expect((init.headers as Record<string, string>)['User-Agent']).toBe(NOMINATIM_USER_AGENT);
     expect(init.signal).toBeDefined();
+  });
+
+  it('reports the place size from the bounding box', async () => {
+    // Huixquilucan, as Nominatim returns it.
+    fetchMock.mockResolvedValueOnce(
+      ok([{ lat: '19.3701838', lon: '-99.3581568', boundingbox: ['19.3016020', '19.4388890', '-99.4041796', '-99.2393911'] }]),
+    );
+    const point = await new GeocodingService().geocode('Huixquilucan');
+    expect(point?.extent_km).toBeGreaterThan(10);
+    expect(point?.extent_km).toBeLessThan(13);
+    expect(boundingBoxExtentKm(['1', '2', 'x', '4'])).toBeNull();
+    expect(boundingBoxExtentKm(undefined)).toBeNull();
   });
 
   it('caches results (case-insensitive) including "not found"', async () => {

@@ -31,6 +31,8 @@ export const NOMINATIM_USER_AGENT = 'BitHauss/1.0 (real-estate; contact@bithauss
 
 export const DEFAULT_RADIUS_KM = 3;
 export const MAX_RADIUS_KM = 50;
+/** Largest radius inferred from a place's size (when the user gave no distance). */
+export const AREA_RADIUS_CAP_KM = 25;
 export const DEFAULT_RESULT_LIMIT = 5;
 
 /** Voice notes: ~60 s of opus/aac fits comfortably in 1 MB. */

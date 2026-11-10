@@ -143,6 +143,39 @@ describe('AssistantService.chat — tool flow', () => {
     });
   });
 
+  it('ambiguous place: if the map point finds nothing, retries by colonia name (no extra LLM call)', async () => {
+    const { service, properties } = setup();
+    const EMPTY: PropertySearchResult = { hits: [], relaxed: true, relaxed_fields: ['area'] };
+    properties.searchForAssistant.mockResolvedValueOnce(EMPTY).mockResolvedValueOnce(RESULT);
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(toolCallResponse({ type: 'OFICINA', cerca_de: 'Juárez' })))
+      .mockResolvedValueOnce(jsonResponse(textResponse('Encontré una oficina en la Juárez.')));
+
+    const res = await service.chat(USER);
+
+    expect(properties.searchForAssistant).toHaveBeenCalledTimes(2);
+    const second = properties.searchForAssistant.mock.calls[1][0];
+    expect(second).toMatchObject({ type: 'OFICINA', neighborhood: 'Juárez' });
+    expect(second.near).toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(res.properties).toEqual([HIT]);
+    const tool = requestBody(fetchMock, 1).messages.find((m: { role: string }) => m.role === 'tool');
+    expect(JSON.parse(tool.content).nota).toContain('nombre de la zona');
+  });
+
+  it('keeps the empty map result when the name search finds nothing either', async () => {
+    const { service, properties } = setup();
+    const EMPTY: PropertySearchResult = { hits: [], relaxed: false, relaxed_fields: [] };
+    properties.searchForAssistant.mockResolvedValue(EMPTY);
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(toolCallResponse({ type: 'BODEGA', cerca_de: 'Roma' })))
+      .mockResolvedValueOnce(jsonResponse(textResponse('No encontré bodegas en la Roma.')));
+
+    const res = await service.chat(USER);
+    expect(properties.searchForAssistant).toHaveBeenCalledTimes(2);
+    expect(res.properties).toEqual([]);
+  });
+
   it('sends system prompt first, cost limits, and a compact tool result without image URLs', async () => {
     const { service } = setup();
     fetchMock
@@ -256,6 +289,34 @@ describe('AssistantService.chat — geocode fallback', () => {
     );
     expect(geocoder.geocode).toHaveBeenCalledWith('Malecón Tajamar, Cancún');
     expect(criteria.near).toEqual({ lat: 21.16, lng: -86.81, radius_km: 5 });
+  });
+
+  it('sizes the radius to the place when no distance was asked (municipio)', async () => {
+    const { service, geocoder } = setup();
+    // Huixquilucan's real Nominatim extent: listings sit 6–8 km from its centroid.
+    geocoder.geocode.mockResolvedValueOnce({ lat: 19.37, lng: -99.36, extent_km: 11.2 });
+    const { criteria } = await service.buildCriteria(JSON.stringify({ cerca_de: 'Huixquilucan' }));
+    expect(criteria.near?.radius_km).toBe(11.2);
+  });
+
+  it('keeps the default radius for a small place and caps huge ones', async () => {
+    const { service, geocoder } = setup();
+    geocoder.geocode.mockResolvedValueOnce({ lat: 19.42, lng: -99.16, extent_km: 0.8 });
+    const small = await service.buildCriteria(JSON.stringify({ cerca_de: 'Roma Norte' }));
+    expect(small.criteria.near?.radius_km).toBe(3);
+
+    geocoder.geocode.mockResolvedValueOnce({ lat: 19.3, lng: -99.6, extent_km: 140 });
+    const state = await service.buildCriteria(JSON.stringify({ cerca_de: 'Estado de México' }));
+    expect(state.criteria.near?.radius_km).toBe(25);
+  });
+
+  it('an explicit distance beats the place size', async () => {
+    const { service, geocoder } = setup();
+    geocoder.geocode.mockResolvedValueOnce({ lat: 19.37, lng: -99.36, extent_km: 11.2 });
+    const { criteria } = await service.buildCriteria(
+      JSON.stringify({ cerca_de: 'Huixquilucan', radio_km: 2 }),
+    );
+    expect(criteria.near?.radius_km).toBe(2);
   });
 });
 

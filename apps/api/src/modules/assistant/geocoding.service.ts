@@ -10,6 +10,12 @@ import {
 export interface GeoPoint {
   lat: number;
   lng: number;
+  /**
+   * Half the diagonal of the place's bounding box, in km, when Nominatim gives
+   * one. A municipality ("Huixquilucan") spans ~10 km from its centroid, a
+   * colonia much less — the caller sizes the search radius with it.
+   */
+  extent_km?: number;
 }
 
 interface CacheEntry {
@@ -20,6 +26,8 @@ interface CacheEntry {
 interface NominatimItem {
   lat: string;
   lon: string;
+  /** [south, north, west, east] as strings. */
+  boundingbox?: string[];
 }
 
 /**
@@ -75,7 +83,9 @@ export class GeocodingService {
 
     const lat = parseFloat(first.lat);
     const lng = parseFloat(first.lon);
-    return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const extent = boundingBoxExtentKm(first.boundingbox);
+    return extent === null ? { lat, lng } : { lat, lng, extent_km: extent };
   }
 
   private remember(key: string, point: GeoPoint | null): void {
@@ -87,4 +97,15 @@ export class GeocodingService {
       this.cache.delete(oldest);
     }
   }
+}
+
+/** Half-diagonal of a Nominatim bounding box in km, or null if absent/invalid. */
+export function boundingBoxExtentKm(bbox: string[] | undefined): number | null {
+  if (!Array.isArray(bbox) || bbox.length !== 4) return null;
+  const [south, north, west, east] = bbox.map(Number);
+  if (![south, north, west, east].every((n) => Number.isFinite(n))) return null;
+  const midLat = (((south as number) + (north as number)) / 2) * (Math.PI / 180);
+  const dLatKm = Math.abs((north as number) - (south as number)) * 111.32;
+  const dLngKm = Math.abs((east as number) - (west as number)) * 111.32 * Math.cos(midLat);
+  return Math.round((Math.hypot(dLatKm, dLngKm) / 2) * 10) / 10;
 }

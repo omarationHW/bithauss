@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 
-import { PropertiesService } from './properties.service';
+import { PropertiesService, accentInsensitive } from './properties.service';
 import type { SupabaseConfigService } from '../../config/supabase.config';
 
 /* ------------------------------------------------------------------ */
@@ -289,7 +289,23 @@ describe('PropertiesService.searchForAssistant', () => {
   it('sanea texto de ubicación y palabras clave', async () => {
     const { service, queries } = makeSupabase([[row()]]);
     await service.searchForAssistant({ city: 'Mérida%_,()', keywords: 'obra & gris | !' });
-    expect(nth(queries, 0)).toContainEqual(['ilike', 'city', '%Mérida%']);
+    expect(nth(queries, 0)).toContainEqual(['ilike', 'city', '%M_rida%']);
     expect(nth(callsOf(nth(queries, 0), 'textSearch'), 0)[2]).toBe('obra gris');
+  });
+});
+
+describe('accentInsensitive', () => {
+  it('turns accented letters into a one-char wildcard so "Juárez" matches "juarez"', () => {
+    expect(accentInsensitive('Juárez')).toBe('Ju_rez');
+    expect(accentInsensitive('JESÚS del Monte')).toBe('JES_S del Monte');
+    expect(accentInsensitive('Peña Pobre')).toBe('Pe_a Pobre');
+    expect(accentInsensitive('Roma Norte')).toBe('Roma Norte');
+  });
+
+  it('is applied to location filters in the assistant search', async () => {
+    const { service, queries } = makeSupabase([[row()]]);
+    await service.searchForAssistant({ neighborhood: 'Juárez', city: 'Cuauhtémoc' });
+    expect(nth(queries, 0)).toContainEqual(['ilike', 'neighborhood', '%Ju_rez%']);
+    expect(nth(queries, 0)).toContainEqual(['ilike', 'city', '%Cuauht_moc%']);
   });
 });
