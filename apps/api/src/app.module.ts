@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { HealthModule } from './modules/health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -13,6 +13,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { MembershipsModule } from './modules/memberships/memberships.module';
 import { AuthGuard } from './common/guards/auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
+import { ClientIpThrottlerGuard } from './common/guards/client-ip-throttler.guard';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor';
 import { validateEnv } from './config/env.validation';
@@ -52,7 +53,7 @@ import { validateEnv } from './config/env.validation';
     // Global throttler guard
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useClass: ClientIpThrottlerGuard,
     },
     // Global auth guard - all routes require auth unless marked @Public()
     {
