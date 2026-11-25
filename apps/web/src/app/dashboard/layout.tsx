@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { UserProvider, useUser } from "./_context/user-context";
+import { CompanyProvider, useCompany } from "./_context/company-context";
 import { OnboardingProvider, restartOnboarding } from "@/components/onboarding/onboarding-provider";
 import { isOnboardingRole } from "@/lib/onboarding/types";
 import {
@@ -58,6 +59,7 @@ const allNavItems = [
   { label: "Mensajes", icon: MessageSquare, href: "/dashboard/mensajes", roles: ["ALL"] },
   { label: "Membresía", icon: CreditCard, href: "/dashboard/membresia", roles: ["BROKER", "INMOBILIARIA", "ADMIN"] },
   { label: "Certificados BRC", icon: ShieldBrc, href: "/dashboard/expedientes", roles: ["BROKER", "INMOBILIARIA", "VENDEDOR", "NOTARIO", "OPERADOR_BRC", "ADMIN"] },
+  { label: "Equipo", icon: Users, href: "/dashboard/equipo", roles: ["INMOBILIARIA", "ADMIN"] },
   { label: "Usuarios", icon: Users, href: "/dashboard/admin/usuarios", roles: ["ADMIN"] },
   { label: "Verificar Notarios", icon: ShieldBrc, href: "/dashboard/admin/notarios", roles: ["ADMIN", "OPERADOR_BRC"] },
   { label: "Asignar Expedientes", icon: FileText, href: "/dashboard/admin/asignaciones", roles: ["ADMIN", "OPERADOR_BRC"] },
@@ -67,8 +69,38 @@ const allNavItems = [
   { label: "Configuración", icon: Settings, href: "/dashboard/configuracion", roles: ["ALL"] },
 ];
 
-function getNavItemsForRole(role: UserRole) {
-  return allNavItems.filter((item) => item.roles.includes("ALL") || item.roles.includes(role));
+/** Páginas que necesita quien administra una inmobiliaria ajena, sea cual sea su rol. */
+const TEAM_HREFS = ["/dashboard/propiedades", "/dashboard/leads"];
+
+function getNavItemsForRole(role: UserRole, isTeam: boolean, ownsCompany: boolean) {
+  return allNavItems.filter((item) => {
+    if (item.href === "/dashboard/equipo") return ownsCompany;
+    return (
+      item.roles.includes("ALL") ||
+      item.roles.includes(role) ||
+      (isTeam && TEAM_HREFS.includes(item.href))
+    );
+  });
+}
+
+function CompanySwitcher() {
+  const { companies, active, setActiveId } = useCompany();
+  if (companies.length === 0) return null;
+  return (
+    <label className="relative mx-3 mb-3 block">
+      <span className="mb-1 block px-1 text-xs font-medium text-slate-400">Inmobiliaria</span>
+      <select
+        value={active?.id ?? ""}
+        onChange={(e) => setActiveId(e.target.value || null)}
+        className="h-11 w-full rounded-xl bg-white/[0.06] px-3 text-sm font-medium text-white outline-none focus-visible:ring-2 focus-visible:ring-blue-400/70"
+      >
+        <option value="" className="text-gray-900">Todas</option>
+        {companies.map((c) => (
+          <option key={c.id} value={c.id} className="text-gray-900">{c.trade_name}</option>
+        ))}
+      </select>
+    </label>
+  );
 }
 
 const rolLabels: Record<UserRole, string> = {
@@ -203,6 +235,8 @@ function SidebarContent({
         )}
       </div>
 
+      {!collapsed && <CompanySwitcher />}
+
       {/* Navegación */}
       <ScrollArea className="relative flex-1 px-3 py-2">
         <nav aria-label="Secciones del panel" className="flex flex-col gap-1">
@@ -277,9 +311,11 @@ export default function DashboardLayout({
 }) {
   return (
     <UserProvider>
-      <OnboardingProvider>
-        <DashboardShell>{children}</DashboardShell>
-      </OnboardingProvider>
+      <CompanyProvider>
+        <OnboardingProvider>
+          <DashboardShell>{children}</DashboardShell>
+        </OnboardingProvider>
+      </CompanyProvider>
     </UserProvider>
   );
 }
@@ -372,6 +408,7 @@ function useNotifications(userId: string | undefined) {
 function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, logout } = useUser();
+  const { companies } = useCompany();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   // Menú lateral colapsado (solo escritorio); la preferencia se recuerda por navegador.
@@ -409,6 +446,11 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const userAvatarUrl = user?.avatarUrl ?? null;
   const userRole = user?.role ?? "COMPRADOR";
   const handleLogout = logout;
+  const navItems = getNavItemsForRole(
+    userRole,
+    companies.length > 0,
+    companies.some((c) => c.access !== "ADMINISTRADOR"),
+  );
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -425,7 +467,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           userInitials={userInitials}
           userAvatarUrl={userAvatarUrl}
           userRole={userRole}
-          navItems={getNavItemsForRole(userRole)}
+          navItems={navItems}
           onLogout={handleLogout}
           collapsed={collapsed}
         />
@@ -463,7 +505,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
                 userInitials={userInitials}
                 userAvatarUrl={userAvatarUrl}
                 userRole={userRole}
-                navItems={getNavItemsForRole(userRole)}
+                navItems={navItems}
                 onLogout={handleLogout}
               />
             </SheetContent>

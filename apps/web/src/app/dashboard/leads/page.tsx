@@ -23,6 +23,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { logError } from "@/lib/log";
 import { useUser } from "../_context/user-context";
+import { useCompany } from "../_context/company-context";
 import { HistorialTimeline } from "@/components/dashboard/historial-timeline";
 import { SpotlightCard } from "@/components/ui/spotlight-card";
 
@@ -129,6 +130,7 @@ function formatDateTimeEs(iso: string): string {
 
 export default function LeadsPage() {
   const { user } = useUser();
+  const { companies, active, ready } = useCompany();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
@@ -140,14 +142,19 @@ export default function LeadsPage() {
 
   /* ---- Fetch leads ---- */
   const fetchLeads = useCallback(async () => {
-    if (!user) return;
+    if (!user || !ready) return;
     const supabase = createClient();
 
     // Admins see every lead (policy "Admins can view all leads", migration
     // 004). Filtering by owner_id here would silently cancel that policy out
     // and leave the admin dashboard empty.
-    let query = supabase.from("leads").select("*, properties(title)");
-    if (user.role !== "ADMIN") {
+    let query = supabase
+      .from("leads")
+      .select(active ? "*, properties!inner(title, company_id)" : "*, properties(title)");
+    if (active) {
+      query = query.eq("properties.company_id", active.id);
+    } else if (user.role !== "ADMIN" && companies.length === 0) {
+      // Con equipo, la RLS ya limita a los leads propios y de sus inmobiliarias.
       query = query.eq("owner_id", user.id);
     }
 
@@ -183,7 +190,7 @@ export default function LeadsPage() {
 
     setLeads(mapped);
     setLoading(false);
-  }, [user]);
+  }, [user, companies, active, ready]);
 
   useEffect(() => {
     fetchLeads();
@@ -212,7 +219,7 @@ export default function LeadsPage() {
           schema: "public",
           table: "leads",
           // Admins watch every lead; RLS still decides what they can read.
-          ...(isAdmin ? {} : { filter: `owner_id=eq.${user.id}` }),
+          ...(isAdmin || companies.length > 0 ? {} : { filter: `owner_id=eq.${user.id}` }),
         },
         () => fetchLeads()
       )
@@ -223,7 +230,7 @@ export default function LeadsPage() {
       document.removeEventListener("visibilitychange", refresh);
       supabase.removeChannel(channel);
     };
-  }, [user, fetchLeads]);
+  }, [user, companies, fetchLeads]);
 
   /* ---- Body scroll lock ---- */
   useEffect(() => {

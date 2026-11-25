@@ -32,6 +32,7 @@ import {
   type PropertyFieldError,
 } from "@/lib/property-fields";
 import { useUser } from "../../_context/user-context";
+import { useCompany } from "../../_context/company-context";
 import {
   PropertyFieldsSection,
   AmenitiesAnsweredField,
@@ -345,6 +346,9 @@ function Toggle({
 export default function NuevaPropiedadPage() {
   const router = useRouter();
   const { user } = useUser();
+  const { companies, active } = useCompany();
+  // Sin selección se usa la única inmobiliaria disponible; con varias hay que elegir.
+  const company = active ?? (user?.role !== "ADMIN" && companies.length === 1 ? companies[0]! : null);
 
   const [form, setForm] = useState<FormData>(initialFormData);
   // Single ordered list so the preview grid can never drift out of sync with
@@ -667,6 +671,12 @@ export default function NuevaPropiedadPage() {
       return;
     }
 
+    if (user?.role !== "ADMIN" && companies.length > 1 && !company) {
+      setError("Elige en el menú lateral la inmobiliaria a la que pertenece el inmueble.");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+
     if (!user) {
       setError("Debes iniciar sesión para publicar una propiedad.");
       return;
@@ -718,7 +728,9 @@ export default function NuevaPropiedadPage() {
       const { data: property, error: insertError } = await supabase
         .from("properties")
         .insert({
-          owner_id: user.id,
+          // El inmueble es de la inmobiliaria elegida aunque lo capture su equipo.
+          owner_id: company?.owner_id ?? user.id,
+          ...(company ? { company_id: company.id } : {}),
           title: form.titulo,
           slug,
           description: form.descripcion,

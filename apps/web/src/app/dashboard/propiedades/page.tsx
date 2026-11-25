@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "../_context/user-context";
+import { useCompany, propertyScope } from "../_context/company-context";
 import { ShieldBrc } from '@/components/ui/shield-brc'
 import { SpotlightCard } from "@/components/ui/spotlight-card";
 import { HistorialTimeline } from "@/components/dashboard/historial-timeline";
@@ -193,6 +194,7 @@ function brcBadge(brcStatus: BrcStatus) {
 
 export default function PropiedadesPage() {
   const { user } = useUser();
+  const { companies, active, ready } = useCompany();
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabValue>("todas");
@@ -204,14 +206,14 @@ export default function PropiedadesPage() {
 
   /* ---- Fetch properties ------------------------------------------ */
   const fetchProperties = useCallback(async () => {
-    if (!user) return;
+    if (!user || !ready) return;
     const supabase = createClient();
     const { data, error } = await supabase
       .from("properties")
       .select(
         "id, title, address_line, city, state, price, currency, status, brc_status, operation, lead_count, view_count, featured_image_url, brc_certificate_id, created_at",
       )
-      .eq("owner_id", user.id)
+      .or(propertyScope(user.id, user.role === "ADMIN", companies, active))
       // Archived listings are still the owner's, so they stay in the list
       // (under their own tab). Only the legacy ELIMINADO rows are hidden.
       .neq("status", "ELIMINADO")
@@ -221,7 +223,7 @@ export default function PropiedadesPage() {
       setProperties(data as Property[]);
     }
     setLoading(false);
-  }, [user]);
+  }, [user, companies, active, ready]);
 
   useEffect(() => {
     fetchProperties();

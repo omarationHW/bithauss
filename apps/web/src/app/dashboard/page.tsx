@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useUser } from "./_context/user-context";
+import { useCompany, propertyScope } from "./_context/company-context";
 import { createClient } from "@/lib/supabase/client";
 import {
   Building2,
@@ -137,6 +138,7 @@ const MONTH_LABELS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "S
 /* ------------------------------------------------------------------ */
 
 function useDashboardData(userId: string | undefined, role: string) {
+  const { companies, active, ready } = useCompany();
   const [kpis, setKpis] = useState<KpiItem[]>([]);
   const [recentLeads, setRecentLeads] = useState<RecentLead[]>([]);
   const [chartData, setChartData] = useState<ChartBar[]>([]);
@@ -149,24 +151,25 @@ function useDashboardData(userId: string | undefined, role: string) {
   };
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || !ready) return;
 
     let cancelled = false;
     const supabase = createClient();
+    const scope = propertyScope(userId, role === "ADMIN", companies, active);
 
     async function fetchBrokerData() {
       // 1. Propiedades Activas
       const { count: activeProps } = await supabase
         .from("properties")
         .select("id", { count: "exact", head: true })
-        .eq("owner_id", userId!)
+        .or(scope)
         .eq("status", "PUBLICADO");
 
       // 2. Get user property IDs for lead queries
       const { data: userProperties } = await supabase
         .from("properties")
         .select("id, view_count")
-        .eq("owner_id", userId!);
+        .or(scope);
 
       const propertyIds = (userProperties ?? []).map((p) => p.id);
 
@@ -175,8 +178,8 @@ function useDashboardData(userId: string | undefined, role: string) {
       if (propertyIds.length > 0) {
         const { count } = await supabase
           .from("leads")
-          .select("id", { count: "exact", head: true })
-          .in("property_id", propertyIds)
+          .select("id, properties!inner(id)", { count: "exact", head: true })
+          .or(scope, { referencedTable: "properties" })
           .eq("status", "NUEVO");
         newLeadsCount = count ?? 0;
       }
@@ -191,7 +194,7 @@ function useDashboardData(userId: string | undefined, role: string) {
       const { count: brcCount } = await supabase
         .from("properties")
         .select("id", { count: "exact", head: true })
-        .eq("owner_id", userId!)
+        .or(scope)
         .eq("brc_status", "CERTIFICADO");
 
       // 6. Recent leads
@@ -199,8 +202,8 @@ function useDashboardData(userId: string | undefined, role: string) {
       if (propertyIds.length > 0) {
         const { data: leadsData } = await supabase
           .from("leads")
-          .select("id, name, status, created_at, property_id, properties(title)")
-          .in("property_id", propertyIds)
+          .select("id, name, status, created_at, property_id, properties!inner(title)")
+          .or(scope, { referencedTable: "properties" })
           .order("created_at", { ascending: false })
           .limit(5);
 
@@ -229,8 +232,8 @@ function useDashboardData(userId: string | undefined, role: string) {
 
         const { data: leadsForChart } = await supabase
           .from("leads")
-          .select("created_at")
-          .in("property_id", propertyIds)
+          .select("created_at, properties!inner(id)")
+          .or(scope, { referencedTable: "properties" })
           .gte("created_at", sixMonthsAgo.toISOString())
           .order("created_at", { ascending: true });
 
@@ -309,12 +312,12 @@ function useDashboardData(userId: string | undefined, role: string) {
       const { count: myProps } = await supabase
         .from("properties")
         .select("id", { count: "exact", head: true })
-        .eq("owner_id", userId!);
+        .or(scope);
 
       const { data: userProperties } = await supabase
         .from("properties")
         .select("id, view_count")
-        .eq("owner_id", userId!);
+        .or(scope);
 
       const propertyIds = (userProperties ?? []).map((p) => p.id);
       const totalViews = (userProperties ?? []).reduce(
@@ -326,15 +329,15 @@ function useDashboardData(userId: string | undefined, role: string) {
       if (propertyIds.length > 0) {
         const { count } = await supabase
           .from("leads")
-          .select("id", { count: "exact", head: true })
-          .in("property_id", propertyIds);
+          .select("id, properties!inner(id)", { count: "exact", head: true })
+          .or(scope, { referencedTable: "properties" });
         requestCount = count ?? 0;
       }
 
       const { count: brcCount } = await supabase
         .from("properties")
         .select("id", { count: "exact", head: true })
-        .eq("owner_id", userId!)
+        .or(scope)
         .eq("brc_status", "CERTIFICADO");
 
       if (cancelled) return;
@@ -485,7 +488,7 @@ function useDashboardData(userId: string | undefined, role: string) {
     return () => {
       cancelled = true;
     };
-  }, [userId, role, refreshKey]);
+  }, [userId, role, refreshKey, companies, active, ready]);
 
   return { kpis, recentLeads, chartData, loadingStats, refresh, refreshKey };
 }
