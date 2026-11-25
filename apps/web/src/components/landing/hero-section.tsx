@@ -42,7 +42,7 @@ const placeholders = [
 ];
 
 export function HeroSection() {
-  const [activeTab, setActiveTab] = useState<Tab>("Compra");
+  const [activeTab, setActiveTab] = useState<Tab | null>(null);
   const [placeholderText, setPlaceholderText] = useState("");
   const [placeholderIdx, setPlaceholderIdx] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -58,9 +58,8 @@ export function HeroSection() {
    */
   function runSearch() {
     const params = new URLSearchParams();
-    // Always explicit: /propiedades defaults to "comprar", but sending the tab
-    // keeps the URL a faithful record of what the visitor picked.
-    params.set("op", TAB_OPERATION[activeTab]);
+    // Sin opción presionada no se filtra: /propiedades muestra todas.
+    if (activeTab) params.set("op", TAB_OPERATION[activeTab]);
     if (propertyType) params.set("tipo", propertyType);
     const q = inputValue.trim();
     if (q) params.set("q", q);
@@ -160,7 +159,7 @@ export function HeroSection() {
               key={tab}
               type="button"
               aria-pressed={activeTab === tab}
-              onClick={() => setActiveTab(tab)}
+              onClick={() => setActiveTab((t) => (t === tab ? null : tab))}
               className={cn(
                 "relative pb-2 text-sm sm:text-base font-medium transition-colors duration-200",
                 activeTab === tab

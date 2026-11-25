@@ -178,15 +178,24 @@ function buildAddress(p: PropertyFromDB): string {
   return [line1, line2].filter(Boolean).join("\n");
 }
 
+type OperationFilter = "todas" | "comprar" | "rentar";
+
+/** `?op=` → filter. Anything other than an explicit choice shows everything. */
+function parseOperation(op: string | null): OperationFilter {
+  return op === "comprar" || op === "rentar" ? op : "todas";
+}
+
 /**
  * Does a stored operation satisfy the visitor's Compra / Renta choice?
+ * Until they press one of them ("todas") every listing is shown.
  *
  * VENTA_RENTA is offered as both, so it has to match either side — it used to
  * be lumped in with VENTA and never appeared under Renta. TRASPASO is a
  * retired operation that only historical rows carry; it was priced as a sale,
  * so it answers to Compra rather than disappearing from the site entirely.
  */
-function matchesOperation(operation: string, wanted: "comprar" | "rentar"): boolean {
+function matchesOperation(operation: string, wanted: OperationFilter): boolean {
+  if (wanted === "todas") return true;
   const op = (operation || "").toUpperCase();
   if (op === "VENTA_RENTA") return true;
   return wanted === "rentar" ? op === "RENTA" : op !== "RENTA";
@@ -228,7 +237,7 @@ const propertyTypes = Array.from(new Set(Object.values(PROPERTY_TYPE_MAP)));
 const bedroomOptions = ["1", "2", "3", "4+"];
 
 interface FiltersState {
-  operationType: "comprar" | "rentar";
+  operationType: OperationFilter;
   /** Free-text search coming from the home hero (?q=). */
   query: string;
   types: string[];
@@ -242,7 +251,7 @@ interface FiltersState {
 }
 
 const initialFilters: FiltersState = {
-  operationType: "comprar",
+  operationType: "todas",
   query: "",
   types: [],
   state: "",
@@ -408,7 +417,7 @@ function FiltersPanel({ filters, setFilters, onReset, properties }: FiltersPanel
     return [...places.values()];
   }, [neighborhood, inventoryColonias, catalogColonias]);
 
-  const setOperationType = (op: "comprar" | "rentar") =>
+  const setOperationType = (op: OperationFilter) =>
     setFilters((f) => ({ ...f, operationType: op }));
   const setSelectedState = (s: string) =>
     setFilters((f) => ({ ...f, state: s, city: "", neighborhood: "" }));
@@ -444,6 +453,16 @@ function FiltersPanel({ filters, setFilters, onReset, properties }: FiltersPanel
         <div className="flex gap-2">
           <Button
             size="sm"
+            aria-pressed={operationType === "todas"}
+            variant={operationType === "todas" ? "default" : "outline"}
+            className={cn("flex-1", operationType === "todas" && "bg-gradient-to-r from-primary to-accent text-white")}
+            onClick={() => setOperationType("todas")}
+          >
+            Todas
+          </Button>
+          <Button
+            size="sm"
+            aria-pressed={operationType === "comprar"}
             variant={operationType === "comprar" ? "default" : "outline"}
             className={cn("flex-1", operationType === "comprar" && "bg-gradient-to-r from-primary to-accent text-white")}
             onClick={() => setOperationType("comprar")}
@@ -452,6 +471,7 @@ function FiltersPanel({ filters, setFilters, onReset, properties }: FiltersPanel
           </Button>
           <Button
             size="sm"
+            aria-pressed={operationType === "rentar"}
             variant={operationType === "rentar" ? "default" : "outline"}
             className={cn("flex-1", operationType === "rentar" && "bg-gradient-to-r from-primary to-accent text-white")}
             onClick={() => setOperationType("rentar")}
@@ -669,7 +689,7 @@ function PropiedadesPageInner() {
   const searchParams = useSearchParams();
   const [filters, setFilters] = useState<FiltersState>(() => ({
     ...initialFilters,
-    operationType: searchParams.get("op") === "rentar" ? "rentar" : "comprar",
+    operationType: parseOperation(searchParams.get("op")),
     query: searchParams.get("q") ?? "",
     city: searchParams.get("ciudad") ?? "",
     types: searchParams.get("tipo") ? [searchParams.get("tipo") as string] : [],
@@ -679,7 +699,7 @@ function PropiedadesPageInner() {
   // Those were previously ignored, so every one of those links landed on an
   // unfiltered list.
   useEffect(() => {
-    const op = searchParams.get("op") === "rentar" ? "rentar" : "comprar";
+    const op = parseOperation(searchParams.get("op"));
     const q = searchParams.get("q") ?? "";
     const ciudad = searchParams.get("ciudad") ?? "";
     const tipo = searchParams.get("tipo");
