@@ -1,16 +1,25 @@
 -- ============================================================
--- 045 · El equipo ve los expedientes BRC de sus inmobiliarias
+-- 045 · Expedientes BRC del equipo y endurecimiento de la 043
 -- ============================================================
--- Solo lectura y solo solicitudes ya enviadas. No da acceso a documentos,
--- certificados notariales ni bitácora (identificaciones y escrituras): sus
--- políticas exigen ser solicitante, notario u operador. Requiere 043.
--- Idempotente.
+-- El equipo ve SOLO inmueble, estatus y fecha de las solicitudes ya enviadas,
+-- por función y no por política: una política abriría también notas, pagos y
+-- demás columnas. Requiere 043. Idempotente.
 -- ============================================================
 
 drop policy if exists "Company team can view submitted expedientes" on brc_expedientes;
-create policy "Company team can view submitted expedientes"
-  on brc_expedientes for select to authenticated
-  using (status <> 'BORRADOR' and public.can_manage_property(property_id));
+
+create or replace function public.team_expedientes(p_company_id uuid default null)
+returns table (id uuid, property_id uuid, property_title text, status text, created_at timestamptz)
+language sql security definer set search_path = public stable as $$
+  select e.id, e.property_id, p.title::text, e.status::text, e.created_at
+    from brc_expedientes e join properties p on p.id = e.property_id
+   where e.status::text <> 'BORRADOR'
+     and (p_company_id is null or p.company_id = p_company_id)
+     and public.can_manage_company(p.company_id)
+   order by e.created_at desc;
+$$;
+revoke all on function public.team_expedientes(uuid) from public, anon;
+grant execute on function public.team_expedientes(uuid) to authenticated;
 
 -- ── Endurecimiento de la 043 ─────────────────────────────────
 

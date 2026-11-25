@@ -505,10 +505,11 @@ export default function ConfiguracionPage() {
             : null;
           // Reuse the key baked into a previous render so the archived original
           // keeps matching this photo even after the editor re-created its row.
-          const photoKey =
-            (stampFolder && prevPath
-              ? photoKeyFromWatermarkPath(prevPath)
-              : null) ?? newPhotoKey();
+          const prevKey =
+            stampFolder && prevPath ? photoKeyFromWatermarkPath(prevPath) : null;
+          const foreignStamp = !!stampFolder && stampFolder !== user.id;
+          // Sello de otra persona: clave nueva, para no pisar un original mío.
+          const photoKey = (foreignStamp ? null : prevKey) ?? newPhotoKey();
 
           const origPath = originalStoragePath(
             user.id,
@@ -519,8 +520,8 @@ export default function ConfiguracionPage() {
             .from(WM_BUCKET)
             .getPublicUrl(
               // La selló otra persona del equipo: su original está en su carpeta.
-              stampFolder
-                ? originalStoragePath(stampFolder, m.property_id, photoKey)
+              stampFolder && prevKey
+                ? originalStoragePath(stampFolder, m.property_id, prevKey)
                 : origPath
             );
 
@@ -534,19 +535,6 @@ export default function ConfiguracionPage() {
             }
           } catch {
             /* no archived original — handled below */
-          }
-
-          // La próxima vez el original se busca en MI carpeta: sin esta copia
-          // ya no se podría volver a sellar la foto.
-          if (source && stampFolder && stampFolder !== user.id) {
-            const { error: copyErr } = await supabase.storage
-              .from(WM_BUCKET)
-              .upload(origPath, source, {
-                upsert: true,
-                cacheControl: "31536000",
-                contentType: source.type || "image/jpeg",
-              });
-            if (copyErr) throw copyErr;
           }
 
           // 2. No archive: only safe to use the live photo when it is NOT
@@ -576,6 +564,22 @@ export default function ConfiguracionPage() {
             failed++;
             lastError = result.error ?? "No se pudo aplicar la marca de agua.";
             continue;
+          }
+
+          // La próxima vez el original se busca en MI carpeta: sin esta copia ya
+          // no se podría volver a sellar. Solo mapas de bits y sin sobrescribir.
+          if (foreignStamp) {
+            if (!["image/jpeg", "image/png", "image/webp"].includes(source.type)) {
+              throw new Error("Formato de foto no admitido.");
+            }
+            const { error: copyErr } = await supabase.storage
+              .from(WM_BUCKET)
+              .upload(origPath, source, {
+                upsert: false,
+                cacheControl: "31536000",
+                contentType: source.type,
+              });
+            if (copyErr) throw copyErr;
           }
 
           // 4. Upload under a path versioned by the config signature, so the
@@ -614,7 +618,7 @@ export default function ConfiguracionPage() {
           const removable =
             prevPath &&
             prevPath !== path &&
-            prevPath.startsWith(`${user.id}/`) &&
+            prevPath.startsWith(`${user.id}/${m.property_id}/`) &&
             !prevPath.includes(`/${ORIGINALS_DIR}/`) &&
             (urlUses.get(m.url) ?? 0) === 1;
           if (removable && prevPath) {

@@ -90,6 +90,33 @@ interface Expediente {
     last_name: string;
   } | null;
   brc_documents: BrcDocument[];
+  /** Resumen de alguien más del equipo: sin documentos ni detalle. */
+  teamOnly?: boolean;
+}
+
+interface TeamExpediente {
+  id: string;
+  property_id: string;
+  property_title: string;
+  status: string;
+  created_at: string;
+}
+
+function fromTeam(t: TeamExpediente): Expediente {
+  return {
+    id: t.id,
+    property_id: t.property_id,
+    status: t.status,
+    created_at: t.created_at,
+    notes: null,
+    assigned_notary_id: null,
+    requested_by: null,
+    properties: { title: t.property_title },
+    notary_profile: null,
+    requester_profile: null,
+    brc_documents: [],
+    teamOnly: true,
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -282,22 +309,31 @@ export default function ExpedientesPage() {
 
       // Mismo alcance que Mis Propiedades: la inmobiliaria elegida o, con
       // "Todas", lo propio más lo de las inmobiliarias que la sesión opera.
-      const queries = isNotary
-        ? [base().eq("assigned_notary_id", me.id)]
+      const ownQuery = isNotary
+        ? base().eq("assigned_notary_id", me.id)
         : active
-          ? [base().eq("properties.company_id", active.id)]
-          : me.role === "ADMIN" || companies.length === 0
-            ? [base().eq("requested_by", me.id)]
-            : [
-                base().eq("requested_by", me.id),
-                base().in("properties.company_id", companies.map((c) => c.id)),
-              ];
-      const results = await Promise.all(queries);
+          ? me.role === "ADMIN"
+            ? base().eq("properties.company_id", active.id)
+            : base().eq("properties.company_id", active.id).eq("requested_by", me.id)
+          : base().eq("requested_by", me.id);
+      // Del resto del equipo solo llegan inmueble, estatus y fecha (045).
+      const wantsTeam = !isNotary && me.role !== "ADMIN" && companies.length > 0;
+      const [own, team] = await Promise.all([
+        ownQuery,
+        wantsTeam
+          ? supabase.rpc("team_expedientes", { p_company_id: active?.id ?? null })
+          : Promise.resolve({ data: [], error: null }),
+      ]);
       if (cancelled) return;
 
-      if (results.every((r) => !r.error)) {
+      if (!own.error) {
+        const teamRows = team.error ? [] : ((team.data ?? []) as TeamExpediente[]);
         setExpedientes(
-          mergeExpedientes(results.map((r) => (r.data ?? []) as unknown as Expediente[]))
+          // Lo propio va al final: gana sobre la versión resumida.
+          mergeExpedientes([
+            teamRows.map(fromTeam),
+            (own.data ?? []) as unknown as Expediente[],
+          ])
         );
       }
       setLoading(false);
@@ -607,6 +643,7 @@ export default function ExpedientesPage() {
                         </div>
                       </td>
                       <td className="px-4 py-4 text-center">
+                        {!exp.teamOnly && (
                         <Link
                           href={`/dashboard/expedientes/${exp.id}`}
                           className="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold text-white shadow-sm transition-[opacity,box-shadow] hover:opacity-90 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
@@ -615,6 +652,7 @@ export default function ExpedientesPage() {
                           Revisar
                           <ArrowUpRight className="h-3 w-3" />
                         </Link>
+)}
                       </td>
                     </tr>
                   );
@@ -759,7 +797,7 @@ export default function ExpedientesPage() {
                         })
                       ) : (
                         <p className="text-sm text-gray-400">
-                          {exp.requested_by === user?.id || isNotario ? "No se han subido documentos aun." : "Los documentos solo los ve quien hizo la solicitud."}
+                          {exp.teamOnly ? "Los documentos solo los ve quien hizo la solicitud." : "No se han subido documentos aun."}
                         </p>
                       )}
                     </div>
@@ -1116,7 +1154,7 @@ export default function ExpedientesPage() {
                     ) : (
                       <div className="rounded-xl bg-gray-50 p-4 text-center">
                         <p className="text-sm text-gray-400">
-                          {selectedExp.requested_by === user?.id || isNotario ? "No se han subido documentos aun." : "Los documentos solo los ve quien hizo la solicitud."}
+                          {selectedExp.teamOnly ? "Los documentos solo los ve quien hizo la solicitud." : "No se han subido documentos aun."}
                         </p>
                       </div>
                     )}
@@ -1134,7 +1172,8 @@ export default function ExpedientesPage() {
                   </button>
                   {/* Was a dead button with no onClick. The detail screen is
                       where documents are reviewed and corrected. */}
-                  <Link
+                  {!selectedExp.teamOnly && (
+                        <Link
                     href={`/dashboard/expedientes/${selectedExp.id}`}
                     className={`${PRIMARY_BTN} flex-1`}
                     style={{ background: BRAND_GRADIENT }}
@@ -1145,6 +1184,7 @@ export default function ExpedientesPage() {
                       ? "Corregir documentos"
                       : "Ver expediente"}
                   </Link>
+)}
                 </div>
               </div>
             </div>
