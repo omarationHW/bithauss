@@ -347,8 +347,10 @@ export default function NuevaPropiedadPage() {
   const router = useRouter();
   const { user } = useUser();
   const { companies, active } = useCompany();
-  // Sin selección se usa la única inmobiliaria disponible; con varias hay que elegir.
-  const company = active ?? (user?.role !== "ADMIN" && companies.length === 1 ? companies[0]! : null);
+  // Sin selección solo se asume una inmobiliaria PROPIA: si alguien agrega a una
+  // persona a su equipo, los inmuebles de esta no deben quedar a nombre de él.
+  const company =
+    active ?? (companies.length === 1 && companies[0]!.access === "DUENO" ? companies[0]! : null);
 
   const [form, setForm] = useState<FormData>(initialFormData);
   // Single ordered list so the preview grid can never drift out of sync with

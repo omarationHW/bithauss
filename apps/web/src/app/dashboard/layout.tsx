@@ -70,11 +70,11 @@ const allNavItems = [
 ];
 
 /** Páginas que necesita quien administra una inmobiliaria ajena, sea cual sea su rol. */
-const TEAM_HREFS = ["/dashboard/propiedades", "/dashboard/leads"];
+const TEAM_HREFS = ["/dashboard/propiedades", "/dashboard/leads", "/dashboard/expedientes"];
 
 function getNavItemsForRole(role: UserRole, isTeam: boolean, ownsCompany: boolean) {
   return allNavItems.filter((item) => {
-    if (item.href === "/dashboard/equipo") return ownsCompany;
+    if (item.href === "/dashboard/equipo") return ownsCompany || isTeam;
     return (
       item.roles.includes("ALL") ||
       item.roles.includes(role) ||

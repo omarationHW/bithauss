@@ -22,6 +22,8 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "@/app/dashboard/_context/user-context";
+import { useCompany } from "@/app/dashboard/_context/company-context";
+import { mergeExpedientes } from "./merge-expedientes";
 import { EXPEDIENTES_NUEVA_SOLICITUD_EVENT } from "@/lib/onboarding/tours";
 import {
   BRC_STATUS_BADGE_STYLES,
@@ -156,6 +158,7 @@ function formatDate(dateStr: string) {
 
 export default function ExpedientesPage() {
   const { user } = useUser();
+  const { companies, active, ready } = useCompany();
   const router = useRouter();
   const [expedientes, setExpedientes] = useState<Expediente[]>([]);
   const [loading, setLoading] = useState(true);
@@ -185,19 +188,21 @@ export default function ExpedientesPage() {
     setLoadingEligible(true);
     try {
       const supabase = createClient();
-      const { data } = await supabase
+      // Solo el dueño solicita el BRC; la inmobiliaria elegida acota la lista.
+      let query = supabase
         .from("properties")
         .select("id, title, address_line, city, state, price, currency")
         .eq("owner_id", userId)
-        .eq("brc_status", "NO_SOLICITADO")
-        .order("created_at", { ascending: false });
+        .eq("brc_status", "NO_SOLICITADO");
+      if (active) query = query.eq("company_id", active.id);
+      const { data } = await query.order("created_at", { ascending: false });
       setEligibleProps((data as EligibleProperty[]) ?? []);
     } catch {
       setEligibleProps([]);
     } finally {
       setLoadingEligible(false);
     }
-  }, [userId]);
+  }, [userId, active]);
 
   const isNotario = user?.role === "NOTARIO";
 
@@ -234,11 +239,15 @@ export default function ExpedientesPage() {
   /* ---- Fetch expedientes ---- */
   useEffect(() => {
     if (!user) return;
+    const isNotary = user.role === "NOTARIO";
+    if (!isNotary && !ready) return;
+    const me = user;
+    let cancelled = false;
 
     async function fetchExpedientes() {
       const supabase = createClient();
 
-      let query = supabase
+      const base = () => supabase
         .from("brc_expedientes")
         .select(
           `
@@ -249,7 +258,7 @@ export default function ExpedientesPage() {
           created_at,
           assigned_notary_id,
           requested_by,
-          properties ( title ),
+          properties!inner ( title, company_id ),
           notary_profile:profiles!brc_expedientes_assigned_notary_id_fkey ( first_name, last_name ),
           requester_profile:profiles!brc_expedientes_requested_by_fkey ( first_name, last_name ),
           brc_documents (
@@ -271,25 +280,41 @@ export default function ExpedientesPage() {
         .neq("status", "BORRADOR")
         .order("created_at", { ascending: false });
 
-      if (user!.role === "NOTARIO") {
-        query = query.eq("assigned_notary_id", user!.id);
-      } else {
-        query = query.eq("requested_by", user!.id);
-      }
+      // Mismo alcance que Mis Propiedades: la inmobiliaria elegida o, con
+      // "Todas", lo propio más lo de las inmobiliarias que la sesión opera.
+      const queries = isNotary
+        ? [base().eq("assigned_notary_id", me.id)]
+        : active
+          ? [base().eq("properties.company_id", active.id)]
+          : me.role === "ADMIN" || companies.length === 0
+            ? [base().eq("requested_by", me.id)]
+            : [
+                base().eq("requested_by", me.id),
+                base().in("properties.company_id", companies.map((c) => c.id)),
+              ];
+      const results = await Promise.all(queries);
+      if (cancelled) return;
 
-      const { data, error } = await query;
-
-      if (!error && data) {
-        setExpedientes(data as unknown as Expediente[]);
+      if (results.every((r) => !r.error)) {
+        setExpedientes(
+          mergeExpedientes(results.map((r) => (r.data ?? []) as unknown as Expediente[]))
+        );
       }
       setLoading(false);
     }
 
     fetchExpedientes();
-  }, [user]);
+    return () => {
+      cancelled = true;
+    };
+  }, [user, companies, active, ready]);
 
   /** Dueño sin ninguna propiedad (no archivada): hay que publicar antes. */
-  const needsProperty = !isNotario && hasProperties === false;
+  const needsProperty = !isNotario && hasProperties === false && companies.length === 0;
+
+  /** Opera la inmobiliaria pero no es su dueño: ve, no solicita. */
+  const isTeamOnly =
+    !isNotario && hasProperties === false && companies.some((c) => c.access === "ADMINISTRADOR");
 
   /* ---- Stats ---- */
   const stats = [
@@ -734,7 +759,7 @@ export default function ExpedientesPage() {
                         })
                       ) : (
                         <p className="text-sm text-gray-400">
-                          No se han subido documentos aun.
+                          {exp.requested_by === user?.id || isNotario ? "No se han subido documentos aun." : "Los documentos solo los ve quien hizo la solicitud."}
                         </p>
                       )}
                     </div>
@@ -824,7 +849,9 @@ export default function ExpedientesPage() {
                     Sin propiedades elegibles
                   </p>
                   <p className="text-sm text-gray-500 max-w-xs">
-                    Todas tus propiedades ya tienen certificacion o estan en proceso.
+                    {isTeamOnly
+                      ? "Solo la cuenta dueña de la inmobiliaria puede solicitar el BRC."
+                      : "Todas tus propiedades ya tienen certificacion o estan en proceso."}
                   </p>
                 </div>
               ) : (
@@ -1089,7 +1116,7 @@ export default function ExpedientesPage() {
                     ) : (
                       <div className="rounded-xl bg-gray-50 p-4 text-center">
                         <p className="text-sm text-gray-400">
-                          No se han subido documentos aun.
+                          {selectedExp.requested_by === user?.id || isNotario ? "No se han subido documentos aun." : "Los documentos solo los ve quien hizo la solicitud."}
                         </p>
                       </div>
                     )}

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { logError } from "@/lib/log";
 import { useUser } from "../_context/user-context";
+import { propertyScope, useCompany } from "../_context/company-context";
 import {
   Bell,
   Shield,
@@ -24,7 +25,7 @@ import {
   broadcastWatermarkConfigChange,
   clearWatermarkImageCache,
   fetchImageAsBlob,
-  isGeneratedWatermarkPath,
+  generatedWatermarkFolder,
   isWatermarked,
   newPhotoKey,
   normalizeWatermarkConfig,
@@ -155,6 +156,7 @@ type SaveState = "idle" | "saving" | "saved" | "error";
 
 export default function ConfiguracionPage() {
   const { user, logout } = useUser();
+  const { companies, active, ready } = useCompany();
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -386,6 +388,28 @@ export default function ConfiguracionPage() {
       return;
     }
 
+    if (!ready) return;
+    const isAdmin = user.role === "ADMIN";
+    // Cada inmobiliaria tiene su logo: nunca sellar varias de una sola vez.
+    if (
+      !isAdmin &&
+      !active &&
+      (companies.length > 1 || companies.some((c) => c.access === "ADMINISTRADOR"))
+    ) {
+      setReprocessError(
+        "Elige primero una inmobiliaria en el menú: la marca de agua se aplica a una a la vez."
+      );
+      return;
+    }
+    if (
+      active &&
+      !window.confirm(
+        `¿Aplicar tu marca de agua a todas las fotos de ${active.trade_name}?`
+      )
+    ) {
+      return;
+    }
+
     setReprocessing(true);
     setReprocessError(null);
     setReprocessMsg("Guardando configuración…");
@@ -414,7 +438,7 @@ export default function ConfiguracionPage() {
       const { data: props, error: propsErr } = await supabase
         .from("properties")
         .select("id, title")
-        .eq("owner_id", user.id)
+        .or(propertyScope(user.id, isAdmin, companies, active))
         .neq("status", "ELIMINADO");
       if (propsErr) throw propsErr;
 
@@ -433,19 +457,26 @@ export default function ConfiguracionPage() {
       // stamps it as a PNG and writes the result BACK to `property_media.url`:
       // without the filter it would overwrite a broker's video with a picture
       // (or, for a YouTube row, fail and report the listing as "con error").
-      const { data: media, error: mediaErr } = await supabase
-        .from("property_media")
-        .select("id, property_id, url, sort_order")
-        .eq("media_type", "IMAGE")
-        .in("property_id", propIds)
-        .order("sort_order", { ascending: true });
-      if (mediaErr) throw mediaErr;
-
-      const rows = (media ?? []) as {
-        id: string;
-        property_id: string;
-        url: string;
-      }[];
+      // Por bloques de inmuebles y por páginas: la API corta en 1,000 filas y
+      // una inmobiliaria con cientos de inmuebles tiene varios miles de fotos.
+      const rows: { id: string; property_id: string; url: string }[] = [];
+      const PAGE = 1000;
+      for (let p = 0; p < propIds.length; p += 50) {
+        for (let from = 0; ; from += PAGE) {
+          const { data: media, error: mediaErr } = await supabase
+            .from("property_media")
+            .select("id, property_id, url, sort_order")
+            .eq("media_type", "IMAGE")
+            .in("property_id", propIds.slice(p, p + 50))
+            .order("property_id", { ascending: true })
+            .order("sort_order", { ascending: true })
+            .order("id", { ascending: true })
+            .range(from, from + PAGE - 1);
+          if (mediaErr) throw mediaErr;
+          rows.push(...((media ?? []) as typeof rows));
+          if ((media?.length ?? 0) < PAGE) break;
+        }
+      }
       if (rows.length === 0) {
         setReprocessMsg("No tienes fotos que procesar.");
         setReprocessing(false);
@@ -469,12 +500,13 @@ export default function ConfiguracionPage() {
         setReprocessMsg(`Procesando ${i + 1} de ${rows.length}…`);
         try {
           const prevPath = storagePathFromPublicUrl(m.url, WM_BUCKET);
-          const wasGenerated =
-            !!prevPath && isGeneratedWatermarkPath(prevPath, user.id);
+          const stampFolder = prevPath
+            ? generatedWatermarkFolder(prevPath, m.property_id)
+            : null;
           // Reuse the key baked into a previous render so the archived original
           // keeps matching this photo even after the editor re-created its row.
           const photoKey =
-            (wasGenerated && prevPath
+            (stampFolder && prevPath
               ? photoKeyFromWatermarkPath(prevPath)
               : null) ?? newPhotoKey();
 
@@ -485,7 +517,12 @@ export default function ConfiguracionPage() {
           );
           const { data: origPublic } = supabase.storage
             .from(WM_BUCKET)
-            .getPublicUrl(origPath);
+            .getPublicUrl(
+              // La selló otra persona del equipo: su original está en su carpeta.
+              stampFolder
+                ? originalStoragePath(stampFolder, m.property_id, photoKey)
+                : origPath
+            );
 
           // 1. Prefer the archived original (single request; a 4xx simply
           //    means we have never archived this photo).
@@ -497,6 +534,19 @@ export default function ConfiguracionPage() {
             }
           } catch {
             /* no archived original — handled below */
+          }
+
+          // La próxima vez el original se busca en MI carpeta: sin esta copia
+          // ya no se podría volver a sellar la foto.
+          if (source && stampFolder && stampFolder !== user.id) {
+            const { error: copyErr } = await supabase.storage
+              .from(WM_BUCKET)
+              .upload(origPath, source, {
+                upsert: true,
+                cacheControl: "31536000",
+                contentType: source.type || "image/jpeg",
+              });
+            if (copyErr) throw copyErr;
           }
 
           // 2. No archive: only safe to use the live photo when it is NOT

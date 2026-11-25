@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
 import { useCompany, type CompanyAccess } from "../_context/company-context";
+import { useUser } from "../_context/user-context";
 import { CompanyLegalInfo } from "./legal-info";
 
 interface Member {
@@ -108,7 +109,21 @@ function CompanyTeam({ company }: { company: CompanyAccess }) {
 
 export default function EquipoPage() {
   const { companies, ready } = useCompany();
+  const { user } = useUser();
+  const [error, setError] = useState<string | null>(null);
   const managed = companies.filter((c) => c.access !== "ADMINISTRADOR");
+  const teams = companies.filter((c) => c.access === "ADMINISTRADOR");
+
+  async function leave(c: CompanyAccess) {
+    if (!user || !window.confirm(`¿Dejar de administrar ${c.trade_name}?`)) return;
+    const { error: e } = await createClient().rpc("remove_company_member", {
+      p_company_id: c.id,
+      p_profile_id: user.id,
+    });
+    if (e) setError(e.message);
+    else window.location.reload();
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -120,6 +135,15 @@ export default function EquipoPage() {
       {managed.map((c) => (
         <CompanyTeam key={c.id} company={c} />
       ))}
+      {teams.map((c) => (
+        <section key={c.id} className="flex flex-wrap items-center gap-3 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200/60">
+          <p className="min-w-0 flex-1 text-sm text-gray-600">
+            Administras <span className="font-semibold text-gray-900">{c.trade_name}</span> por autorización de su dueño.
+          </p>
+          <Button variant="outline" className="h-11" onClick={() => leave(c)}>Salir del equipo</Button>
+        </section>
+      ))}
+      {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       {ready && managed.length === 0 && (
         <p className="text-sm text-gray-500">No eres dueño de ninguna inmobiliaria.</p>
       )}

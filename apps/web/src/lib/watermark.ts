@@ -241,6 +241,16 @@ export function isGeneratedWatermarkPath(path: string, userId: string): boolean 
 }
 
 /**
+ * Folder (uid) of whoever stamped `path` for that property, or null when it is
+ * not one of our renders. Company teams share listings, so the stamp — and the
+ * archived original next to it — may live in a teammate's folder.
+ */
+export function generatedWatermarkFolder(path: string, propertyId: string): string | null {
+  const [folder, pid, dir] = path.split("/");
+  return folder && pid === propertyId && dir === "wm" ? folder : null;
+}
+
+/**
  * Extract the object path from a Supabase Storage public URL, or null when the
  * URL does not belong to `bucket`.
  */
